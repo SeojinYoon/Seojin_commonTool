@@ -5,8 +5,10 @@ import subprocess
 import pandas as pd
 import numpy as np
 import os
+from functools import reduce
+import nibabel as nb
 
-from sj_string import search_stringAcrossTarget
+from sj_string import search_stringAcrossTarget, str_join
 from stat_module import t_critical_value
 
 def set_afni_abin(abin_path):
@@ -393,6 +395,54 @@ def find_thresholds_1samp(stat_path,
         "p_value" : p_value,
         "n_cluster" : n_cluster
     }
+
+def afni_to_nifti(afni_brain):
+    # Get the AFNI data and header information
+    data = afni_brain.get_fdata()
+    afni_header = afni_brain.header
+
+    # Create a new NIfTI image
+    nifti_image = nb.Nifti1Image(data, afni_brain.affine, header=afni_header)
+    
+    return nifti_image
+
+def read_1d(file_path):
+    # Read data
+    with open(file_path, 'r') as file:
+        data = file.readlines()    
+        
+        headers = []
+        header_idx = -1
+        for i, d in enumerate(data):
+            if "#" in d:
+                header_idx = i
+                headers.append(d)
+        if header_idx == -1:
+            pass
+        else:
+            data = data[header_idx + 1:]
+    
+    # Concat string
+    data = str_join(data, "")
+    
+    # Unify white space
+    white_spaces = [" ", "\t", "\n"]
+    for w_s in white_spaces:
+        data = data.replace(w_s, " ")
+    data = data.strip()
+    
+    # Remove white space
+    def red(acc, cur):
+        if len(acc) > 0 and acc[-1] == cur and cur in white_spaces:
+            return acc
+        else:
+            return acc + cur
+    data = reduce(lambda acc, cur: red(acc, cur), data, "")
+    
+    # Convert string to float
+    data = [float(e) for e in data.split(" ")]
+    
+    return data, headers
 
 if __name__ == "__main__":
     set_afni_abin("/Users/clmn/abin/afni")

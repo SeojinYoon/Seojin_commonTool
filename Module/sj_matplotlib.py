@@ -126,15 +126,19 @@ def draw_label(axis, label_info = {}):
     x_label_size = label_info.get("x_size", 9)
     y_label_size = label_info.get("y_size", 9)
     
+    x_label_pad = label_info.get("x_label_pad", 10)
+    y_label_pad = label_info.get("y_label_pad", 10)
     axis.set_xlabel(x_label, 
                     color = color, 
                     fontdict = x_weight, 
-                    size = x_label_size)
+                    size = x_label_size,
+                    labelpad = x_label_pad)
     
     axis.set_ylabel(y_label, 
                     color = color, 
                     fontdict = y_weight, 
-                    size = y_label_size)
+                    size = y_label_size,
+                    labelpad = y_label_pad)
 
 def draw_threshold(axis, threshold_info = {}):
     """

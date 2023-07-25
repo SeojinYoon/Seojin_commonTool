@@ -1,6 +1,8 @@
 
 # Common Libraries
 import numpy as np
+import re
+from functools import reduce
 
 # Custom Libraries
 import sj_sequence
@@ -139,6 +141,9 @@ def replace_all(text, dic):
 def make_pad_fromInt(integer, n_digit):
     return str(integer).zfill(n_digit)
 
+
+    
+                      
 if __name__ == "__main__":
     a_string = "A string is more than its parts!"
     matches = ["more", "d"]

@@ -1839,28 +1839,6 @@ def get_r2(fmri_signal, brain_beta, design_mat):
     
     return r_squared
 
-def afni_to_nifti(afni_brain):
-    # Get the AFNI data and header information
-    data = afni_brain.get_fdata()
-    afni_header = afni_brain.header
-
-    # Create a new NIfTI image
-    nifti_image = nb.Nifti1Image(data, afni_brain.affine, header=afni_header)
-    
-    return nifti_image
-
-def read_afni_1d_file(file_path):
-    with open(file_path, 'r') as file:
-        data = file.readlines()
-
-    # The first line often contains labels or comments, so we skip it
-    data_values = data[1:]
-
-    # Convert the data from strings to floats
-    data_values = [float(value.strip()) for value in data_values]
-
-    return np.array(data_values)
-
 if __name__ == "__main__":
     # highlight_stat
     result = sj_brain.highlight_stat(roi_array=motor_left_mask.get_data(),

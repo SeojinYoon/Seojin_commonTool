@@ -28,6 +28,7 @@ def clusterize(file_path,
                orientation = "LPI",
                is_positive = False,
                pref_map = None,
+               pref_dat = None,
                stat_index = 1):
     """
     clusetring analysis based on stat map
@@ -41,7 +42,8 @@ def clusterize(file_path,
     :param is_parsing: whether parsing output(boolean)
     :param orientation: (string) ex) LPI, RAI
     :param is_positive: filter positive cluster only
-    :param pref_map: cluster map result path(string)
+    :param pref_map: cluster map cluster label result path(string)
+    :param pref_dat: cluster map intensity result path(string)
     :param stat_index: statmap index of file_path
 
     return: (pd.DataFrame)
@@ -59,6 +61,8 @@ def clusterize(file_path,
     
     if pref_map != None:
         command_format = command_format + f"-pref_map {pref_map}"
+    if pref_dat != None:
+        command_format = command_format + f"-pref_dat {pref_dat}"
 
     # threshold
     threshold = np.abs(threshold)

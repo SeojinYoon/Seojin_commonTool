@@ -123,10 +123,7 @@ def draw_line_graph(axis, data_df, conds,
     """
     line_alpha = style_info.get("line_alpha", 0.5)
     line_fmt = style_info.get("line_fmt", "-o")
-    
-    y_min = style_info.get("y_min", np.min(data_df["y"]))
-    y_max = style_info.get("y_max", np.max(data_df["y"]))
-    y_interval = style_info.get("y_interval", (y_max - y_min) / 5)
+    line_style = style_info.get("line_style", "-")
     
     error_bars = []
     for cond in conds:
@@ -136,7 +133,8 @@ def draw_line_graph(axis, data_df, conds,
                           y = sel_df["y"],
                           yerr = sel_df["err"],
                           alpha = line_alpha,
-                          fmt = line_fmt)
+                          fmt = line_fmt,
+                          ls = line_style)
         error_bars.append(p)
 
     draw_label(axis, label_info)
@@ -145,7 +143,6 @@ def draw_line_graph(axis, data_df, conds,
     draw_title(axis, title_info)
     
     cp_legend_info = legend_info.copy()
-    cp_legend_info["is_draw_legend"] = True
     cp_legend_info["legends"] = error_bars
     cp_legend_info["names"] = conds
 
@@ -491,7 +488,8 @@ def plot_stats(axis,
                is_sort = True,
                title_info = {},
                grid_info = {},
-               legend_info = {}):
+               legend_info = {},
+               errors = None):
     """
     Plot stats
     
@@ -523,7 +521,10 @@ def plot_stats(axis,
     name_index = 0
     accuracy_index = 1
     
-    results = list(zip(names, stats, p_values))
+    if type(errors) == type(None):
+        errors = np.repeat(0, len(stats))
+        
+    results = list(zip(names, stats, p_values, errors))
     
     filtered_results = list(filter(lambda result: search_string(target = result[name_index], 
                                                                 search_keys = search_names, 
@@ -549,10 +550,12 @@ def plot_stats(axis,
     
     x_data = np.cumsum(origin_x_data) + np.cumsum(x_adds) 
     
-    y_data = [stat for _, stat, _ in filtered_results]
+    y_data = [stat for _, stat, _, _ in filtered_results]
     y_data = np.round(y_data, y_tick_round)
-    p_data = [p for _, _, p in filtered_results]
+    p_data = [p for _, _, p, _ in filtered_results]
+    error_data = [err for _, _, _, err in filtered_results]
     
+    bar_style = style_info.get("bar_style", "default")
     color_style = style_info.get("color_style", "palette")
     if color_style == "single_color":
         single_color = style_info.get('single_color', "gray")
@@ -560,29 +563,53 @@ def plot_stats(axis,
         axis.bar(x_data, y_data, color = single_color, width = bar_width)
     elif color_style == "palette":
         palette = style_info.get('palette', ("tab10"))
-        
+
         rescale = lambda y: (y - np.min(y)) / (np.max(y) - np.min(y))
         my_cmap = plt.get_cmap(palette)
+        
         axis.bar(x_data, y_data, color = my_cmap(rescale(y_data)), width = bar_width)
     elif color_style == "multi_color":
         multi_color = style_info.get('multi_color', np.repeat("gray", n_data))
+        
         axis.bar(x_data, y_data, color = multi_color, width = bar_width)
+
+    if bar_style == "error":
+        axis.errorbar(x = x_data, 
+                      y = y_data, 
+                      fmt = 'none', 
+                      ecolor = 'black',
+                      capsize = 4,
+                      yerr = error_data)
+        
+        data_y_min = min(y_data - error_data)
+        data_y_max = max(y_data + error_data)
+    else:
+        data_y_min = min(y_data)
+        data_y_max = max(y_data)
     
-    y_min = min(y_data)
-    y_max = max(y_data)
+    sig_style = style_info.get("sig_style", "default")
+    sig_y_diff = style_info.get("sig_y_diff", (data_y_max - data_y_min) / 30)
     
-    sig_y_diff = style_info.get("sig_y_diff", (y_max - y_min) / 30)
+    # Iterrating over the bars one-by-one to represent significance level
+    i = 0
     
-    # Iterrating over the bars one-by-one
     sig_annot_pos = []
     for bar, p in zip(axis.patches, p_data):    
         bar_height = bar.get_height()
         x_loc = bar.get_x() + (bar.get_width() / 2)
         
-        if bar_height >= 0:
-            y_loc = bar_height + sig_y_diff
-        else:
-            y_loc = bar_height - sig_y_diff
+        if sig_style == "default":
+            if bar_style == "error":
+                extra = error_data[i]
+            else:
+                extra = 0
+                
+            if bar_height >= 0:
+                y_loc = bar_height + sig_y_diff + extra
+            else:
+                y_loc = bar_height - sig_y_diff - extra
+        elif sig_style == "y_max":
+            y_loc = data_y_max + sig_y_diff
             
         axis.annotate(convert_pvalue_to_asterisks(p),
                        (x_loc, y_loc), 
@@ -594,19 +621,18 @@ def plot_stats(axis,
                        weight = "bold")
         
         sig_annot_pos.append([x_loc, y_loc])
+        i += 1
+        
     sig_annot_pos = np.array(sig_annot_pos)
-
+    
     # x-ticks
-    filtered_names = [name for name, _, _ in filtered_results]
+    filtered_names = [name for name, _, _, _ in filtered_results]
     tick_info["x_data"] = tick_info.get("x_data", x_data)
     tick_info["x_names"] = tick_info.get("x_names", filtered_names)
     
     # y-ticks
     y_divided = tick_info.get("y_divided", 3)
     y_need_tick = tick_info.get("y_need_tick", None)
-    
-    data_y_min = min(y_data)
-    data_y_max = max(y_data)
     
     y_interval = (data_y_max - data_y_min) / y_divided
     y_range = np.append(np.arange(data_y_min, data_y_max, y_interval), data_y_max)
@@ -618,11 +644,11 @@ def plot_stats(axis,
     ys = np.unique(ys)
     if y_need_tick != None:
         ys = np.append(ys, y_need_tick)
-        min_y = min(np.min(sig_annot_pos[:, 1]), np.min(y_need_tick))
-        max_y = max(np.max(sig_annot_pos[:, 1]), np.max(y_need_tick))
+        min_y = min(np.min(sig_annot_pos[:, 1]), np.min(y_need_tick), data_y_min)
+        max_y = max(np.max(sig_annot_pos[:, 1]), np.max(y_need_tick), data_y_max)
     else:
-        min_y = np.min(sig_annot_pos[:, 1])
-        max_y = np.max(sig_annot_pos[:, 1])
+        min_y = np.min(sig_annot_pos[:, 1], data_y_min)
+        max_y = np.max(sig_annot_pos[:, 1], data_y_max)
     
     tick_info["y_data"] = tick_info.get("y_data", ys)
     tick_info["y_names"] = tick_info.get("y_names", ys)
@@ -730,6 +756,7 @@ def convert_pvalue_to_asterisks(pvalue):
         return "**"
     elif pvalue <= 0.05:
         return "*"
+
     return ""
 
 def draw_regPlot(axis,

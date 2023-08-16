@@ -7,6 +7,9 @@ from PIL import ImageColor
 def rgb_to_hex(rgb):
     return "#" + '%02x%02x%02x' % rgb
 
+def hex_to_rgb(hex_):
+    return np.array(ImageColor.getcolor(hex_, "RGB"))
+    
 def l_cmap(cmap_style, names, add_number = 0.5, axis = None):
     """
     Get listed cmap
@@ -39,8 +42,8 @@ def l_cmap(cmap_style, names, add_number = 0.5, axis = None):
     colors = []
     for name in names:
         index = names.index(name)
-    
-        colors.append(ImageColor.getcolor(palette[name][1], "RGB"))
+        
+        colors.append(hex_to_rgb(palette[name][1]))
     colors = np.array(colors)
 
     # Create the ListedColormap

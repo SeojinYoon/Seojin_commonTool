@@ -25,10 +25,6 @@ class CreateFileWatcher:
 
     def run(self):
         """
-        파일을 기다림
-        """
-
-        """
         listening file
         """
         self.start()

@@ -7,13 +7,13 @@ from collections import Counter
 from enum import Enum
 import glob
 from operator import itemgetter
-
-# Custom Libraries
 import glob
 import tqdm
 from multiprocessing import Pool
 import subprocess
 import numpy as np
+
+# Functions
 
 class File_comparison(Enum):
     file_name = 1 << 0

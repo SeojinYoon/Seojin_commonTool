@@ -378,9 +378,14 @@ class WorkingTreeCursor:
             self.work_fromSup(work_tree)
         
         for tree in work_tree.subtree:
+            self.work_all(tree)
+            
+            """
+            print(tree)
             if tree.result == None:
                 self.work_all(tree)
-
+            """
+            
 class WorkingTree:
     """
     This class make tree structure including function to work.
@@ -390,6 +395,8 @@ class WorkingTree:
     def __init__(self, 
                  func, 
                  name, 
+                 pre_func = None,
+                 post_func = None,
                  suptree = [],
                  is_command = False, 
                  arg_info = {}, 
@@ -398,13 +405,17 @@ class WorkingTree:
         """
         :param func(function or string): function to work, ex) lambda a: a + 3
         :param name(str): tree name, ex) "Tree1"
+        :param pre_func(function): function to work previously
+        :param post_func(function): function to work afterwards
         :param suptree(list - WorkingTree): super tree list
         :param is_command(boolean): True: execute command line, False: execute function
         :param arg_info(dictionary): argument info, ex) { "a" : 3 }
         :param pipeline_info(dictinary): command pipeline
         :param check_result(function): check function's result ex) labmda result: result == True
         """
+        self.pre_func = pre_func
         self.func = func
+        self.post_func = post_func
         self.name = name
         self.arg_info = arg_info
         self.pipeline_info = pipeline_info
@@ -420,11 +431,15 @@ class WorkingTree:
                     return True if result == 0 else False
                 
                 self.check_result = check_
-        
+
+                
     def work(self):
         """
         execute work
         """
+        if type(self.pre_func) != type(None):
+            self.pre_func()
+        
         if self.is_command:
             if self.arg_info == {}:
                 result = os.system(self.func)
@@ -440,7 +455,10 @@ class WorkingTree:
             
             comm = self.command()
             assert self.is_valid_result, f"{self.name} is not working!!, {comm}, result: {self.result}"
-                    
+        
+        if type(self.post_func) != type(None):
+            self.post_func()
+            
         return result
     
     def command(self):

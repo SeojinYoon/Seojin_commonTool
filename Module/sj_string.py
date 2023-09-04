@@ -10,12 +10,12 @@ from sj_enum import File_validation
 
 # Sources
 
-def str_join(strs, deliminator = "_"):
+def str_join(strs, delimiter = "_"):
     """
     join string
 
     :param strs: list of string
-    :param deliminator: deliminator
+    :param delimiter: delimiter
 
     return: combination string
     """
@@ -27,14 +27,14 @@ def str_join(strs, deliminator = "_"):
     elif len(strs) == 1:
         return str(strs[0])
     else:
-        return strs[0] + deliminator + str_join(strs[1:], deliminator)
+        return strs[0] + delimiter + str_join(strs[1:], delimiter)
 
-def str_join_multi_deliminators(strs, deliminators = ["_"]):
+def str_join_multi_delimiters(strs, delimiters = ["_"]):
     """
     join string
 
     :param strs: list of string
-    :param deliminator: deliminators
+    :param delimiter: delimiters
 
     return: combination string
     """
@@ -43,9 +43,9 @@ def str_join_multi_deliminators(strs, deliminators = ["_"]):
     if len(strs) == 1:
         return str(strs[0])
     else:
-        current_deliminator = deliminators[0]
-        next_deliminators = deliminators[1:] + [current_deliminator]
-        return strs[0] + deliminators[0] + str_join_multi_deliminators(strs[1:], next_deliminators)
+        current_delimiter = delimiters[0]
+        next_delimiters = delimiters[1:] + [current_delimiter]
+        return strs[0] + delimiters[0] + str_join_multi_delimiters(strs[1:], next_delimiters)
     
 def search_string(target, search_keys, search_type = "any", exclude_keys = []):
     """

@@ -17,12 +17,13 @@ from enum import Enum
 from matplotlib.pyplot import xticks, yticks
 from scipy.stats import pearsonr
 from collections import Counter
+import math
 
 # Custom Libraries
-from sj_file_system import str_join
+from sj_string import str_join
 from sj_enum import Visualizing
 from sj_string import search_stringAcrossTarget, search_string
-from sj_matplotlib import draw_title, draw_grid, draw_threshold, draw_ticks, draw_spine
+from sj_matplotlib import draw_title, draw_grid, draw_threshold, draw_ticks, draw_spine, draw_text
 from sj_matplotlib import draw_legend, draw_vlines, vline_pos, draw_label
 from sj_color import rgb_to_hex
 
@@ -93,12 +94,22 @@ def bar_plot(ax, data, colors=None, total_width=0.8, single_width=1, legend=True
     if legend:
         ax.legend(bars, data.keys())
 
-def draw_bar_plot(x_list, y_list, title = "Title", xlabel = "xlabel", ylabel = "ylabel"):
-    plt.bar(x_list, y_list)
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+def draw_bar_plot(dataframe, axis, label_info = {}, title_info = {}, tick_info = {}, spine_info = {}):
+    axis = sns.barplot(dataframe, color = "black")
     
+    draw_label(axis, label_info)
+    draw_title(axis, title_info)
+    
+    cp_tick_info = tick_info.copy()
+    cp_tick_info["x_data"] = cp_tick_info.get("x_data", axis.get_xticks())
+    cp_tick_info["x_names"] = cp_tick_info.get("x_names", dataframe.columns)
+    
+    cp_tick_info["y_tick_round"] = 0
+    cp_tick_info["y_data"] = axis.get_yticks()
+    cp_tick_info["y_names"] = axis.get_yticks()
+    
+    draw_ticks(axis, cp_tick_info)
+    draw_spine(axis, spine_info)
     
 
 def draw_scatter_plot(x_list, y_list, title = "Title", xlabel = "xlabel", ylabel = "ylabel"):
@@ -746,6 +757,45 @@ def draw_plot_box(axis, names, accuracies, search_names = [], exclude_names = []
 
     title = str_join([search_title, exclude_title, range_title], ", ")
     axis.set_title(title)
+
+def draw_regPlot(axis,
+                 xs, 
+                 ys,
+                 threshold_info = {},
+                 label_info = {},
+                 title_info = {},
+                 spine_info = {},
+                 tick_info = {},
+                 grid_info = {},
+                 text_info = {}):
+    """
+    Draw linear plot
+    
+    :param axis: axis
+    :param xs(list): x_values
+    :param ys(list): y_values
+    """
+    sns.regplot(x = xs, y = ys, ax = axis)
+    
+    draw_threshold(axis, threshold_info)
+    draw_label(axis, label_info)
+    draw_title(axis, title_info)
+    draw_spine(axis, spine_info)
+    draw_ticks(axis, tick_info)
+    draw_grid(axis, grid_info)
+    
+    result_correlation = pearsonr(xs, ys)
+    stat = np.round(result_correlation.statistic, 2)
+    p_value = result_correlation.pvalue
+    
+    text = f"r = {stat}" + "\n" + format_p_value(p_value)
+    min_x, max_x = np.min(xs), np.max(xs)
+    min_y, max_y = np.min(ys), np.max(ys)
+    cp_text_info = text_info.copy()
+    cp_text_info["x"] = cp_text_info.get("x", max_x - (max_x - min_x) / 5)
+    cp_text_info["y"] = cp_text_info.get("y", max_y - (min_y - max_y) / 5)
+    cp_text_info["text"] = cp_text_info.get("text", text)
+    draw_text(axis, cp_text_info)
     
 def convert_pvalue_to_asterisks(pvalue):
     if pvalue <= 0.0001:
@@ -759,39 +809,13 @@ def convert_pvalue_to_asterisks(pvalue):
 
     return ""
 
-def draw_regPlot(axis,
-                 xs, 
-                 ys,
-                 threshold_info = {},
-                 label_info = {},
-                 title_info = {},
-                 spine_info = {},
-                 tick_info = {},
-                 grid_info = {}):
-    """
-    Draw linear plot
+def format_p_value(p_value, threshold = 0.01):
+    n_zero = int(-math.log(p_value, 10))
+    if p_value < threshold:
+        return  f"p < $10^" + '{' + f"-{n_zero}" + '}$' 
+    else:
+        return f"p = {p_value:.2f}"
     
-    :param axis: axis
-    :param xs(list): x_values
-    :param ys(list): y_values
-    """
-    print("corr: ", pearsonr(xs, ys))
-    
-    agg_ys = np.median(ys)
-    exceed_ys = ys <= agg_ys
-    
-    print("exceed ys: ", Counter(exceed_ys)[True])
-    print("not exceed ys: ", Counter(exceed_ys)[False])
-
-    sns.regplot(x = xs, y = ys, ax = axis)
-    
-    draw_threshold(axis, threshold_info)
-    draw_label(axis, label_info)
-    draw_title(axis, title_info)
-    draw_spine(axis, spine_info)
-    draw_ticks(axis, tick_info)
-    draw_grid(axis, grid_info)
-
 if __name__=="__main__":
     import F_Visualize
     test = pd.DataFrame([

@@ -123,8 +123,8 @@ def draw_label(axis, label_info = {}):
     x_weight = dict(weight = label_info.get("x_weight", "bold"))
     y_weight = dict(weight = label_info.get("y_weight", "bold"))
     
-    x_label_size = label_info.get("x_size", 9)
-    y_label_size = label_info.get("y_size", 9)
+    x_label_size = label_info.get("x_size", 14)
+    y_label_size = label_info.get("y_size", 14)
     
     x_label_pad = label_info.get("x_label_pad", 10)
     y_label_pad = label_info.get("y_label_pad", 10)
@@ -231,14 +231,14 @@ def draw_ticks(axis, tick_info = {}):
     x_names = tick_info.get("x_names", [])
     
     x_tick_weight = tick_info.get("x_tick_weight", "normal")
-    x_tick_size = tick_info.get("x_tick_size", 8)
+    x_tick_size = tick_info.get("x_tick_size", 12)
     x_tick_rotation = tick_info.get("x_tick_rotation", 90)
 
     y_data = tick_info.get("y_data", [])
     y_names = tick_info.get("y_names", [])
     
     y_tick_weight = tick_info.get("y_tick_weight", "normal")
-    y_tick_size = tick_info.get("y_tick_size", 8)
+    y_tick_size = tick_info.get("y_tick_size", 12)
     y_tick_rotation = tick_info.get("y_tick_rotation", 0)
 
     # X
@@ -454,6 +454,39 @@ def vline_pos(axis, search_xs, pos_info = {}):
                 key_i += 1
                 
     return annot_pos
+
+def draw_text(axis, style_info = {}):
+    """
+    Draw text
+    
+    :param axis(AxesSubplot): axis
+    :param style_info: (dictionary)
+        -k, text(string): text
+        -k, x(float): x pos of text
+        -k, y(float): y pos of text
+        -k, h_align(string): holizontal align
+        -k, v_align(string): vertical align
+        -k, weight(string): font
+        -k, size(float): text size
+    """
+    text = style_info.get("text", "")
+    x = style_info.get("x", 0)
+    y = style_info.get("y", 0)
+    
+    h_align = style_info.get("h_align", "center")
+    v_align = style_info.get("v_align", "center")
+    
+    weight = style_info.get("weight", "normal")
+    size = style_info.get("size", 15)
+    axis.text(x = x, 
+              y = y, 
+              s = text,
+              horizontalalignment = h_align,
+              verticalalignment = v_align,
+              weight = weight,
+              size = size)
+
+
 
 if __name__=="__main__":
     multi_font_strings(["a", "b"])

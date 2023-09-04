@@ -56,7 +56,7 @@ def filter_from_key(dic, filter_func):
     
     return filtered dictionary
     """
-    keys = np.array(list(dic.keys()))
+    keys = np.array(list(dic.keys()), dtype = object)    
     flags = list(map(filter_func, keys))
     
     filtered_result = dict(np.array(list(dic.items()), dtype = object)[flags, :])

@@ -17,44 +17,9 @@ from pathlib import Path
 
 # Custom Libraries
 from sj_enum import File_comparison
+from sj_string import str_join
 
 # Sources
-
-def str_join(strs, deliminator = "_"):
-    """
-    join string
-
-    :param strs: list of string
-    :param deliminator: deliminator
-
-    return: combination string
-    """
-    strs = list(filter(lambda str: str != "", strs))
-    strs = list(filter(lambda str: str != None, strs))
-    
-    if len(strs) == 1:
-        return str(strs[0])
-    else:
-        return strs[0] + deliminator + str_join(strs[1:], deliminator)
-
-def str_join_multi_deliminators(strs, deliminators = ["_"]):
-    """
-    join string
-
-    :param strs: list of string
-    :param deliminator: deliminators
-
-    return: combination string
-    """
-    strs = list(filter(lambda str: str != "", strs))
-    
-    if len(strs) == 1:
-        return str(strs[0])
-    else:
-        current_deliminator = deliminators[0]
-        next_deliminators = deliminators[1:] + [current_deliminator]
-        return strs[0] + deliminators[0] + str_join_multi_deliminators(strs[1:], next_deliminators)
-    
 def file_name(path):
     """
     :param path: file_path
@@ -432,6 +397,17 @@ def check_is_hidden(p):
     else:
         return p.startswith('.') #linux-osx
 
+
+def get_all_files(dir_path, filename_pattern):
+    """
+    Get all file with matching filename_pattern
+    
+    return generator
+    """
+    root = Path(dir_path)
+    
+    return root.rglob(filename_pattern)
+    
 if __name__ == "__main__":
     """
     Example of CsvManager 
@@ -462,4 +438,6 @@ if __name__ == "__main__":
     compare_directory("/Users/yoonseojin/Downloads/", "/Users/yoonseojin/Downloads/")
     
     file_is_hidden("/mnt/sdb2/DeepDraw/Projects/20230109_DP21_mri/mri/raw_data/HEAD/._PRE_REST")
+    
+    get_all_files(".", "*")
     

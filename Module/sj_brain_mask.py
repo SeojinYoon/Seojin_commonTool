@@ -12,7 +12,7 @@ from nltools.data import Brain_Data
 
 # Custom Libraries
 from sj_dictionary import search_dict
-from sj_file_system import str_join
+from sj_string import str_join
 
 def apply_mask_change_shape(fMRI_datas, mask):
     """

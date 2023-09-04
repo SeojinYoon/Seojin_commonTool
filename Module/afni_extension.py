@@ -1,5 +1,5 @@
 
-
+# Common Libraries
 from re import I
 import subprocess
 import pandas as pd
@@ -8,6 +8,7 @@ import os
 from functools import reduce
 import nibabel as nb
 
+# Custom Libraries
 from sj_string import search_stringAcrossTarget, str_join
 from stat_module import t_critical_value
 
@@ -41,6 +42,7 @@ def clusterize(file_path,
     :param is_show_command: whether showing command(boolean)
     :param is_parsing: whether parsing output(boolean)
     :param orientation: (string) ex) LPI, RAI
+    :param testing_method: (string) ex) 1-sided_right, 1-sided_left, 2-sided
     :param is_positive: filter positive cluster only
     :param pref_map: cluster map cluster label result path(string)
     :param pref_dat: cluster map intensity result path(string)
@@ -49,34 +51,34 @@ def clusterize(file_path,
     return: (pd.DataFrame)
         -row: cluster info
     """
-
-    command_format = "3dClusterize \
-    -inset {file_path} \
-    -idat {stat_index} -NN {NN_level} \
-    -clust_nvox {cluster_size} \
-    -2sided {l_threshold} {u_threshold} \
-    -ithr {stat_index} \
-    -orient {orientation} \
-    "
-    
-    if pref_map != None:
-        command_format = command_format + f"-pref_map {pref_map}"
-    if pref_dat != None:
-        command_format = command_format + f"-pref_dat {pref_dat}"
-
-    # threshold
-    threshold = np.abs(threshold)
-    l_threshold = -threshold
-    u_threshold = threshold
-    
+    # Testing method
+    test_str = ""
+    if testing_method == "1-sided_right":
+        test_str = f"-1sided RIGHT_TAIL {threshold}"
+    elif testing_method == "1-sided_left":
+        test_str = f"-1sided LEFT_TAIL {threshold}"
+    else 
+        # testing_method == "2-sided":
+        threshold = np.abs(threshold)
+        l_threshold = -threshold
+        u_threshold = threshold
+        
+        test_str = f"-2sided {l_threshold} {u_threshold}"
+        
     # command
-    command = command_format.format(file_path = file_path,
-                                    NN_level = NN_level,
-                                    cluster_size = cluster_size,
-                                    l_threshold = l_threshold,
-                                    u_threshold = u_threshold,
-                                    orientation = orientation,
-                                    stat_index = stat_index)
+    command = str_join(strs = [
+        "3dClusterize ",
+        f"-inset {file_path}",
+        f"-idat {stat_index}",
+        f"-NN {NN_level}",
+        f"-clust_nvox {cluster_size}",
+        f"-ithr {stat_index}",
+        f"-orient {orientation}",
+        test_str,
+        f"-pref_map {pref_map}" if pref_map != None else "",
+        f"-pref_dat {pref_dat}" if pref_dat != None else "",
+    ], delimiter = "\\")
+    print(command)
     
     output = subprocess.check_output(command, shell=True)
     output = output.decode('utf-8').split("\n")

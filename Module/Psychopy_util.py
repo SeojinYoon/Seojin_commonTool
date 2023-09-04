@@ -40,7 +40,7 @@ wait_visual_stimulus = "+"
 
 class Direct_fire_timer:
     """
-    This class is made for call certain procedure when the time is reached by timer or when need to call directly
+    This class is made for calling a procedure when the time is over or when we need to call procedure directly
     """
     def start(self, seconds, proc):
         self.proc = proc

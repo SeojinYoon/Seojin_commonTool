@@ -31,7 +31,6 @@ import nibabel as nb
 from nilearn import image
 from nilearn.plotting import plot_design_matrix
 
-import nltools
 from nltools.data import Brain_Data
 
 # Multiprocessing
@@ -39,17 +38,12 @@ from tqdm.contrib.concurrent import process_map
 
 # Custom Libraries
 from F_Visualize import plot_timeseries
-import sj_util
-import sj_sequence
-import sj_file_system
-import sj_higher_function
-import sj_preprocessing
-import sj_file_system
-import sj_datastructure
-import sj_dictionary
-import sj_math
-import sj_string
-
+from sj_sequence import get_multiple_elements_in_list, slice_list_usingDiff, check_duplication
+from sj_file_system import load, save
+from sj_higher_function import recursive_mapWithDepth
+from sj_preprocessing import change_df
+from sj_datastructure import quick_sort
+from sj_string import make_pad_fromInt, str_join
 from sj_brain_mask import apply_mask_change_shape
 
 # Sources
@@ -114,10 +108,10 @@ def type_transform(brain_data, tranform_type):
     """
     if type(brain_data) == nb.Nifti1Image:
         if tranform_type == "nltools":
-            result = nltools.data.brain_data.Brain_Data(brain_data)
+            result = Brain_Data(brain_data)
         elif tranform_type == "array":
             result = brain_data.get_fdata()
-    elif type(brain_data) == nltools.data.brain_data.Brain_Data:
+    elif type(brain_data) == Brain_Data:
         if tranform_type == "array":
             result = brain_data.to_nifti().get_fdata()
         elif tranform_type == "nibabel":
@@ -194,14 +188,14 @@ def split_data_pairs(datas, behaviors, train_indexes, test_indexes):
     return train_datas, train_behavior, test_datas(4d numpy array), test_behavior
     """
     train_datas = concat_fMRI_datas(train_indexes, datas)
-    train_behavior = sj_util.get_multiple_elements_in_list(in_list=behaviors,
+    train_behavior = get_multiple_elements_in_list(in_list=behaviors,
                                                            in_indices=train_indexes)
-    train_behavior = sj_util.concat_pandas_datas(train_behavior)
+    train_behavior = concat_pandas_datas(train_behavior)
 
     test_datas = concat_fMRI_datas(test_indexes, datas)
-    test_behavior = sj_util.get_multiple_elements_in_list(in_list=behaviors,
+    test_behavior = get_multiple_elements_in_list(in_list=behaviors,
                                                           in_indices=test_indexes)
-    test_behavior = sj_util.concat_pandas_datas(test_behavior)
+    test_behavior = concat_pandas_datas(test_behavior)
 
     return train_datas, train_behavior, test_datas, test_behavior
 
@@ -428,7 +422,7 @@ def make_rdm_from_1dTriangle(triangle_1d, mat_dim):
         else:
             return c1_i < c2_i
         
-    lower_triangle_indexes = sj_datastructure.quick_sort(lower_triangle_indexes, sort_func)
+    lower_triangle_indexes = quick_sort(lower_triangle_indexes, sort_func)
     for e, index in zip(triangle_1d, lower_triangle_indexes):
         r_i = index[0]
         c_i = index[1]
@@ -481,7 +475,7 @@ def searchlight_RDM(betas,
             print("load rdm: ", save_rdm_path)
             
             if load_rdm:
-                SL_RDM = sj_file_system.load(save_rdm_path)
+                SL_RDM = load(save_rdm_path)
                 return SL_RDM
             else:
                 pass
@@ -500,18 +494,18 @@ def searchlight_RDM(betas,
             beta = betas.slicer[..., i]
             array_betas.append(beta.get_fdata())
         array_betas = np.array(array_betas)
-    elif type(betas) == nltools.data.brain_data.Brain_Data:
+    elif type(betas) == Brain_Data:
         array_betas = []
         for condition_i in range(0, len(conditions)):
             array_betas.append(betas[condition_i].to_nifti().get_fdata())    
 
         array_betas = np.array(array_betas)
-    elif type(betas) == list and type(betas[0]) == nltools.data.brain_data.Brain_Data:
+    elif type(betas) == list and type(betas[0]) == Brain_Data:
         array_betas = np.array([beta.to_nifti().get_fdata() for beta in betas])
     
     if save_region_path != None:        
         try:
-            centers, neighbors = sj_file_system.load(save_region_path)
+            centers, neighbors = load(save_region_path)
         except:
             print("load region fail: ", save_region_path)
             """
@@ -530,7 +524,7 @@ def searchlight_RDM(betas,
             centers, neighbors = get_volume_searchlight(mask.get_fdata(), 
                                                         radius=radius, 
                                                         threshold=threshold)
-            sj_file_system.save((centers, neighbors), save_region_path)
+            save((centers, neighbors), save_region_path)
             print("save region: ", save_region_path)
         
     # reshape data so we have n_observastions x n_voxels
@@ -553,7 +547,7 @@ def searchlight_RDM(betas,
     
     if save_rdm_path != None:
         print("save RDM: ", save_rdm_path)
-        sj_file_system.save(SL_RDM, save_rdm_path)
+        save(SL_RDM, save_rdm_path)
         
     return SL_RDM
 
@@ -667,23 +661,20 @@ class RDM_model:
         colorbar.set_ticklabels(legend_tick_labels, weight = legend_tick_weight, size = legend_tick_size)
         
         # Matrix Ticks
-        slicing_indexes = sj_sequence.slice_list_usingDiff(conditions)
+        slicing_indexes = slice_list_usingDiff(conditions)
         rdm_conditions = [conditions[start_i] for start_i, end_i in slicing_indexes]
         
-        axis.set_xticks([(start_i + end_i)/2 for start_i, end_i in sj_sequence.slice_list_usingDiff(conditions)], 
+        axis.set_xticks([(start_i + end_i)/2 for start_i, end_i in slice_list_usingDiff(conditions)], 
                         rdm_conditions,
                         size = tick_size,
                         weight = tick_weight,
                         rotation = x_tick_rotation)
-        axis.set_yticks([(start_i + end_i)/2 for start_i, end_i in sj_sequence.slice_list_usingDiff(conditions)], 
+        axis.set_yticks([(start_i + end_i)/2 for start_i, end_i in slice_list_usingDiff(conditions)], 
                         rdm_conditions,
                         size = tick_size,
                         weight = tick_weight,
                         )
        
-
-
-        
         # Title
         axis.set_title(title, weight = title_wight, size = title_size)
         
@@ -767,7 +758,7 @@ def RSA(models,
     for i, model in enumerate(models):
         # Filter if the rsa result exists already.
         save_rsa_path = os.path.join(save_corr_brain_dir_path, 
-                                     sj_file_system.str_join([eval_method, model.name]) + ".nii.gz")
+                                     str_join([eval_method, model.name]) + ".nii.gz")
         
         if os.path.exists(save_rsa_path):
             print("RSA result exists aready!", save_rsa_path)
@@ -811,7 +802,7 @@ def RSA(models,
         for model_i in range(0, len(cp_models)):
             model = cp_models[model_i]  
             
-            save_corr_path = os.path.join(save_corr_brain_dir_path, sj_file_system.str_join([eval_method, model.name]) + ".nii.gz")
+            save_corr_path = os.path.join(save_corr_brain_dir_path, str_join([eval_method, model.name]) + ".nii.gz")
             
             corr_img = nb.Nifti1Image(corr_brains[model_i], affine = mask.affine)
             print(save_corr_path)
@@ -947,7 +938,7 @@ def construct_contrast(design_matrix_columns, contrast_info):
     
     """
     
-    assert sj_sequence.check_duplication(design_matrix_columns) != True, "column is duplicated!"
+    assert check_duplication(design_matrix_columns) != True, "column is duplicated!"
 
     candidates = np.zeros(len(design_matrix_columns))
     for condition in contrast_info:
@@ -1048,13 +1039,13 @@ def change_event_typeForLSS(lsa_event, rest_condition, target_condition, trial_i
     return event
     """
     event = lsa_event.copy()
-    target_conditionWithTrial = sj_file_system.str_join([target_condition, str(trial_index)])
+    target_conditionWithTrial = str_join([target_condition, str(trial_index)])
     
     # Rest to Nuisance Rest
-    df = sj_preprocessing.change_df(event, "trial_type", lambda t_type: "Nuisance_Rest" if t_type != target_conditionWithTrial and rest_condition in t_type else t_type)
+    df = change_df(event, "trial_type", lambda t_type: "Nuisance_Rest" if t_type != target_conditionWithTrial and rest_condition in t_type else t_type)
     
     # 
-    df = sj_preprocessing.change_df(df, "trial_type", lambda t_type: "Nuisance_Move" if t_type != target_conditionWithTrial and t_type != "Nuisance_Rest" else t_type)
+    df = change_df(df, "trial_type", lambda t_type: "Nuisance_Move" if t_type != target_conditionWithTrial and t_type != "Nuisance_Rest" else t_type)
     
     return df
 
@@ -1080,12 +1071,12 @@ def compare_design_mats(design_mats1, design_mats2, mat1_description="", mat2_de
     for run_index in range(run_length):
         dm1_axis = axes[dm1_axis_index][run_index]
         plot_design_matrix(design_mats1[run_index], ax = dm1_axis)
-        dm1_axis.set_title(sj_file_system.str_join([mat1_description, str(run_index + 1)]))
+        dm1_axis.set_title(str_join([mat1_description, str(run_index + 1)]))
 
     for run_index in range(run_length):
         dm2_axis = axes[dm2_axis_index][run_index]
         plot_design_matrix(design_mats2[run_index], ax = dm2_axis)
-        dm2_axis.set_title(sj_file_system.str_join([mat2_description, str(run_index + 1)]))
+        dm2_axis.set_title(str_join([mat2_description, str(run_index + 1)]))
 
 def compare_design_mats_hemodynamic(design_mats1, 
                         design_mats2, 
@@ -1199,8 +1190,8 @@ def searchlight_with_beta(Xs,
     end = datetime.datetime.now()
     
     # Save
-    save_file_name = sj_file_system.str_join([prefix, subj_name, estimator, "searchlight_clf"], deliminator = "_")   
-    sj_file_system.save(searchlight, os.path.join(searchlight_dir_path, save_file_name))
+    save_file_name = str_join([prefix, subj_name, estimator, "searchlight_clf"], deliminator = "_")   
+    save(searchlight, os.path.join(searchlight_dir_path, save_file_name))
                  
     score_img = image.new_img_like(ref_niimg = full_mask, data = searchlight.scores_)
     nb.save(score_img, os.path.join(searchlight_dir_path, save_file_name + ".nii"))
@@ -1363,9 +1354,9 @@ def sort_rdm(rdm_array, origin_conditions, reordered_conditions):
     for i in range(cond_length):
         for j in range(cond_length):
             target_pair = sorted_grid[i][j]
-            target_array = np.array(sj_higher_function.recursive_mapWithDepth(orgin_grid, 
-                                                                              lambda x: x == target_pair, 
-                                                                              1))
+            target_array = np.array(recursive_mapWithDepth(orgin_grid, 
+                                                           lambda x: x == target_pair, 
+                                                           1))
 
             x_indexes, y_indexes = np.where(target_array == True)
             assert len(x_indexes) == 1 and len(y_indexes) == 1, "Please check duplicate"
@@ -1712,7 +1703,7 @@ def convert_data_type(data, full_mask, convert_type = "nifti"):
         elif convert_type == "masked_array":
             masked_array = apply_mask_change_shape([data], full_mask)[0][0]
             return masked_array
-    elif type(data) == nltools.Brain_Data:
+    elif type(data) == Brain_Data:
         if convert_type == "nifti":
             return data.to_nifti()
         elif convert_type == "brain_data":
@@ -1741,7 +1732,7 @@ def convert_data_type(data, full_mask, convert_type = "nifti"):
             return image
         elif convert_type == "brain_data":
             nifti_img = convert_data_type(data, full_mask, convert_type = "nifti")
-            return nltools.Brain_Data(nifti_img, mask = full_mask)
+            return Brain_Data(nifti_img, mask = full_mask)
         elif convert_type == "masked_array":
             return data
 

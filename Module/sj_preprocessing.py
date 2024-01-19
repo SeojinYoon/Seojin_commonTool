@@ -139,7 +139,7 @@ def search_multi_conditions(data, search_columns, filter_funcs):
     """
     filter data using filter funcs over search_columns
     
-    :param search_columns: list of column name ex [ ["학생코드", "", "", ""], ...] <- if use multindex column
+    :param search_columns: list of column name ex [ ["학생코드", "", "", ""], ...] <- if you use multindex column
     :param filter_funcs: Apply filter function over the column vector
     
     return DataFrame
@@ -371,7 +371,7 @@ def sampling(start_sampling_timing, sampling_interval, sampling_count, timings, 
     :param values: values(list) - corresponding value from each timing
     """
     n_interval_decimal = len(str(float(sampling_interval)).split(".")[1])
-    end_sampling_timing = round_down(start_sampling_timing + sampling_count * sampling_interval, n_interval_decimal)
+    end_sampling_timing = np.round(start_sampling_timing + sampling_count * sampling_interval, n_interval_decimal)
     sampling_timings = np.arange(start_sampling_timing, 
                                  end_sampling_timing, 
                                  sampling_interval)

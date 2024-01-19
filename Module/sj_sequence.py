@@ -8,7 +8,7 @@ from operator import itemgetter
 import math
 
 # Custom Libraries
-import sj_higher_function
+from sj_higher_function import recursive_map, flatten
 
 # Sources
 
@@ -448,7 +448,7 @@ def replace_element(data, from_, to_):
         else:
             raise Exception("from_'s elements are duplicated!!")
     
-    return sj_higher_function.recursive_map(data, replacer)
+    return recursive_map(data, replacer)
 
 def remove_duplicate_series(data, return_type = "check_result"):
     """
@@ -467,7 +467,7 @@ def remove_duplicate_series(data, return_type = "check_result"):
     
     dup_lengths = (stop_indexes - start_indexes) + 1
     
-    check_result = sj_higher_function.flatten([list(np.repeat(False, dup_length)) for dup_length in dup_lengths])
+    check_result = flatten([list(np.repeat(False, dup_length)) for dup_length in dup_lengths])
     
     # Check starting value
     for start_index in start_indexes:

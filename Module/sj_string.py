@@ -5,7 +5,7 @@ import re
 from functools import reduce
 
 # Custom Libraries
-import sj_sequence
+from sj_sequence import get_multiple_elements_in_list
 from sj_enum import File_validation
 
 # Sources
@@ -97,7 +97,7 @@ def search_stringAcrossTarget(targets,
                                     exclude_keys = exclude_keys) for target in targets]
     search_flags = np.array(search_results)
     indexes = np.where(search_flags == True)[0]
-    result = sj_sequence.get_multiple_elements_in_list(targets, indexes)
+    result = get_multiple_elements_in_list(targets, indexes)
     
     # search validation
     if validation_type == None:

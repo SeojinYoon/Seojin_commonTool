@@ -22,6 +22,7 @@ def set_afni_abin(abin_path):
     
 def clusterize(file_path, 
                threshold,
+               testing_method = "2-sided",
                NN_level = 1, 
                cluster_size = 40, 
                is_show_command = False,
@@ -37,12 +38,12 @@ def clusterize(file_path,
 
     :param file_path: path of statmap(string)
     :param threshold: threshold(float)
+    :param testing_method: (string) ex) 1-sided_right, 1-sided_left, 2-sided
     :param NN_level: NN level(int)
     :param cluster_size: cluster size(int)
     :param is_show_command: whether showing command(boolean)
     :param is_parsing: whether parsing output(boolean)
     :param orientation: (string) ex) LPI, RAI
-    :param testing_method: (string) ex) 1-sided_right, 1-sided_left, 2-sided
     :param is_positive: filter positive cluster only
     :param pref_map: cluster map cluster label result path(string)
     :param pref_dat: cluster map intensity result path(string)
@@ -57,7 +58,7 @@ def clusterize(file_path,
         test_str = f"-1sided RIGHT_TAIL {threshold}"
     elif testing_method == "1-sided_left":
         test_str = f"-1sided LEFT_TAIL {threshold}"
-    else 
+    else:
         # testing_method == "2-sided":
         threshold = np.abs(threshold)
         l_threshold = -threshold
@@ -67,7 +68,7 @@ def clusterize(file_path,
         
     # command
     command = str_join(strs = [
-        "3dClusterize ",
+        "3dClusterize",
         f"-inset {file_path}",
         f"-idat {stat_index}",
         f"-NN {NN_level}",
@@ -77,8 +78,7 @@ def clusterize(file_path,
         test_str,
         f"-pref_map {pref_map}" if pref_map != None else "",
         f"-pref_dat {pref_dat}" if pref_dat != None else "",
-    ], delimiter = "\\")
-    print(command)
+    ], delimiter = " ")
     
     output = subprocess.check_output(command, shell=True)
     output = output.decode('utf-8').split("\n")

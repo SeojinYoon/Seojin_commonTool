@@ -4,6 +4,8 @@ This file contains the basic source code to visualize graph using matplotlib
 """
 import numpy as np
 import matplotlib.pylab as plt
+from scipy.stats import cumfreq
+
 from sj_sequence import slice_list_usingDiff
 from sj_string import search_stringAcrossTarget
 from sj_file_system import str_join
@@ -486,9 +488,48 @@ def draw_text(axis, style_info = {}):
               weight = weight,
               size = size)
 
+def plot_histogram_and_cdf(data, 
+                           axis=None, 
+                           num_bins=30,
+                           hist_label = "Histogram",
+                           cdf_label = "CDF"):
+    """
+    Plot histogram and cumulative distribution function (CDF) of the given data.
+    
+    :param data(1D array or list): input data
+    :param axis(Matplotlib axis): Matplotlib axis, the axis to plot on (default is None, which creates a new figure)
+    :param num_bins(int): number of bins for the histogram (default is 30)
+    """
+    if axis is None:
+        fig, axis = plt.subplots()
 
+    # Plot histogram
+    axis.hist(data, bins=num_bins, density=True, alpha=0.6, color='g', label=hist_label)
+
+    # Calculate cumulative distribution function (CDF) using cumfreq
+    cf = cumfreq(data, numbins=num_bins)
+    x_values = cf.lowerlimit + np.linspace(0, cf.binsize * cf.cumcount.size, cf.cumcount.size)
+
+    # Normalize the CDF values
+    cdf_values = cf.cumcount / len(data)
+
+    # Plot the CDF
+    axis.plot(x_values, cdf_values, 'r--', linewidth=2, label=cdf_label)
+
+    # Add labels and legend
+    axis.set_xlabel('Value')
+    axis.set_ylabel('Frequency / Cumulative Probability')
+    axis.legend()
 
 if __name__=="__main__":
     multi_font_strings(["a", "b"])
-    pass
+    
+    # Example usage with random data
+    random_data = np.random.normal(loc=0, scale=1, size=1000)
+
+    # Create a new figure and axis
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
+
+    # Call the function with the first axis
+    plot_histogram_and_cdf(random_data, axis=axes[0])
     

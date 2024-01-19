@@ -28,11 +28,11 @@ def file_name(path):
     from sys import platform
 
     if platform == 'win32':
-        deliminator = '\\'
+        delimiter = '\\'
     else:
-        deliminator = '/'
+        delimiter = '/'
 
-    return path.split(deliminator)[-1]
+    return path.split(delimiter)[-1]
 
 def wait_for_write_finish_download(file_path, wait_seconds, exception):
     """
@@ -180,7 +180,7 @@ def rename(dir_path, target_str, replace_str):
     target = os.path.join(dir_path, target_str)
     replace = os.path.join(dir_path, replace_str)
         
-    command = str_join(["mv", target, replace], deliminator = " ")
+    command = str_join(["mv", target, replace], delimiter = " ")
     print(command)
     os.system(command)
 

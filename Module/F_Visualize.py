@@ -560,6 +560,7 @@ def plot_stats(axis,
     bar_width = style_info.get("bar_width", 0.8)
     
     x_data = np.cumsum(origin_x_data) + np.cumsum(x_adds) 
+    x_data -= 1
     
     y_data = [stat for _, stat, _, _ in filtered_results]
     y_data = np.round(y_data, y_tick_round)
@@ -597,6 +598,10 @@ def plot_stats(axis,
     else:
         data_y_min = min(y_data)
         data_y_max = max(y_data)
+    data_y_min = min(tick_info.get("y_min", data_y_min), data_y_min)
+    data_y_max = max(tick_info.get("y_max", data_y_max), data_y_max)
+        
+    print(data_y_min, data_y_max)
     
     sig_style = style_info.get("sig_style", "default")
     sig_y_diff = style_info.get("sig_y_diff", (data_y_max - data_y_min) / 30)
@@ -658,8 +663,8 @@ def plot_stats(axis,
         min_y = min(np.min(sig_annot_pos[:, 1]), np.min(y_need_tick), data_y_min)
         max_y = max(np.max(sig_annot_pos[:, 1]), np.max(y_need_tick), data_y_max)
     else:
-        min_y = np.min(sig_annot_pos[:, 1], data_y_min)
-        max_y = np.max(sig_annot_pos[:, 1], data_y_max)
+        min_y = min(np.min(sig_annot_pos[:, 1]), data_y_min)
+        max_y = max(np.max(sig_annot_pos[:, 1]), data_y_max)
     
     tick_info["y_data"] = tick_info.get("y_data", ys)
     tick_info["y_names"] = tick_info.get("y_names", ys)

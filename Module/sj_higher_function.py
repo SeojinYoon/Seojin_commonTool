@@ -13,8 +13,6 @@ from collections.abc import Iterable
 
         
 # Custom Libaries
-from sj_file_system import str_join
-import sj_higher_function
 
 # Sources
 
@@ -447,6 +445,8 @@ def call_func_dynamically(function_name, argument_names, arg_value_pair, module_
     
     return: output of function
     """
+    from sj_string import str_join
+    
     # mapping between arg name and arg value
     arg = list(map(lambda arg_name, arg_value: str_join([arg_name, arg_value], "="), argument_names, arg_value_pair))
     

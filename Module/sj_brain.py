@@ -20,6 +20,7 @@ from rsatoolbox.util.searchlight import get_volume_searchlight, get_searchlight_
 from rsatoolbox.data.dataset import Dataset
 from tqdm import tqdm
 from rsatoolbox.rdm import calc_rdm, RDMs
+from rsatoolbox.data.noise import prec_from_residuals
 
 # Visualize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -47,7 +48,17 @@ from sj_string import make_pad_fromInt, str_join
 from sj_brain_mask import apply_mask_change_shape
 
 # Sources
-
+class Shrinkage_type:
+    eye = "shrinkage_eye"
+    diag = "shrinkage_diag"
+    
+    @staticmethod
+    def name(shrinkage_type):
+        if shrinkage_type == Shrinkage_type.eye:
+            return Shrinkage_type.eye
+        elif shrinkage_type != Shrinkage_type.diag:
+            return Shrinkage_type.diag
+        
 class Similarity_type:
     # https://rsatoolbox.readthedocs.io/en/latest/_modules/rsatoolbox/rdm/calc.html#calc_rdm_mahalanobis
     
@@ -1416,7 +1427,7 @@ def calc_precision_mat_basic(run_length, residuals, mask, residual_cov_method = 
         print(masked_data.shape)
         
         # noise covariance matrix
-        noise_precision_mat = rsatoolbox.data.noise.prec_from_residuals(masked_data, method = residual_cov_method)
+        noise_precision_mat = prec_from_residuals(masked_data, method = residual_cov_method)
 
         noise_precision_mats.append(noise_precision_mat)
     return noise_precision_mats
@@ -1462,6 +1473,78 @@ def construct_dataset(subj_number, beta_values, run_length, conditions):
                        channel_descriptors=chn_des)
     
     return dataset
+
+def calc_roi_crossnobis(subj_number,
+                        betas, 
+                        conditions, 
+                        sessions,
+                        run_length,
+                        residuals, 
+                        roi_mask, 
+                        roi_name, 
+                        full_mask, 
+                        residual_cov_method = "shrinkage_diag"):
+    """
+    Calculate crossnobis based on roi img
+    
+    :param subj_number(int): subject number ex) 1
+    :param betas(Brain_Data - shape: (#cond, #voxels): beta values 
+    :param conditions(np.array - 1d): condition of betas ex) ["a", "b", "c", "d", "a", "b", "c", "d"]
+    :param sessions(np.array - 1d): session of beta ex) [1,1,1,1, 2,2,2,2, 3,3,3,3]
+    :param run_length(int): the number of run
+    :param residuals(list - Brain_Data): beta residual
+    :param roi_mask(nifti - shape: (nx, ny, nz)): mask img 
+    :param roi_name(string): roi_name ex) "cuneate nucleus"
+    :param full_mask(nifti - shape: (nx, ny, nz)): full mask img
+    :param residual_cov_method(string): residual covariance method ex) shrinkage_eye
+    """
+    select_data = 0
+    select_first = 0
+    
+    """
+    Step 1: Apply roi mask
+    """
+    mask = Brain_Data(roi_mask, mask = full_mask)
+    measurements = betas.apply_mask(mask).data
+    
+    masked_residuals = []
+    for r_i in range(run_length):
+        target_residual = residuals[r_i].apply_mask(mask)
+        masked_residuals.append(target_residual.data)
+        
+    """
+    Step 2: Make dataset
+    """
+    # measurment information
+    des = {'subj': subj_number}
+    obs_des = {'conds': conditions, 'sessions': sessions}
+    nVox = measurements.shape[-1]
+    chn_des = {'voxels': np.array(['voxel_' + str(x) for x in np.arange(nVox)])}
+
+    dataset = Dataset(measurements = measurements,
+                      descriptors = des,
+                      obs_descriptors = obs_des,
+                      channel_descriptors = chn_des)
+    """
+    Step 3: Calculate precision matrix
+    """
+    noise_precision_mats = []
+    for r_i in range(run_length):
+        noise_precision_mat = prec_from_residuals(residuals = masked_residuals[r_i],
+                                                  method = residual_cov_method)
+        noise_precision_mats.append(noise_precision_mat)
+
+    
+    """
+    Step 4: Calculate crossnobis distance
+    """
+    rdm_crossnobis = calc_rdm(dataset = dataset, 
+                              descriptor = 'conds', 
+                              method = 'crossnobis',
+                              noise = noise_precision_mats,
+                              cv_descriptor = 'sessions')
+    
+    return rdm_crossnobis
 
     
 def calc_crossnobis_with_prewhitening(subj_number, 
@@ -1629,7 +1712,7 @@ def calc_precision_mat(neighbor_i):
         masked_residual = target_residual[mask_array]
 
         # noise covariance matrix
-        noise_precision_mat = rsatoolbox.data.noise.prec_from_residuals(masked_residual.T)
+        noise_precision_mat = prec_from_residuals(masked_residual.T)
         noise_precision_mats.append(noise_precision_mat)
         
     return noise_precision_mats

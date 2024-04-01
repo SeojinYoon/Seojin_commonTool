@@ -281,6 +281,8 @@ class parcellation_roi_mask_manager:
 class multi_label_roi_manager:
     def __init__(self, labeled_img, label_info, reference_img):
         """
+        Initialize multi label roi manager
+        
         :params labeled_img: nifti image with multi labeled(nifti)
         :params label_info: (dictionary)
         :params reference_img: reference_img (nitfti)

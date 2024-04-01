@@ -14,12 +14,26 @@ import subprocess
 import numpy as np
 import pathlib
 from pathlib import Path
+import h5py
+import re
 
 # Custom Libraries
 from sj_enum import File_comparison
 from sj_string import str_join
 
 # Sources
+def get_fileName(path):
+    """
+    Get file name of path
+    
+    :param path(string): path ex) "/mnt/sdb2/DeepDraw/mri_mask/targetROIs/Lt_BA6_ventrolateral.nii.gz"
+    """
+    regex_pattern = r'[^/]+(?=\.nii\.gz)'
+    match = re.search(regex_pattern, path)
+    extracted_with_regex = match.group() if match else None
+    
+    return extracted_with_regex
+
 def file_name(path):
     """
     :param path: file_path
@@ -397,7 +411,6 @@ def check_is_hidden(p):
     else:
         return p.startswith('.') #linux-osx
 
-
 def get_all_files(dir_path, filename_pattern):
     """
     Get all file with matching filename_pattern
@@ -407,6 +420,34 @@ def get_all_files(dir_path, filename_pattern):
     root = Path(dir_path)
     
     return root.rglob(filename_pattern)
+
+def get_hdf5_info(file_path):
+    """
+    Get all data keys within hdf5 file.
+    
+    :param file_path(string): The file path of hdf5
+    
+    return (string)
+    """
+    with h5py.File(file_path) as hdf:
+        dataset = list(hdf.keys())
+    return dataset
+
+def get_hdf5_data(file_path, key):
+    """
+    Get datas from hdf5 file using key
+    
+    :param file_path(string): The file path of hdf5
+    :param key(string)
+    
+    return data(np.array)
+    """
+    with h5py.File(file_path) as hdf:
+        dataset = hdf[key]
+        result = dataset[:]
+    return result
+
+
     
 if __name__ == "__main__":
     """
@@ -440,4 +481,9 @@ if __name__ == "__main__":
     file_is_hidden("/mnt/sdb2/DeepDraw/Projects/20230109_DP21_mri/mri/raw_data/HEAD/._PRE_REST")
     
     get_all_files(".", "*")
+    
+    dir_path = "/mnt/sdb2/DeepDraw/Deepdraw_dataset/20220801_DP02_mri_converted_data/Original"
+    file_name = "dataset_all_20220801_DP02_mri_with_fmri.hdf5"
+    get_hdf5_info(os.path.join(dir_path, file_name))
+    
     

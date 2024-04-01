@@ -2,6 +2,8 @@
 # Common Libraries
 import copy
 import numpy as np
+import xarray as xr
+import pandas as pd
 import matplotlib.pyplot as plt
 import pygraphviz as pgv
 import inspect
@@ -1332,7 +1334,38 @@ class KnowledgeNode:
                 
         G.layout(prog=prog)
         return G
+
+def make_3d_dataset(data, 
+                    wrapping_dataset_name,
+                    element_dataset_names,
+                    datset1_dim_names, 
+                    datset2_dim_names, 
+                    datset3_dim_names):
+    """
+    Make 3D dataset from 3D numpy array
     
+    :param data(numpy array - shape(3d)): numpy data
+    :param wrapping_dataset_name(string): Wrapping name of total dataset
+    :param element_dataset_names(list - string): dataset name list of each dataset within total dataset
+    :param datset1_dim_names(list - string): dimension name list of dataset1
+    :param datset2_dim_names(list - string): dimension name list of dataset2
+    :param datset3_dim_names(list - string): dimension name list of dataset3
+    
+    return (xarray.Dataset)
+    """
+    # Create the xarray Dataset
+    ds = xr.Dataset(
+        {
+            wrapping_dataset_name : (element_dataset_names, data)
+        },
+        coords={
+            element_dataset_names[0]: datset1_dim_names,
+            element_dataset_names[1]: datset2_dim_names,
+            element_dataset_names[2]: datset3_dim_names
+        }
+    )
+    return ds
+
 # Test  #############################################################################################
 if __name__=="__main__":
     import my_function
@@ -1380,3 +1413,20 @@ if __name__=="__main__":
                            ]])
     a = Cursor(s[0])
     a.work_byDepth()
+    
+    # 3D dataframe
+    ## Define the dimensions
+    companies = ["MSFT", "APPL", "TSLA"]
+    dates = pd.date_range('2024-01-01', periods=10)  # 10 days of data
+    prices = ['Open', 'Close']
+
+    ## Generate random data - Shape: (companies, dates, prices)
+    data = np.random.rand(len(companies), len(dates), len(prices))
+
+    ## Make dataset
+    ds = make_3d_dataset(data = data,
+                         wrapping_dataset_name = "Stock Prices",
+                         element_dataset_names = ["Company", "Dates", "Prices"],
+                         datset1_dim_names = companies,
+                         datset2_dim_names = dates,
+                         datset3_dim_names = prices)

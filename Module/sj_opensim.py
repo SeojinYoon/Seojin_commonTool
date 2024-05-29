@@ -5,9 +5,15 @@ import xml.etree.ElementTree as ET
 import xml.dom.minidom as md
 import os
 import sys
+import numpy as np
+import pandas as pd
 
 # Custom Libraries
 from XML.xml_util import search_tags_in_xml
+
+x_index = 0
+y_index = 1
+z_index = 2
 
 # Scale model
 def make_scale_setup(setup_template_path,
@@ -87,8 +93,6 @@ def run_scaling(setup_file_path,
     
     command = f"opensim-cmd run-tool {setup_file_path}"
     output = run_command_onDocker(command, docker_name = docker_name)
-    
-    print(f"Model is created completely")
     
     return output
 
@@ -315,12 +319,12 @@ def read_mot_file(file_path):
     
     return header, dataframe
     """
-    with open(mot_file_path, 'r') as file:
+    with open(file_path, 'r') as file:
         lines = file.readlines()
     header_end_idx = lines.index('endheader\n')
     column_names = lines[header_end_idx + 1].strip().split('\t')
     
-    df_mot = pd.read_csv(mot_file_path, sep='\t', skiprows = header_end_idx + 2, names=column_names)
+    df_mot = pd.read_csv(file_path, sep='\t', skiprows = header_end_idx + 2, names=column_names)
     
     header = " ".join(lines[:header_end_idx])
     return header, df_mot
@@ -414,7 +418,7 @@ def convert_mot2sto(mot_file_path, save_file_path):
         
     return df_mot 
 
-def get_marker_position(model_file, marker_name):
+def get_marker_position(model_path, marker_name):
     """
     Get the position of a specific marker in an OpenSim model.
     
@@ -426,18 +430,147 @@ def get_marker_position(model_file, marker_name):
     import opensim as osim
     
     # Load the model
-    model = osim.Model(model_file)
-    model.initSystem()
+    model = osim.Model(model_path)
+    state = model.initSystem()
 
     # Access the marker set and the specific marker by name
     marker = model.getMarkerSet().get(marker_name)
 
     # Get the marker's position in the global frame
-    # Note: initSystem() or realizePosition() might be needed to ensure
-    # the model is in a consistent state for position retrieval
-    position = marker.get_location_in_ground(model.initSystem())
+    position = marker.getLocationInGround(state)
 
     return position
+
+def get_body_positions(model_path):
+    """
+    Get body positions from model
+    
+    :param model_path(string): path of model
+    
+    return (dictionary)
+        -k bodyname
+            -k locationInGround: location relative to ground frame
+    """
+    import opensim as osim
+    
+    model = osim.Model(model_path)
+    state = model.initSystem() # initial state of model
+    
+    # Get body positions
+    body_position_info = {}
+    for body in bodySet:
+        body_location = body.getPositionInGround(state)
+        body_location = np.array([body_location[x_index], 
+                                  body_location[y_index], 
+                                  body_location[z_index]])
+        body_position_info[body.getName()] = {
+            "locationInGround" : body_location
+        }
+    return body_position_info
+        
+def get_marker_positions(model_path):
+    """
+    Get marker positions from model
+    
+    :param model_path(string): path of model
+    
+    return (dictionary)
+        -k marker_name
+            -k parent: parent frame name
+            -k locationInGround: location relative to ground frame
+            -k locationInParent: location relative to parent frame
+    """
+    import opensim as osim
+    
+    model = osim.Model(model_path)
+    state = model.initSystem() # initial state of model
+    
+    marker_position_info = {}
+    for marker in markerSet:
+        marker_name = marker.getName()
+        parent_frame = marker.getParentFrame()
+        parent_frame_name = parent_frame.getName()
+        parent_frame.getPositionInGround(state)
+
+        # Get marker location - from parent frame
+        marker_location_in_parent = marker.findLocationInFrame(state, parent_frame)
+        marker_location_in_parent = np.array([marker_location_in_parent[x_index], 
+                                              marker_location_in_parent[y_index],
+                                              marker_location_in_parent[z_index]])
+
+        # Get marker location - from ground frame
+        marker_locationInGround = marker.getLocationInGround(state)
+        marker_locationInGround = np.array([marker_locationInGround[x_index], 
+                                            marker_locationInGround[y_index], 
+                                            marker_locationInGround[z_index]])
+
+        marker_position_info[marker_name] = {
+            "parentFrame_name" : parent_frame_name,
+            "locationInGround" : marker_locationInGround,
+            "locationInParent" : marker_location_in_parent,
+        }
+        
+    return marker_position_info
+
+def mm_to_m(vector):
+    """
+    Convert mm to m
+    
+    :param vector(np.array): 
+    
+    return vector which has m unit
+    """
+    return vector * 1000
+
+def find_data_start(file_path, indicator='Frame#'):
+    """
+    Scan the .trc file to find where the data section starts.
+
+    :param file_path(string): The path to the .trc file.
+    :param indicator(string): A string that indicates the start of the data section. 
+                 This is usually the first column name of the actual data.
+
+    returns:
+        - The line number where the data section starts, which can be used as skiprows in pd.read_csv.
+        - The line containing column names, to be used as header.
+    """
+    with open(file_path, 'r') as file:
+        for i, line in enumerate(file):
+            # Check if the indicator is in the current line
+            if indicator in line:
+                # Return the line number (i) and the previous line for column names
+                # Adjust the return value based on whether your file contains an extra line
+                # between the column names and the first row of data
+                return i, line.strip().split('\t')
+    return 0, None  # Return 0, None if the indicator is not found
+
+def load_trc_file(file_path, indicator='Frame#'):
+    """
+    Load trc file
+    
+    :param file_path(string): path for trc
+    
+    return (pd.DataFrame)
+    """
+    # Find the start of data and header line
+    skip_rows1, column_names1 = find_data_start(file_path, indicator=indicator)
+    skip_rows2, column_names2 = find_data_start(file_path, indicator="X1")
+    
+    for i, item in enumerate(column_names1):
+        if item == "":
+            column_names1[i] = column_names1[i-1]
+    column_names1.append(column_names1[-1])
+    column_names1.append(column_names1[-1])
+    
+    column_names2.insert(0, "")
+    column_names2.insert(0, "")
+            
+    columns = pd.MultiIndex.from_arrays([column_names1, column_names2])
+    # Load the .trc file with detected skiprows and use the column names
+    data = pd.read_csv(file_path, delimiter='\t', skiprows = skip_rows2)
+    data.columns = columns
+
+    return data
 
 if __name__=="__main__":
     readStoFile("")
@@ -451,3 +584,5 @@ if __name__=="__main__":
                                     ik_path = ik_path,
                                     so_output_dir_path = "/mnt/sdb2/DeepDraw/Projects/20220801_DP02_mri/Opensim/test/so_new",
                                     time_range = (0,5))
+    
+    load_trc_file("/mnt/sdb2/DeepDraw/Projects/20220801_DP02_mri/Opensim/TRC_files/resnet_50/trial/trial2.trc")

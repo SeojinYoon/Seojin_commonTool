@@ -1338,18 +1338,18 @@ class KnowledgeNode:
 def make_3d_dataset(data, 
                     wrapping_dataset_name,
                     element_dataset_names,
-                    datset1_dim_names, 
-                    datset2_dim_names, 
-                    datset3_dim_names):
+                    dataset1_dim_names, 
+                    dataset2_dim_names, 
+                    dataset3_dim_names):
     """
     Make 3D dataset from 3D numpy array
     
     :param data(numpy array - shape(3d)): numpy data
     :param wrapping_dataset_name(string): Wrapping name of total dataset
     :param element_dataset_names(list - string): dataset name list of each dataset within total dataset
-    :param datset1_dim_names(list - string): dimension name list of dataset1
-    :param datset2_dim_names(list - string): dimension name list of dataset2
-    :param datset3_dim_names(list - string): dimension name list of dataset3
+    :param dataset1_dim_names(list - string): dimension name list of dataset1
+    :param dataset2_dim_names(list - string): dimension name list of dataset2
+    :param dataset3_dim_names(list - string): dimension name list of dataset3
     
     return (xarray.Dataset)
     """
@@ -1359,9 +1359,9 @@ def make_3d_dataset(data,
             wrapping_dataset_name : (element_dataset_names, data)
         },
         coords={
-            element_dataset_names[0]: datset1_dim_names,
-            element_dataset_names[1]: datset2_dim_names,
-            element_dataset_names[2]: datset3_dim_names
+            element_dataset_names[0]: dataset1_dim_names,
+            element_dataset_names[1]: dataset2_dim_names,
+            element_dataset_names[2]: dataset3_dim_names
         }
     )
     return ds

@@ -443,11 +443,49 @@ def get_hdf5_data(file_path, key):
     return data(np.array)
     """
     with h5py.File(file_path) as hdf:
-        dataset = hdf[key]
-        result = dataset[:]
-    return result
+        if key in hdf:
+            dataset = hdf[key]
+            result = dataset[:]
+            return result
+        else:
+            raise KeyError(f"{key} not found in HDF5 file.")
 
+def print_hdf5_keys(name, obj, indent=0, max_depth=None, current_depth=0):
+    """
+    Recursively prints the keys of an HDF5 file up to a specified depth.
 
+    Parameters:
+    - name: The name of the current object being processed.
+    - obj: The HDF5 object (group or dataset).
+    - indent: The current indentation level for printing.
+    - max_depth: The maximum depth to explore. If None, explores all depths.
+    - current_depth: The current depth level in the recursion.
+    """
+    # Print the current object's name with indentation
+    print('    ' * indent + f"{name}: [{type(obj).__name__}]")
+    
+    # Stop if the maximum depth has been reached
+    if max_depth is not None and current_depth >= max_depth:
+        return
+    
+    # If the object is a group, iterate through its items and call the function recursively
+    if isinstance(obj, h5py.Group):
+        for sub_name, sub_obj in obj.items():
+            print_hdf5_keys(sub_name, sub_obj, indent + 1, max_depth, current_depth + 1)
+    elif isinstance(obj, h5py.Dataset):
+        # Optionally, print dataset details here
+        pass
+
+def explore_hdf5_file(file_path, max_depth=None):
+    """
+    Opens an HDF5 file and prints its structure up to a given depth.
+
+    Parameters:
+    - file_path: Path to the HDF5 file.
+    - max_depth: The maximum depth to explore. If None, explores all depths.
+    """
+    with h5py.File(file_path, 'r') as hdf:
+        print_hdf5_keys('/', hdf, max_depth=max_depth)
     
 if __name__ == "__main__":
     """

@@ -429,7 +429,7 @@ def read_1d(file_path):
             data = data[header_idx + 1:]
     
     # Concat string
-    data = str_join(data, "")
+    data = " ".join(data)
     
     # Unify white space
     white_spaces = [" ", "\t", "\n"]

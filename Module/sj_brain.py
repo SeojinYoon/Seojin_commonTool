@@ -7,7 +7,7 @@ import copy
 import datetime
 
 # Preprocessing
-from statsmodels.stats.outliers_influence import variance_inflation_factor
+
 from sklearn.model_selection import LeaveOneGroupOut, GroupKFold
 from scipy.stats import zscore
 from multiprocessing.pool import ThreadPool
@@ -38,7 +38,7 @@ from nltools.data import Brain_Data
 from tqdm.contrib.concurrent import process_map
 
 # Custom Libraries
-from F_Visualize import plot_timeseries
+from sj_visualization import plot_timeseries
 from sj_sequence import get_multiple_elements_in_list, slice_list_usingDiff, check_duplication
 from sj_file_system import load, save
 from sj_higher_function import recursive_mapWithDepth
@@ -71,7 +71,10 @@ class Similarity_type:
     
     # For comparison between model and data comparison
     spearman = "spearman"
-    
+    kendall_tau_b = "kendall"
+    kendall_tau_a = "tau-a"
+
+
     @staticmethod
     def name(sim_type):
         if sim_type == Similarity_type.pearson:
@@ -957,19 +960,6 @@ def construct_contrast(design_matrix_columns, contrast_info):
         candidates[i_condition] = contrast_info[condition]
 
     return candidates
-
-def VIF(design_matrix):
-    """
-    Calculate VIF from design matrix
-    
-    return vif(dataframe)
-    """
-    
-    vif_data = pd.DataFrame()
-    vif_data["feature"] = design_matrix.columns
-    vif_data["VIF"] = [variance_inflation_factor(design_matrix.values, i) for i in range(len(design_matrix.columns))]
-
-    return vif_data
 
 def get_statsWithDM(fMRI_datas, 
                     dsg_mats, 
@@ -1913,6 +1903,38 @@ def get_r2(fmri_signal, brain_beta, design_mat):
     
     return r_squared
 
+def get_roi_3d_indexes(roi_img, roi_value):
+    """
+    Get roi 3d indexes
+    
+    :param roi_img(nb.Nifti1Image): roi image where the value of roi is [roi_value]
+    :param roi_value: value of roi
+    
+    return roi_3d_indexes(np.array - #voxel, (x_index, y_index, z_index))
+    """
+    roi_xs, roi_ys, roi_zs = np.where(roi_img.get_fdata() == roi_value)
+    
+    roi_xs = np.expand_dims(roi_xs, 1)
+    roi_ys = np.expand_dims(roi_ys, 1)
+    roi_zs = np.expand_dims(roi_zs, 1)
+    
+    roi_3d_indexes = np.concatenate([roi_xs, roi_ys, roi_zs], axis = 1)
+    return roi_3d_indexes
+
+def get_roi_1d_indexes(roi_img, roi_value):
+    """
+    Get roi 1d indexes
+    
+    :param roi_img(nb.Nifti1Image): roi image where the value of roi is [roi_value]
+    :param roi_value: value of roi
+    
+    return roi_1d_indexes(np.array)
+    """
+    
+    roi_3d_indexes = get_roi_3d_indexes(roi_img, roi_value)
+    roi_1d_indexes = np.apply_along_axis(lambda index_3d: image3d_to_1d(index_3d, roi_img.shape), 1, roi_3d_indexes)
+    return roi_1d_indexes
+
 if __name__ == "__main__":
     # highlight_stat
     result = sj_brain.highlight_stat(roi_array=motor_left_mask.get_data(),
@@ -1994,3 +2016,10 @@ if __name__ == "__main__":
                           model_name = "abc",
                           conditions = ["1", "2", "3"])
     rdm_model.draw()
+
+    # Roi index
+    roi_img = nb.load("/mnt/sdb2/DeepDraw/mri_mask/targetROIs/Lt_BA6_ventrolateral.nii.gz")
+    roi_3d_indexes = get_roi_3d_indexes(roi_img, 1)
+    roi_1d_indexes = get_roi_1d_indexes(roi_img, 1)
+    
+    

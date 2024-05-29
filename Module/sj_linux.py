@@ -2,9 +2,10 @@
 import os
 from pathlib import Path
 import glob 
-from sj_string import str_join
 
-def exec_command(command, parameter_info = {}, pipeline_info = {}):
+def exec_command(command, 
+                 parameter_info = {}, 
+                 pipeline_info = {}):
     """
     Execute command
     
@@ -13,6 +14,8 @@ def exec_command(command, parameter_info = {}, pipeline_info = {}):
         -k [argument_name]: [argument_value]
         -k 1, [value]: if there is not arg name, set the name using number
     :param pipeline_info(dictionary): pipeline
+    
+    return: result of command
     """ 
     commands = make_command(command, parameter_info, pipeline_info)
     print(f"\033[1m" + commands + "\033[0m")
@@ -20,7 +23,57 @@ def exec_command(command, parameter_info = {}, pipeline_info = {}):
     result = os.system(commands)
     return result
 
-def make_command(command, parameter_info = {}, pipeline_info = {}):
+def exec_command_inConda(command, 
+                         conda_env_name,
+                         conda_env_path = "/home/seojin/anaconda3/condabin",
+                         parameter_info = {}, 
+                         pipeline_info = {}):
+    """
+    Execute command in conda environment
+    
+    :param command: command
+    :param parameter_info(dictionary): argument information
+        -k [argument_name]: [argument_value]
+        -k 1, [value]: if there is not arg name, set the name using number
+    :param pipeline_info(dictionary): pipeline
+    
+    return: result of command
+    """ 
+    os.environ["PATH"] += f":{conda_env_path}"
+    
+    active_conda_command = f"conda run -n {conda_env_name}"
+    origin_command = make_command(command, parameter_info, pipeline_info)
+    
+    commands = " ".join([active_conda_command, origin_command])
+    print(f"\033[1m" + commands + "\033[0m")
+    
+    result = os.system(commands)
+    return result
+
+def exec_command_withSudo(command, 
+                          password, 
+                          parameter_info = {}, 
+                          pipeline_info = {}):
+    """
+    Execute command on sudo
+    
+    :param command: command
+    :param password(string): password of current account
+    :param parameter_info(dictionary): argument information
+        -k [argument_name]: [argument_value]
+        -k 1, [value]: if there is not arg name, set the name using number
+    :param pipeline_info(dictionary): pipeline
+    
+    return: result of command
+    """ 
+    command = f"echo {password}" + " | " + "sudo -S " + make_command(command)
+    
+    result = exec_command(command, parameter_info, pipeline_info)
+    return result
+    
+def make_command(command, 
+                 parameter_info = {}, 
+                 pipeline_info = {}):
     """
     Make command
     
@@ -56,7 +109,7 @@ def make_command(command, parameter_info = {}, pipeline_info = {}):
                 arg_str += " -" + argument
             else:
                 arg_str += " -" + argument + " " + value_str
-        elif arg_type == list:
+        elif arg_type == tuple:
             for a, v in zip(argument, value):
                 arg_str += " -" + a + " " + v
         else:
@@ -88,6 +141,37 @@ def rename(target_dir_path, from_, to_, max_depth = 1, file_type = "f"):
                           })
     return output
 
+def make_export_command(environment_info = {}):
+    """
+    Make export command
+    
+    :param environment_info(dictionary): ex)
+        {
+            "LD_LIBRARY_PATH" : [
+                "/tmp/moco_dependencies_install/simbody/lib",
+                "/tmp/opensim-moco-install/sdk/Python/opensim",
+                "/tmp/moco_dependencies_install/adol-c/lib64",
+                "/tmp/opensim-moco-install/sdk/Simbody/li",
+                ],
+        }
+    
+    return (string): command to export environment variable
+    """
+    exports = []
+    for environment_variable in environment_info:
+        values = environment_info[environment_variable]
+
+        for value in values:
+            exports.append(f"export {environment_variable}=${environment_variable}:{value}")
+
+    return "; ".join(exports)
+
 if __name__ == "__main__":
     exc_command("ls", {"-l", ""}, {">" : "ls.txt"})
+    make_export_command({
+        "s" : "s",
+    })
     
+    exec_command_inConda(command = "ls",
+                         conda_env_name = "DP",
+                         conda_env_path = "/home/seojin/anaconda3/condabin")

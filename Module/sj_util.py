@@ -12,7 +12,7 @@ import random
 import pandas as pd
 
 # Custom
-import sj_sequence
+from sj_sequence import find_indexes
 
 # Sources
 
@@ -129,7 +129,7 @@ def get_random_sample_in_codes(sample_count, codes, appear_counts):
     :return: list of codes
     """
     result = ["empty"] * sample_count
-    empty_value_indexes = sj_sequence.find_indexes(result, "empty")
+    empty_value_indexes = find_indexes(result, "empty")
 
     for code_i in range(0, len(codes)):
         if code_i != len(codes) - 1:

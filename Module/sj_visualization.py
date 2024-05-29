@@ -18,6 +18,8 @@ from matplotlib.pyplot import xticks, yticks
 from scipy.stats import pearsonr
 from collections import Counter
 import math
+from ipywidgets.widgets import Button, IntSlider, interact, HBox, VBox
+from collections.abc import Iterable
 
 # Custom Libraries
 from sj_string import str_join
@@ -110,7 +112,6 @@ def draw_bar_plot(dataframe, axis, label_info = {}, title_info = {}, tick_info =
     
     draw_ticks(axis, cp_tick_info)
     draw_spine(axis, spine_info)
-    
 
 def draw_scatter_plot(x_list, y_list, title = "Title", xlabel = "xlabel", ylabel = "ylabel"):
     plt.scatter(x_list, y_list)
@@ -600,8 +601,6 @@ def plot_stats(axis,
         data_y_max = max(y_data)
     data_y_min = min(tick_info.get("y_min", data_y_min), data_y_min)
     data_y_max = max(tick_info.get("y_max", data_y_max), data_y_max)
-        
-    print(data_y_min, data_y_max)
     
     sig_style = style_info.get("sig_style", "default")
     sig_y_diff = style_info.get("sig_y_diff", (data_y_max - data_y_min) / 30)
@@ -820,7 +819,159 @@ def format_p_value(p_value, threshold = 0.01):
         return  f"p < $10^" + '{' + f"-{n_zero}" + '}$' 
     else:
         return f"p = {p_value:.2f}"
+
+def draw_onImg(img, 
+               xs_series,
+               ys_series,
+               cmap_name = "tab20",
+               legend_loc = (1.1, -0.5)):
+    """
+    Draw point on img
     
+    :param img(np.array - 3d): img data ex) the img's shape: 480, 928, 3
+    :param xs_series(pd.Series): x datas, index is the name of each data
+    :param ys_series(pd.Series): y datas, index is the name of each data    
+    """
+    assert np.alltrue(xs_series.index == ys_series.index), "X and Y datas are not matched"
+    
+    # img
+    plt.imshow(img)
+    
+    # Marker
+    my_cmap = plt.get_cmap(cmap_name)
+    
+    for i in range(len(xs_series)):
+        name = xs_series.index[i]
+        plt.scatter(xs_series[i], ys_series[i], s = 4, label = name, color = my_cmap(i))
+
+    plt.legend(loc = legend_loc)
+    
+def compare_frames(*args, titles, fig_info = { "fig_width" : 10 }, cmap = "gray"):
+    """
+    Compare frame by frame
+    
+    :param *args: frames (np.array - shape: n_t, n_y, n_x)
+    :param titles(list - string): each title of video ex) "a", "b"
+    :param cmap(string): color map for visualizing video
+    """
+    prev1_btn = Button(description="Prev_1")
+    next1_btn = Button(description="Next_1")
+    prev10_btn = Button(description="Prev_10")
+    next10_btn = Button(description="Next_10")
+    prev30_btn = Button(description="Prev_30")
+    next30_btn = Button(description="Next_30")
+    buttons = HBox(children=[prev1_btn, next1_btn, prev10_btn, next10_btn, prev30_btn, next30_btn])
+
+    video_frames = [value for value in args]
+    n_video = len(video_frames)
+    
+    shapes = [video.shape for video in video_frames]
+    
+    assert np.alltrue([shape[0] == shapes[0][0] for shape in shapes]), "the number of time must be same"
+    n_t, n_y, n_x = shapes[0]
+    
+    slider = IntSlider(min = 0, 
+                       max = n_t - 1, 
+                       step = 1, 
+                       layout = {'width': '900px'})
+    
+    @interact
+    def func1(frame = slider):
+        fig, axises = plt.subplots(1, n_video)
+        if not isinstance(axises, Iterable):
+            axises = [axises]
+            
+        fig.set_figwidth(fig_info["fig_width"])
+
+        for axis, title, frames in zip(axises, titles, video_frames):
+            axis.axis('off')
+            axis.set_title(title)
+
+            axis.imshow(frames[frame], cmap = cmap)
+
+        plt.show()    
+
+    # Callbacks
+    def onPrev1(s):
+        slider.value = slider.value - 1
+
+    def onNext1(s):
+        slider.value = slider.value + 1
+
+    def onPrev10(s):
+        slider.value = slider.value - 10
+
+    def onNext10(s):
+        slider.value = slider.value + 10
+
+    def onPrev30(s):
+        slider.value = slider.value - 30
+
+    def onNext30(s):
+        slider.value = slider.value + 30
+
+    prev1_btn.on_click(onPrev1)
+    next1_btn.on_click(onNext1)
+    prev10_btn.on_click(onPrev10)
+    next10_btn.on_click(onNext10)
+    prev30_btn.on_click(onPrev30)
+    next30_btn.on_click(onNext30)
+
+    display(buttons)
+
+def draw_errorlines(means,
+                    errors,
+                    other_means,
+                    title,
+                    subtitles,
+                    save_path = None,
+                    xlabel = "",
+                    ylabel = ""):
+    """
+    Draw error lines
+    
+    :param means(np.array - shape: (#roi, #time)): mean activation across roi
+    :param errors(np.array - shape: (#roi, #time)): standard deviation across roi
+    :param other_means(np.array - shape: (#roi, #time)): model prediction(GLM) result
+    :param title(string): title
+    :param save_path(string): path
+    """
+    plt.clf()
+    
+    # Figure
+    n_col = 4
+    fig, axes = plt.subplots(int(len(roi_names) / n_col + 1), n_col)
+    fig.set_figheight(30)
+    fig.set_figwidth(15)
+
+    axes = axes.flatten()
+    for roi_i, roi_name in enumerate(roi_names):
+        mean = means[roi_i]
+        error = errors[roi_i]
+
+        xs = np.arange(len(mean))
+        axes[roi_i].plot(mean, color = "black")
+        axes[roi_i].fill_between(xs, 
+                                 mean - error, 
+                                 mean + error,
+                                 color = "black",
+                                 alpha = 0.1)
+        axes[roi_i].plot(other_means[roi_i], linestyle='dashed', color = "orange")
+        axes[roi_i].set_xticks(np.arange(len(times)), times)
+        axes[roi_i].set_title(subtitles[roi_i], weight = "bold")
+        
+    fig.supxlabel(xlabel, weight = "bold")
+    fig.supylabel(ylabel, weight = "bold")
+    fig.suptitle(f"{title}", fontsize=20, y = 1.00, weight = "bold")
+    fig.tight_layout()
+    
+    # Save figure
+    if save_path != None:
+        plt.savefig(save_path)
+        print(f"save: {save_path}")
+    
+    return fig, axes
+
 if __name__=="__main__":
     import F_Visualize
     test = pd.DataFrame([
@@ -833,20 +984,21 @@ if __name__=="__main__":
         [169, 237, 188]
                 ])
 
-    a = F_Visualize.draw_line_graph([test[0], test[1], test[2]], x_marks = ['아', '야', '어', '여', '오', '요'],
-                                    ylim = [0, 300],
-                                    xlabel = 'x축',
-                                    ylabel = 'y축',
-                                    title = 'abc')
+    a = draw_line_graph([test[0], test[1], test[2]], 
+                        x_marks = ['아', '야', '어', '여', '오', '요'],
+                        ylim = [0, 300],
+                        xlabel = 'x축',
+                        ylabel = 'y축',
+                        title = 'abc')
     
-    F_Visualize.draw_stack_graph([[1, 2, 3, 4], [5, 6, 7, 8]],
+    draw_stack_graph([[1, 2, 3, 4], [5, 6, 7, 8]],
                                  legends = ['1234','456'],
                                  title = '1234',
                                  x_marks = ['가','나','다','라'],
                                  x_label = 'Y축!~',
                                  y_label = 'X축!~')
 
-    F_Visualize.draw_function(np.linspace(0, 100, 100), lambda x: x + 1)
+    raw_function(np.linspace(0, 100, 100), lambda x: x + 1)
 
     data = {
         "a": [1, 2, 3, 2, 1],
@@ -891,3 +1043,14 @@ if __name__=="__main__":
     fig, axis = plt.subplots(1,1)
     plot_stats(axis, ["a", "b"], [1,2])
     
+    data = np.zeros((100, 120, 3))
+    xs = pd.Series({
+        "1" : 50,
+        "2" : 30,
+    })
+    ys = pd.Series({
+        "1" : 20,
+        "2" : 10,
+    })
+    draw_onImg(data, xs, ys)
+

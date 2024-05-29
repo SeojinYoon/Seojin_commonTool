@@ -24,8 +24,7 @@ def apply_mask_change_shape(fMRI_datas, mask):
     return masked_fmri_datas(1d array), mask_img
     """
     resampled_mask = resample_to_img(mask, fMRI_datas[0], interpolation="nearest")
-    resampled_mask = nb.Nifti1Image(np.array(resampled_mask.get_fdata() > 0, dtype=np.int8),
-                                         resampled_mask.affine)
+    resampled_mask = nb.Nifti1Image(np.array(resampled_mask.get_fdata() > 0, dtype=np.int8), resampled_mask.affine)
 
     # Multiply the functional image with the mask
     roi_fMRI_datas = []
@@ -59,7 +58,7 @@ def apply_mask_no_change_shape(fMRI_datas, mask):
 
     return roi_fMRI_datas, resampled_mask
 
-def apply_mask(fMRI_datas, mask):
+def apply_mask_withCrop(fMRI_datas, mask):
     """
     While removing zeros, apply ROI mask to fMRI datas
 
@@ -80,7 +79,7 @@ def apply_mask(fMRI_datas, mask):
 
 def apply_mask_with_img(anatomy_data, fMRI_datas, mask, is_show_img = True):
     """
-    Applying mask while showing the result of mask application
+    Applying mask with showing the result of mask application
     
     :params anatomy_data: anatomy(nifiti1Image)
     :params fMRI_datas: array of Nifti1Image(list)
@@ -102,7 +101,7 @@ def apply_mask_with_img(anatomy_data, fMRI_datas, mask, is_show_img = True):
                  cut_coords=None,
                  cmap='magma_r',
                  dim=1)
-    return apply_mask(fMRI_datas, mask)
+    return apply_mask_change_shape(fMRI_datas, mask)
 
 class brain_mask:
     def __init__(self, mask_nifti_img, name):
@@ -458,3 +457,6 @@ if __name__ == "__main__":
 
     # untangle img
     brain_imgs = untangle_mask_img("/Users/clmn/Downloads/vedo_vis/model/st_c/Clust_mask.nii")
+    
+    
+    

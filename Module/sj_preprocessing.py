@@ -179,9 +179,8 @@ def search(data,
            mode=1,
            showing_columns = None,):
     searched = search_multi_conditions(data=data, 
-                       search_columns=search_columns,
-                        filter_funcs=filter_funcs
-                       )
+                                       search_columns=search_columns,
+                                       filter_funcs=filter_funcs)
     if showing_columns == None:
         return searched
     else:

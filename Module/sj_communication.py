@@ -16,7 +16,6 @@ def scp_download(server_ip, account_name, server_file_path, local_file_path):
     os.system(command)
 
 if __name__ == "__main__":
-    for subj_number, cam1_path, cam2_path in zip(subj_numbers, cam1_paths, cam2_paths):
     subj_number = str(subj_number).zfill(2)
     directory_path = f"C:\\Users\\USER\\Desktop\\Videos\\DP{subj_number}"
 

@@ -7,11 +7,14 @@ Created on Sun Nov 15 16:15:22 2020
 """
 
 # Common Libaries
-import numpy as np 
+import numpy as np
+import pandas as pd
 from scipy import stats
+from scipy.stats import pearsonr
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 # Custom Libraries
-import sj_higher_function
+from sj_higher_function import apply_function
 
 # Sources
 
@@ -49,7 +52,7 @@ def LSE_one_data(f, x, args, response):
     :return: scalar(LSE value)
     """
 
-    return (sj_higher_function.apply_function(f, np.append(x, args)) - response) ** 2
+    return (apply_function(f, np.append(x, args)) - response) ** 2
 
 """
 require for computing
@@ -95,7 +98,16 @@ def find_reg_coeff(variables, response):
     intermediate_process = np.dot(np.linalg.inv(np.dot(design_matrix.transpose(), design_matrix)), design_matrix.transpose())
     result = np.dot(intermediate_process, response)
     return result
-    
+
+def find_linear_coeff(design_matrix, response):
+    intermediate_process = np.dot(np.linalg.inv(np.dot(design_matrix.transpose(), design_matrix)), 
+                                  design_matrix.transpose())
+    result = np.dot(intermediate_process, response)
+    return result
+
+def linear_estimation(design_matrix, coeff):
+    return np.dot(design_matrix, coeff)
+
 """
 estimation
 """
@@ -300,3 +312,37 @@ def check_p(target_p, ref_p):
     else:
         print(f"The target p-value is not more significant than reference p-value: t: {target_p} >= r: {ref_p}")
     return target_p < ref_p
+
+def autocorrelation(data, lag):
+    """
+    Function to calculate autocorrelation using numpy
+    
+    :param data(np.array): data
+    :param lag(int): how much lag do you want to inspect
+    
+    return np.array - (pearson, p-value)
+    """
+    data_lagged = np.roll(data, lag)
+    if lag > 0:
+        data_lagged[:lag] = 0  # Zero out the first 'lag' elements
+    
+    corr = pearsonr(data, data_lagged)
+    return corr[0], corr[1]
+
+def VIF(design_matrix):
+    """
+    Calculate VIF from design matrix
+    
+    :param design_matrix(pd.DataFrame): design matrix
+    
+    return vif(dataframe)
+    """
+    
+    vif_data = pd.DataFrame()
+    vif_data["feature"] = design_matrix.columns
+    vif_data["VIF"] = [variance_inflation_factor(design_matrix.values, i) for i in range(len(design_matrix.columns))]
+
+    return vif_data
+
+if __name__ == "__main__":
+    pass

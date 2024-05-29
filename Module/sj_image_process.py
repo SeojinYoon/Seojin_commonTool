@@ -7,7 +7,6 @@ Created on Wed Jul  8 10:39:39 2020
 
 import cv2
 import numpy as np
-import prj_info
 import matplotlib.pylab as plt
 import sys
 

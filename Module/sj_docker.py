@@ -1,7 +1,9 @@
 
 import docker
+from sj_linux import make_export_command
 
 def run_command_onDocker(command,
+                         environment_info = {},
                          docker_name = "seojin_opensim"):
     """
     Run command on docker container
@@ -17,16 +19,49 @@ def run_command_onDocker(command,
 
     # Check whether the container exists
     if container.status == 'running':
-        print("Container is running. Ready to execute commands.")
+        pass
+        # print("Container is running. Ready to execute commands.")
     else:
         print("Container is not running. Starting container.")
         container.start()
-
-    # Execute command on docker
-    command = f"/bin/bash -c '{command}'"
-    exec_result = container.exec_run(cmd = command, tty = True)
+    
+    # Set environment variable
+    export_command = make_export_command(environment_info)
+    
+    # Command for bash
+    if export_command != "":
+        bash_command = f"/bin/bash -c '{export_command}; {command}'"
+    else:
+        bash_command = f"/bin/bash -c '{command}'"
+    
+    # Execute
+    exec_result = container.exec_run(cmd = bash_command, tty = True)
 
     # Output log
     output = exec_result.output.decode('utf-8')
 
     return output
+
+if __name__ == "__main__":
+    environment_info = {
+        "LD_LIBRARY_PATH" : [
+            "/tmp/moco_dependencies_install/simbody/lib",
+            "/tmp/opensim-moco-install/sdk/Python/opensim",
+            "/tmp/moco_dependencies_install/adol-c/lib64",
+            "/tmp/opensim-moco-install/sdk/Simbody/li",
+            ],
+    }
+
+    python_source = f"""
+    import os
+    import sys
+    import opensim as osim
+
+    # Load the model
+    model = osim.Model(\\"{model_path}\\")
+    """
+
+    command = f'python3.6 -c "{python_source}"'
+    s = run_command_onDocker(command, environment_info = environment_info)
+    
+    

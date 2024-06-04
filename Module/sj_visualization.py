@@ -919,20 +919,20 @@ def compare_frames(*args, titles, fig_info = { "fig_width" : 10 }, cmap = "gray"
 
     display(buttons)
 
-def draw_errorlines(means,
-                    errors,
-                    other_means,
+def draw_errorlines(mean_df,
+                    error_df,
                     title,
                     subtitles,
+                    other_mean_df = None,
                     save_path = None,
                     xlabel = "",
                     ylabel = ""):
     """
     Draw error lines
     
-    :param means(np.array - shape: (#roi, #time)): mean activation across roi
-    :param errors(np.array - shape: (#roi, #time)): standard deviation across roi
-    :param other_means(np.array - shape: (#roi, #time)): model prediction(GLM) result
+    :param mean_df(pd.DataFrame - shape: (#roi, #time)): mean activation across roi
+    :param error_df(pd.DataFrame - shape: (#roi, #time)): standard deviation across roi
+    :param other_mean_df(np.array - shape: (#roi, #time)): model prediction(GLM) result
     :param title(string): title
     :param save_path(string): path
     """
@@ -940,14 +940,15 @@ def draw_errorlines(means,
     
     # Figure
     n_col = 4
-    fig, axes = plt.subplots(int(len(roi_names) / n_col + 1), n_col)
+    fig, axes = plt.subplots(int(len(mean_df) / n_col + 1), n_col)
     fig.set_figheight(30)
     fig.set_figwidth(15)
 
     axes = axes.flatten()
-    for roi_i, roi_name in enumerate(roi_names):
-        mean = means[roi_i]
-        error = errors[roi_i]
+    for roi_i in range(len(mean_df)):
+        
+        mean = mean_df.iloc[roi_i].to_numpy()
+        error = error_df.iloc[roi_i].to_numpy()
 
         xs = np.arange(len(mean))
         axes[roi_i].plot(mean, color = "black")
@@ -956,8 +957,10 @@ def draw_errorlines(means,
                                  mean + error,
                                  color = "black",
                                  alpha = 0.1)
-        axes[roi_i].plot(other_means[roi_i], linestyle='dashed', color = "orange")
-        axes[roi_i].set_xticks(np.arange(len(times)), times)
+        
+        if type(other_mean_df) != None:
+            axes[roi_i].plot(other_mean_df.iloc[roi_i].to_numpy(), linestyle='dashed', color = "orange")
+        axes[roi_i].set_xticks(np.arange(len(mean_df.columns)), mean_df)
         axes[roi_i].set_title(subtitles[roi_i], weight = "bold")
         
     fig.supxlabel(xlabel, weight = "bold")

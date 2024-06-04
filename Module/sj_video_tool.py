@@ -4,7 +4,7 @@ import os
 import cv2
 import numpy as np
 from tqdm import tqdm
-from moviepy.editor import VideoFileClip, VideoClip
+from moviepy.editor import VideoFileClip, VideoClip, concatenate_videoclips
 import torch
 
 # Functions
@@ -30,44 +30,40 @@ def get_video_info(video_path):
         "fps" : fps,
     }
 
-def do_background_subtraction(video_path, output_video_path):
+def do_background_subtraction(video_path, output_video_path, split_window):
     """
     Do background subtraction on video
     
     :param video_path(string): target video path to do background subtraction
     :param output_video_path(string): processed video path
+    :param split_window(int): the unit of processing
     """
-    if os.path.exists(output_video_path):
-        print(f"Output already exists: {output_video_path}")    
-        return
-
+    video_info = get_video_info(video_path)
+    fps = video_info["fps"]
+    frame_count = video_info["frame_count"]
+    width = video_info["width"]
+    height = video_info["height"]
+    
+    # Capture video
     cap = cv2.VideoCapture(video_path)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    w = round(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = round(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-
-    # Files
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-
-    # Video writer
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (w, h))
-
-    #create Background Subtractor objects
+    
+    # Create Background Subtractor objects
     backSub = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+    
+    for start_i in tqdm(range(0, frame_count, split_window)):
+        end_i = start_i + split_window
 
-    # Convert origin video to background subtraction video
-    for i in tqdm(range(frame_count)):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        result = np.zeros((end_i - start_i, height, width), dtype = np.uint8)
+        for i in range(start_i, end_i):
+            # Read frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+            ret, frame = cap.read()    
 
-        ret, frame = cap.read()    
-        #update the background model
-        fgMask = backSub.apply(frame)
-
-        fg = cv2.copyTo(frame,fgMask)
-        out.write(fg)
-    cap.release()
-    out.release()
+            # Update the background model
+            fgMask = backSub.apply(frame)
+            result[i - start_i] = fgMask
+        rgb_array = np.stack((result,)*3, axis=-1)
+        append_frames(output_video_path, rgb_array, fps)
 
 def calc_pixel_sum(video_path, pixel_sum_path, roi_x = (0, 100), roi_y = (400, 480)):
     """
@@ -254,6 +250,30 @@ def save_video(rgb_arrays, fps, output_path):
     animation.write_videofile(output_path, fps = fps)
     print(f"save: {output_path}")
 
+def append_frames(video_path, rgb_frames, fps_of_rgb_frames, is_progress_bar = False):
+    """
+    Append video frames on the video_path
+    
+    :param video_path(string): video path
+    :param rgb_frames(np.array - shape: (#frame, #y, #x, 3)): rgb image frames
+    :param fps_of_rgb_frames(int): fps of rgb frames
+    :param is_progress_bar(bool): is visualize progress bar
+    """
+    frame_count, ny, nx, nrgb = rgb_frames.shape
+    time_duration = frame_count / fps_of_rgb_frames
+    
+    def make_frame(t):
+        index = int(t * fps_of_rgb_frames)
+        return rgb_frames[index]
+    
+    animation = VideoClip(make_frame, duration = time_duration)
+    if os.path.exists(video_path):
+        video = VideoFileClip(video_path)
+        final_clip = concatenate_videoclips([video, animation])
+        final_clip.write_videofile(video_path, fps = fps_of_rgb_frames, verbose=False, logger=None)
+    else:
+        animation.write_videofile(video_path, fps = fps_of_rgb_frames, verbose=False, logger=None)
+    
 if __name__ == "__main__":
     do_background_subtraction(video_path, output_video_path)
     
@@ -262,11 +282,10 @@ if __name__ == "__main__":
     result = estimate_depth_monocular(video_path)
     
     frames = get_video_frames(video_path)
-    
-    
+        
     rgb_array = np.random.rand(135, 480, 928, 3)
     fps = 30
     output_path = "output.mp4"
     save_video(rgb_array, fps, output_path)
     
-    
+    append_frames(video_path, rgb_array, 30)

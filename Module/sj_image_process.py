@@ -9,9 +9,11 @@ import cv2
 import numpy as np
 import matplotlib.pylab as plt
 import sys
+from skimage import measure
 
 import sj_higher_function
 from sj_timer import convert_time_to_second, convert_second_to_time, convert_second_to_frame
+from sj_sequence import slice_list_usingDiff
 
 def shift_image(X, dx, dy):
     """
@@ -405,3 +407,203 @@ def show_camera_spec(cap):
         "fps" : int(cap.get(cv2.CAP_PROP_FPS)),
         "buffer_size" : int(cap.get(cv2.CAP_PROP_BUFFERSIZE)),
     }
+
+def find_cluster_onBinaryImage(image, thres_n_neighbor):
+    """
+    Find cluster on binary image
+    
+    :param image(np.array - 2d): image array
+    :param thres_n_neighbor(int); threshold of the number of neighbor
+    
+    return cluster data(np.array)
+    """
+    labels = measure.label(image, connectivity=2)
+    cluster_numbers = np.unique(labels)
+    
+    # Constraint
+    for number in cluster_numbers:
+        cluster = labels == number
+        n_neighbor = np.sum(cluster)
+        if n_neighbor < thres_n_neighbor:
+            labels[cluster] = 0
+    
+    # Renumbering
+    cluster_numbers = np.unique(labels)
+    re_numbering = np.arange(len(cluster_numbers))
+    for cluster_number, re_number in zip(cluster_numbers, re_numbering):
+        mask = labels == cluster_number
+        labels[mask] = re_number
+    return labels
+
+def draw_temporal_correlation(frames, fix_x, fix_y, is_vis = False):
+    """
+    Draw temporal correlation between pixels
+    
+    :param frames(np.array - shape: n_t, n_y, n_x): frames
+    :param fix_x(int): reference pixel x-index
+    :param fix_y(int): reference pixel y-index
+    """
+    spatial_x_pearsons = []
+    for x in range(n_x):
+        stat = pearsonr(frames[:, fix_y, fix_x], frames[:, fix_y, x]).statistic
+        spatial_x_pearsons.append(stat)
+    spatial_x_pearsons = np.array(spatial_x_pearsons)
+    
+    spatial_y_pearsons = []
+    for y in range(n_y):
+        stat = pearsonr(frames[:, fix_y, fix_x], frames[:, y, fix_x]).statistic
+        spatial_y_pearsons.append(stat)
+    spatial_y_pearsons = np.array(spatial_y_pearsons)
+    
+    if is_vis:
+        fig, axes = plt.subplots(2)
+        axes[0].plot(spatial_x_pearsons)
+        axes[0].set_xlabel("x")
+        axes[0].set_ylabel("corr")
+        valid_corrs = spatial_x_pearsons[np.logical_not(np.isnan(spatial_x_pearsons))]
+        axes[0].axvline(x = fix_x, 
+                        ymin = np.min(valid_corrs), 
+                        ymax = np.max(valid_corrs), 
+                        color = "red")
+        
+        axes[1].plot(spatial_y_pearsons)
+        axes[1].set_xlabel("y")
+        axes[1].set_ylabel("corr")
+        axes[1].axvline(x = fix_y, 
+                        ymin = np.min(spatial_y_pearsons), 
+                        ymax = np.max(spatial_y_pearsons), 
+                        color = "red")
+        
+        fig.tight_layout()
+
+def divide_screen(frame, n_rect_x, n_rect_y):
+    """
+    Divide screen using rect
+    
+    :param n_rect_x(int): the number of rect across x-axis
+    :param n_rect_y(int): the number of rect across y-axis
+    
+    return rect information(pd.DataFrame)
+        - index: rect_x_index, rect_y_index
+        - column: x1(left up), x2(right down), y1(left up), y2(right down)
+    """
+    fig, axis = plt.subplots(1, 1)
+    fig.set_figwidth(15)
+    fig.set_figheight(10)
+
+    dx = width / n_rect_x
+    dy = height / n_rect_y
+
+    rect_width = dx
+    rect_height = dy
+
+    x1 = np.arange(0, width, rect_width).astype(np.int16)
+    x2 = np.arange(0 + rect_width, width + 1, rect_width).astype(np.int16)
+
+    y1 = np.arange(0, height, rect_height).astype(np.int16)
+    y2 = np.arange(0 + rect_height, height + 1, rect_height).astype(np.int16)
+
+    rect_pos_datas = []
+    rect_pos_data_indexes = []
+    for rect_x_i, rect_y_i in product(np.arange(n_rect_x), np.arange(n_rect_y)):
+        rect_pos_datas.append([x1[rect_x_i], x2[rect_x_i], y1[rect_y_i], y2[rect_y_i]])
+        rect_pos_data_indexes.append((rect_x_i, rect_y_i))
+
+    rect_pos_df = pd.DataFrame(rect_pos_datas)
+    rect_pos_df.columns = ["x1", "x2", "y1", "y2"]
+    rect_pos_df.index = rect_pos_data_indexes
+
+    axis.imshow(frame, cmap = "gray")
+    for rect_data in rect_pos_df.iterrows():
+        i, rect = rect_data
+
+        rect_width = rect["x2"] - rect["x1"]
+        rect_height = rect["y2"] - rect["y1"]
+
+        axis.add_patch(plt.Rectangle(xy = (rect["x1"], rect["y1"]), 
+                                     width = rect_width, 
+                                     height = rect_height, 
+                                     fill = False, 
+                                     edgecolor = 'red', 
+                                     linewidth = 3))
+    return rect_pos_df
+
+def detect_high_gradients_regions(frames,
+                                  time_index,
+                                  y_index, 
+                                  grad_threshold,
+                                  n_region_threshold = 10,
+                                  region_continue_threshold = 5,
+                                  is_vis = False):
+    """
+    Detect high gradient regions across x-axis given y index
+    
+    This function is for detecting edge of an image
+    
+    :param frames(np.array - shape: n_t, n_y, n_x): frames
+    :param time_index(int): target index of frames
+    :param y_index(int): y index  
+    :param grad_threshold(int): gradient threshold
+    :param n_region_threshold(int): region width to filter thin regions
+    :param region_continue_threshold(int): threshold to detect continuous region
+    :param is_vis(bool): is visualized a result
+    """
+    n_t, n_y, n_x = frames.shape
+    
+    # High gradient
+    gradients = np.gradient(frames[time_index, y_index, :])
+    high_grad_indexes = np.where(np.abs(gradients) > grad_threshold)[0]
+    t_high_grad_indexes = list(high_grad_indexes)
+    
+    # Sort
+    t_high_grad_indexes = np.array(sorted(t_high_grad_indexes))
+    
+    # Detect region
+    diff_indexes = t_high_grad_indexes[1:] - t_high_grad_indexes[:-1]
+    
+    previous_stop_i = 0
+    region_indexes = []
+    for slicing_start_i, slicing_stop_i in slice_list_usingDiff(diff_indexes):
+        if slicing_stop_i - slicing_start_i > n_region_threshold:
+            start_i = t_high_grad_indexes[slicing_start_i]
+            stop_i = t_high_grad_indexes[slicing_stop_i]
+            
+            
+            if (start_i - previous_stop_i) > region_continue_threshold:
+                region_indexes.append((start_i, stop_i))
+                previous_stop_i = stop_i
+
+    if is_vis:
+        cmap = get_cmap("viridis", len(region_indexes))        
+
+        plt.hlines(y_index, xmin = 0, xmax = n_x - 1, color = "red")
+        
+        i = 0
+        for r_start, r_stop in region_indexes:
+            color = rgb2hex(cmap(i)[:3])
+            plt.fill_betweenx(y = [0,n_y], x1 = r_start, x2 = r_stop, alpha = 0.3, color = color)
+            i += 1
+            
+        plt.imshow(frames[time_index, :, :], cmap = "gray")
+            
+    return region_indexes
+
+if __name__ == "__main__":
+    frames = convert_gray(video_path)
+    draw_temporal_correlation(frames = frames, fix_x = 0, fix_y = 0, is_vis = True)
+    divide_screen(frames, n_rect_x = 2, n_rect_y = 3)
+    
+    # Detect edge
+    n_t, n_y, n_x = frames.shape
+    edges = np.repeat(False, n_t * n_y * n_x).reshape(n_t, n_y, n_x)
+    for time_index in range(n_t):
+        for y_index in range(n_y):
+            high_gradient_regions = detect_high_gradients_regions(frames, 
+                                                                  time_index = time_index,
+                                                                  y_index = y_index, 
+                                                                  n_region_threshold = 1,
+                                                                  grad_threshold = 4,
+                                                                  region_continue_threshold = 1,
+                                                                  is_vis=False)
+            for region in high_gradient_regions:
+                edges[time_index, y_index, region[0]] = True

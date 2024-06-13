@@ -832,7 +832,23 @@ def RSA(models,
         return result
     else:
         return eval_results
-        
+
+def make_3darray_from_Indexes(data, voxel_indexes, shape_3d):
+    """
+    Create a 3D array from 1D data array using voxel indexes to position the elements in the 3D array.
+    
+    :param data(np.array - shape: 1d): data of elements
+    :param voxel_indexes(np.array - shape: 1d): index in corresponding with data
+    :param shape_3d(tuple): 3d shape
+    
+    return (np.array - 3d shape)
+    """
+    array_3d = np.zeros(shape_3d)
+    index_3ds = np.unravel_index(voxel_indexes, shape_3d)
+    array_3d[index_3ds] = data
+
+    return array_3d
+
 def make_RDM_brain(brain_shape, RDMs, conditions, is_return_1d=False):
     """
     Make RDM brain (nx, ny, nz, n_condition x n_condition)
@@ -1576,137 +1592,6 @@ def calc_crossnobis_with_prewhitening(subj_number,
     
     return rdm_crossnobis
 
-def searchlight_crossvalidate(parallel_numbers = 1):
-    from share_array.share_array import get_shared_array
-    
-    start_time = datetime.datetime.now()
-    print("Sl start", start_time)
-    
-    centers = get_shared_array("centers")
-    n_centers = centers.shape[0]
-    
-    RDM_values = process_map(calc_crossvalidated_dissmilarity, 
-                            np.arange(0, len(centers)), 
-                            max_workers=parallel_numbers)
-
-    end_time = datetime.datetime.now()
-    
-    print("Sl end", end_time)
-    
-    conditions = get_shared_array(name='conditions')
-    n_conds = len(np.unique(conditions))
-    
-    RDM = np.zeros((n_centers, n_conds * (n_conds - 1) // 2))
-    for center_i, rdm in enumerate(RDM_values): 
-        RDM[center_i, :] = rdm.dissimilarities
-
-    SL_rdms = RDMs(RDM,
-                   rdm_descriptors = {'voxel_index': centers},
-                   pattern_descriptors = RDM_values[0].pattern_descriptors,
-                   dissimilarity_measure = "crossnobis")
-    
-    return SL_rdms
-
-def calc_crossvalidated_dissmilarity(center_i):    
-    from share_array.share_array import get_shared_array
-    
-    # Betas
-    data_2d = get_shared_array('array_betas')
-    
-    # Searchlight params
-    centers = get_shared_array(name='centers')
-    neighbors = get_shared_array(name='neighbors')
-    
-    # Residuals
-    residuals = get_shared_array('residuals')
-    
-    # Brain shape
-    nx, ny, nz = get_shared_array(name="total_brain_shape")
-    
-    # Precision matrix
-    noise_precision_mats = get_shared_array(name='precision_mats')
-    
-    # Conditions
-    conditions = get_shared_array(name='conditions')
-    
-    # Sessions
-    sessions = get_shared_array(name="sessions")
-    
-    n_centers = centers.shape[0]
-    center = centers[center_i]
-    center_neighbors = neighbors[center_i]
-    
-    # create a database object with this data
-    ds = Dataset(data_2d[:,center_neighbors],
-                 descriptors={'center': center},
-                 obs_descriptors={'events': conditions, "sessions" : sessions},
-                 channel_descriptors={'voxels': center_neighbors})
-    
-    RDM = calc_rdm(ds, 
-                   method="crossnobis",
-                   descriptor='events',
-                   noise=noise_precision_mats[center_i],
-                   cv_descriptor='sessions')
-        
-    return RDM
-
-def calc_wholebrain_precision_mats(total_brain_shape, neighbors, residuals, parallel_numbers = 1):
-    """
-    Calculate whole brain's precision matrix
-    Before calling this function, you need to remove heavy memory storing in RAM.
-    Because this function uses multiprocessing, it forks process based on caller process.
-    
-    :param total_brain_shape: brain shape (nx, ny, nz)
-    :param neighbors: neighbors (numpy array)
-    :param residuals: whole brain residuals (numpy array)
-    
-    return noise_precision_mats
-    """
-    from share_array.share_array import make_shared_array
-    
-    n_centers = neighbors.shape[0]
-    
-    make_shared_array(np.array(neighbors), name='neighbors')
-    make_shared_array(residuals, name='residuals')
-    globals()["total_brain_shape"] = total_brain_shape
-    
-    precisions = process_map(calc_precision_mat, 
-                             np.arange(0, n_centers), 
-                             max_workers=parallel_numbers)
-    
-    return precisions
-
-def calc_precision_mat(neighbor_i):
-    """
-    Calculate precision matrix from single neighbor
-    
-    :param neighbors: neighbors (numpy array)
-    
-    return noise_precision_mats
-    """
-    from share_array.share_array import get_shared_array
-    
-    nx, ny, nz = globals()["total_brain_shape"]
-    neighbor = get_shared_array(name='neighbors')[neighbor_i]
-    residuals = get_shared_array(name='residuals')
-    
-    n_session = len(residuals)
-    
-    noise_precision_mats = []
-    for session_i in range(n_session):
-        mask_array = np.repeat(False, nx * ny * nz).reshape((nx, ny, nz))
-        for m_voxel in neighbor:
-            mask_array[np.unravel_index(indices = m_voxel, shape = (nx, ny, nz))] = True
-
-        target_residual = residuals[session_i]
-        masked_residual = target_residual[mask_array]
-
-        # noise covariance matrix
-        noise_precision_mat = prec_from_residuals(masked_residual.T)
-        noise_precision_mats.append(noise_precision_mat)
-        
-    return noise_precision_mats
-
 def make_rdm(conditions, pair_values):
     """
     Make rdm using dataframe
@@ -1935,6 +1820,18 @@ def get_roi_1d_indexes(roi_img, roi_value):
     roi_1d_indexes = np.apply_along_axis(lambda index_3d: image3d_to_1d(index_3d, roi_img.shape), 1, roi_3d_indexes)
     return roi_1d_indexes
 
+def make_1d_voxel_indexes(index_3ds, shape_3d):
+    """
+    Make 1d indexes from 3d indexes
+    
+    :param index_3ds(np.array - shape: (nx, ny, nz)): 3d index array
+    :param shape(tuple): 3d shape
+    
+    return 1d indexes (np.array - 1d array)
+    """
+    index_1d = np.ravel_multi_index(index_3ds, mask.shape)
+    return index_1d
+
 if __name__ == "__main__":
     # highlight_stat
     result = sj_brain.highlight_stat(roi_array=motor_left_mask.get_data(),
@@ -2022,4 +1919,9 @@ if __name__ == "__main__":
     roi_3d_indexes = get_roi_3d_indexes(roi_img, 1)
     roi_1d_indexes = get_roi_1d_indexes(roi_img, 1)
     
+    # Indexing
+    roi_img = nb.load("/mnt/sdb2/DeepDraw/mri_mask/targetROIs/Lt_BA6_ventrolateral.nii.gz")
+    index_3d = make_3darray_from_Indexes(data = [1], voxel_1d_indexes = [10, 20], shape_3d = roi_img.shape)
+    
+    index_2d = make_1d_voxel_indexes(index_3d, mask.shape)
     

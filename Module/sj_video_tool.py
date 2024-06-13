@@ -6,6 +6,8 @@ import numpy as np
 from tqdm import tqdm
 from moviepy.editor import VideoFileClip, VideoClip, concatenate_videoclips
 import torch
+from multiprocessing import Pool
+from joblib import Parallel, delayed
 
 # Functions
 def get_video_info(video_path):
@@ -30,42 +32,98 @@ def get_video_info(video_path):
         "fps" : fps,
     }
 
-def do_background_subtraction(video_path, output_video_path, split_window):
+def process_background_subtraction(args):
+    """
+    Process background subtraction
+    
+    :param args: video_path, start_index, end_index of frame
+    
+    return (np.array - shape: (#frame, #y, #x))
+    """
+    video_path, start_i, end_i, dir_path = args
+    
+    cap = cv2.VideoCapture(video_path)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_i)
+    backSub = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+    
+    results = []
+    for i in range(start_i, end_i):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        fgMask = backSub.apply(frame)
+        results.append(cv2.cvtColor(fgMask, cv2.COLOR_GRAY2RGB))
+    cap.release()
+    
+    save_path = os.path.join(dir_path, f"bg_sub_{start_i}.mp4")
+    save_video(rgb_arrays = np.array(results), fps = fps, output_path = save_path)
+
+def parallel_background_subtraction(video_path, 
+                                    output_dir_path, 
+                                    split_window,
+                                    n_process = 5):
+    """
+    Process parallel background subtraction
+    
+    :param video_path(string): video apth
+    :param output_dir_path(string): output direcotry path after preprocessing
+    :param split_window(int): the number of frames to be processed per one time
+    :param n_process(int): the number of process
+    """
+    video_info = get_video_info(video_path)
+    frame_count = video_info["frame_count"]
+    fps = video_info["fps"]
+    
+    args = [(video_path, i, min(i + split_window, frame_count), output_dir_path) for i in range(0, frame_count, split_window)]
+    with Pool(processes = n_process) as pool:
+        for member in tqdm(pool.imap(process_background_subtraction, args), total = len(args)):
+            pass
+
+def do_background_subtraction(video_path, output_video_path):
     """
     Do background subtraction on video
     
     :param video_path(string): target video path to do background subtraction
     :param output_video_path(string): processed video path
-    :param split_window(int): the unit of processing
     """
-    video_info = get_video_info(video_path)
-    fps = video_info["fps"]
-    frame_count = video_info["frame_count"]
-    width = video_info["width"]
-    height = video_info["height"]
-    
-    # Capture video
+    if os.path.exists(output_video_path):
+        print(f"Output already exists: {output_video_path}")    
+        return
+
     cap = cv2.VideoCapture(video_path)
-    
-    # Create Background Subtractor objects
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    w = round(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = round(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+    # Files
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+    # Video writer
+    out = cv2.VideoWriter(output_video_path, fourcc, fps, (w, h))
+
+    #create Background Subtractor objects
     backSub = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+
+    # Convert origin video to background subtraction video
+    for i in tqdm(range(frame_count)):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+
+        ret, frame = cap.read()    
+        #update the background model
+        fgMask = backSub.apply(frame)
+
+        fg = cv2.copyTo(frame,fgMask)
+        out.write(fg)
+    cap.release()
+    out.release()
     
-    for start_i in tqdm(range(0, frame_count, split_window)):
-        end_i = start_i + split_window
-
-        result = np.zeros((end_i - start_i, height, width), dtype = np.uint8)
-        for i in range(start_i, end_i):
-            # Read frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-            ret, frame = cap.read()    
-
-            # Update the background model
-            fgMask = backSub.apply(frame)
-            result[i - start_i] = fgMask
-        rgb_array = np.stack((result,)*3, axis=-1)
-        append_frames(output_video_path, rgb_array, fps)
-
-def calc_pixel_sum(video_path, pixel_sum_path, roi_x = (0, 100), roi_y = (400, 480)):
+def calc_pixel_sum(video_path, 
+                   pixel_sum_path, 
+                   roi_x = (0, 100), 
+                   roi_y = (400, 480)):
     """
     Calculate pixel sum over roi across video
 
@@ -85,18 +143,53 @@ def calc_pixel_sum(video_path, pixel_sum_path, roi_x = (0, 100), roi_y = (400, 4
 
         ranges = range(frame_count)
         for i in tqdm(ranges):
-            bgs_cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-
             ret, frame = bgs_cap.read()
             imgGray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             corner_image = imgGray[roi_y[0]: roi_y[1], roi_x[0]: roi_x[1]]
+            
             pixel_sums.append(np.sum(corner_image))
-
+            
         # Save pixel sum
         pixel_sums = np.array(pixel_sums)
         np.save(pixel_sum_path, pixel_sums)
         bgs_cap.release()
     return pixel_sums
+
+def calc_n_active_pixels(video_path, 
+                         save_path, 
+                         roi_x = (0, 100), 
+                         roi_y = (400, 480)):
+    """
+    Calculate pixel sum over roi across video
+
+    :param video_path(string): video_path
+    :param save_path(string): Path to save this process' result
+    :param roi_x(tuple - (from,to)): roi over x-axis
+    :param roi_y(tuple - (from,to)): roi over y-axis
+
+    return pixel_sums(list): sum of the pixel of each frame's roi
+    """
+    if os.path.exists(save_path):
+        n_active_pixels = np.load(save_path)
+    else:
+        bgs_cap = cv2.VideoCapture(video_path)
+        frame_count = int(bgs_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        n_active_pixels = []
+
+        ranges = range(frame_count)
+        for i in tqdm(ranges):
+            ret, frame = bgs_cap.read()
+            imgGray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            corner_image = imgGray[roi_y[0]: roi_y[1], roi_x[0]: roi_x[1]]
+            
+            n_active_pixel = len(np.where(corner_image > 0)[0])
+            n_active_pixels.append(n_active_pixel)
+            
+        # Save pixel sum
+        n_active_pixels = np.array(n_active_pixels)
+        np.save(save_path, n_active_pixels)
+        bgs_cap.release()
+    return n_active_pixels
 
 def cut_video_usingTime(video_path, output_path, start_sec, end_sec):
     """
@@ -170,8 +263,6 @@ def estimate_depth_monocular(video_path,
     
     results = []
     for i in tqdm(range(frame_count)):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-
         ret, frame = cap.read()    
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -199,12 +290,12 @@ def get_video_frames(video_path):
     """
     # Video information
     cap = cv2.VideoCapture(video_path)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     results = []
     for i in tqdm(range(frame_count)):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-
         ret, frame = cap.read()
         results.append(frame)
     return np.c_[results]
@@ -231,7 +322,7 @@ def convert_gray(video_path):
         cap.release()
     return np.c_[results]
 
-def save_video(rgb_arrays, fps, output_path):
+def save_video(rgb_arrays, fps, output_path, is_progress_bar = False):
     """
     Save video from numpy array
     
@@ -247,7 +338,10 @@ def save_video(rgb_arrays, fps, output_path):
         return rgb_arrays[index]
     
     animation = VideoClip(make_frame, duration = time_duration)
-    animation.write_videofile(output_path, fps = fps)
+    animation.write_videofile(output_path, 
+                              fps = fps, 
+                              verbose = is_progress_bar, 
+                              logger = None)
     print(f"save: {output_path}")
 
 def append_frames(video_path, rgb_frames, fps_of_rgb_frames, is_progress_bar = False):
@@ -269,13 +363,70 @@ def append_frames(video_path, rgb_frames, fps_of_rgb_frames, is_progress_bar = F
     animation = VideoClip(make_frame, duration = time_duration)
     if os.path.exists(video_path):
         video = VideoFileClip(video_path)
-        final_clip = concatenate_videoclips([video, animation])
-        final_clip.write_videofile(video_path, fps = fps_of_rgb_frames, verbose=False, logger=None)
+        clip = concatenate_videoclips([video, animation])
     else:
-        animation.write_videofile(video_path, fps = fps_of_rgb_frames, verbose=False, logger=None)
+        clip = animation
+    clip.write_videofile(video_path, 
+                         fps = fps_of_rgb_frames, 
+                         verbose = is_progress_bar, 
+                         logger = None)
+
+def pixel_sum(args):
+    video_path, start_i, end_i, roi_x, roi_y = args
+    cap = cv2.VideoCapture(video_path)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_i)
+   
+    results = []
+    for i in range(start_i, end_i):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        imgGray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        corner_image = imgGray[roi_y[0]: roi_y[1], roi_x[0]: roi_x[1]]
+        results.append(np.sum(corner_image))
+    cap.release()
     
+    return results
+
+def calc_pixel_sum(video_path, 
+                   pixel_sum_path, 
+                   roi_x = (0, 100), 
+                   roi_y = (400, 480), 
+                   split_window = 100,
+                   num_jobs = -1):
+    """
+    Calculate pixel sum over roi across video and accumulate frame by frame
+
+    :param video_path(string): video_path
+    :param pixel_sum_path(string): Path to save this process' result
+    :param roi_x(tuple - (from,to)): roi over x-axis
+    :param roi_y(tuple - (from,to)): roi over y-axis
+    :param num_jobs(int): Number of parallel jobs to run (-1 uses all processors)
+
+    return pixel_sums(list): cumulative sum of the pixel of each frame's roi
+    """
+    if os.path.exists(pixel_sum_path):
+        pixel_sums = np.load(pixel_sum_path)
+    else:
+        video_info = get_video_info(video_path)
+        frame_count = video_info["frame_count"]
+        
+        args = []
+        for start_i in range(0, frame_count, split_window):
+            args.append((video_path, start_i, min(start_i + split_window, frame_count), roi_x, roi_y))
+        
+        with Pool(processes=num_jobs) as pool:
+            pixel_sums = list(tqdm(pool.imap(pixel_sum, args), total = len(args), desc = "Processing frames"))
+        
+        pixel_sums = np.concatenate(pixel_sums)
+        
+        # Save pixel sum 
+        np.save(pixel_sum_path, pixel_sums)
+        
+    return pixel_sums
+
 if __name__ == "__main__":
-    do_background_subtraction(video_path, output_video_path)
+    parallel_background_subtraction(video_path, output_video_path, split_window = 30, n_process = 5)
     
     dir_path = "/mnt/sdb2/DeepDraw/Projects/20220801_DP02_mri/Camera1/video_perTrial"
     video_path = os.path.join(dir_path, "trial2.mp4")

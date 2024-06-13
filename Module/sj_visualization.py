@@ -924,9 +924,11 @@ def draw_errorlines(mean_df,
                     title,
                     subtitles,
                     other_mean_df = None,
-                    save_path = None,
+                    fig = None,
+                    axes = None,
                     xlabel = "",
-                    ylabel = ""):
+                    ylabel = "",
+                    save_path = None):
     """
     Draw error lines
     
@@ -936,17 +938,15 @@ def draw_errorlines(mean_df,
     :param title(string): title
     :param save_path(string): path
     """
-    plt.clf()
-    
     # Figure
-    n_col = 4
-    fig, axes = plt.subplots(int(len(mean_df) / n_col + 1), n_col)
-    fig.set_figheight(30)
-    fig.set_figwidth(15)
+    if type(fig) == None and type(axes) == None:
+        n_col = 4
+        fig, axes = plt.subplots(int(len(mean_df) / n_col + 1), n_col)
+        fig.set_figheight(30)
+        fig.set_figwidth(15)
 
     axes = axes.flatten()
     for roi_i in range(len(mean_df)):
-        
         mean = mean_df.iloc[roi_i].to_numpy()
         error = error_df.iloc[roi_i].to_numpy()
 
@@ -962,7 +962,6 @@ def draw_errorlines(mean_df,
             axes[roi_i].plot(other_mean_df.iloc[roi_i].to_numpy(), linestyle='dashed', color = "orange")
         axes[roi_i].set_xticks(np.arange(len(mean_df.columns)), mean_df)
         axes[roi_i].set_title(subtitles[roi_i], weight = "bold")
-        
     fig.supxlabel(xlabel, weight = "bold")
     fig.supylabel(ylabel, weight = "bold")
     fig.suptitle(f"{title}", fontsize=20, y = 1.00, weight = "bold")

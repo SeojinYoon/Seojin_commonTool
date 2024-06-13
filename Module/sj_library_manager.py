@@ -6,7 +6,7 @@ def get_library_path(library_name):
     """
     Get library path
     
-    :param library_name: the name of library to search
+    :param library_name(string): the name of library to search
     
     return path of the library(string)
     """

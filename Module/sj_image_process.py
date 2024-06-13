@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pylab as plt
 import sys
 from skimage import measure
+from matplotlib.cm import get_cmap
+from matplotlib.colors import rgb2hex
 
 import sj_higher_function
 from sj_timer import convert_time_to_second, convert_second_to_time, convert_second_to_frame

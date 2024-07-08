@@ -29,3 +29,15 @@ def erose_2d(array, repetition = 1):
     for _ in range(repetition):
         array = ndimage.binary_erosion(array, structure = erosion_struct)
     return array
+
+def find_sign_change_indices(data):
+    # Calculate the sign of each element in the data
+    signs = np.sign(data)
+    
+    # Find where the sign changes (where the difference between consecutive signs is not zero)
+    sign_changes = np.diff(signs)
+    
+    # Indices where the sign changes
+    sign_change_indices = np.where(sign_changes != 0)[0]
+    
+    return sign_change_indices

@@ -628,7 +628,7 @@ class RDM_model:
             -k, legend_ticks(list): ticks ex) [1,2,3]
             -k, legend_labels(list): tick label ex) ["1","2","3"]
         """
-        cmap = style_info.get("cmap", "seismic")
+        cmap = style_info.get("cmap", "coolwarm")
         
         # Title constants
         title = style_info.get("title", "")
@@ -689,8 +689,15 @@ class RDM_model:
                         weight = tick_weight,
                         )
        
+        # Spine
+        for spine in axis.spines.values():
+            spine.set_visible(False)
+    
         # Title
         axis.set_title(title, weight = title_wight, size = title_size)
+        
+        # Grid
+        axis.grid(False)
         
 def RSA(models, 
         mask,

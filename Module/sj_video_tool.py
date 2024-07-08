@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 from moviepy.editor import VideoFileClip, VideoClip, concatenate_videoclips
-import torch
 from multiprocessing import Pool
 from joblib import Parallel, delayed
 
@@ -240,6 +239,8 @@ def estimate_depth_monocular(video_path,
     
     return (np.array)
     """
+    import torch
+    
     # MiDaS
     torch.hub.set_dir(model_dir_path)
     midas = torch.hub.load("intel-isl/MiDaS", model_type)

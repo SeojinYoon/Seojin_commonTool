@@ -4,7 +4,7 @@ from sj_linux import make_export_command
 
 def run_command_onDocker(command,
                          environment_info = {},
-                         docker_name = "seojin_opensim"):
+                         docker_name = "seojin_opensim2"):
     """
     Run command on docker container
 
@@ -35,6 +35,7 @@ def run_command_onDocker(command,
         bash_command = f"/bin/bash -c '{command}'"
     
     # Execute
+    print(f"\033[1m" + bash_command + "\033[0m")
     exec_result = container.exec_run(cmd = bash_command, tty = True)
 
     # Output log

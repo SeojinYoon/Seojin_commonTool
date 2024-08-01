@@ -904,12 +904,6 @@ def compare_frames(*args, titles, fig_info = { "fig_width" : 10 }, cmap = "gray"
     def onNext10(s):
         slider.value = slider.value + 10
 
-    def onPrev30(s):
-        slider.value = slider.value - 30
-
-    def onNext30(s):
-        slider.value = slider.value + 30
-
     prev1_btn.on_click(onPrev1)
     next1_btn.on_click(onNext1)
     prev10_btn.on_click(onPrev10)

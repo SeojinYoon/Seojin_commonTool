@@ -647,6 +647,7 @@ class RDM_model:
         color_range = style_info.get("color_range", (v_min, v_max))
         
         # legend constants
+        is_legend = style_info.get("is_legend", True)
         legend_padding = style_info.get("legend_padding", 0.1)
         legend_label = style_info.get("legend_label", "Dissimilarity")
         legend_size = style_info.get("legend_size", 20)
@@ -662,17 +663,17 @@ class RDM_model:
         im = axis.imshow(rdm, cmap = cmap, vmin = color_range[0], vmax = color_range[1])
         
         # Legend
-        divider = make_axes_locatable(axis)
-        cax = divider.append_axes('right', size = '5%', pad = legend_padding)
-        im = axis.imshow(rdm, cmap = cmap, vmin = color_range[0], vmax = color_range[1])
-        colorbar = fig.colorbar(im, cax = cax, orientation = 'vertical')
-        colorbar.set_label(legend_label, weight = legend_weight, size = legend_size)
-        
-        # Set custom ticks on the color bar
-        colorbar.set_ticks(legend_ticks)
+        if is_legend:
+            divider = make_axes_locatable(axis)
+            cax = divider.append_axes('right', size = '5%', pad = legend_padding)
+            colorbar = fig.colorbar(im, cax = cax, orientation = 'vertical')
+            colorbar.set_label(legend_label, weight = legend_weight, size = legend_size)
 
-        # You can also set custom tick labels if desired
-        colorbar.set_ticklabels(legend_tick_labels, weight = legend_tick_weight, size = legend_tick_size)
+            # Set custom ticks on the color bar
+            colorbar.set_ticks(legend_ticks)
+
+            # You can also set custom tick labels if desired
+            colorbar.set_ticklabels(legend_tick_labels, weight = legend_tick_weight, size = legend_tick_size)
         
         # Matrix Ticks
         slicing_indexes = slice_list_usingDiff(conditions)
@@ -686,8 +687,7 @@ class RDM_model:
         axis.set_yticks([(start_i + end_i)/2 for start_i, end_i in slice_list_usingDiff(conditions)], 
                         rdm_conditions,
                         size = tick_size,
-                        weight = tick_weight,
-                        )
+                        weight = tick_weight)
        
         # Spine
         for spine in axis.spines.values():
@@ -1622,9 +1622,9 @@ def make_rdm(conditions, pair_values):
 
 def check_condition_withinRun(run_conditions, population_conds):
     """
-    Check zero trial condition within run
+    Check there is no trial per condition within a run
     
-    This thing can be happened when trials are dropped multiple times within run due to trajectory filtering.
+    Zero trial per condition can happen when trials are dropped multiple times within run due to condition filtering.
     
     :param conditions: conditions per Run(list)
     ex)

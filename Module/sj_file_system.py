@@ -486,6 +486,20 @@ def explore_hdf5_file(file_path, max_depth=None):
     """
     with h5py.File(file_path, 'r') as hdf:
         print_hdf5_keys('/', hdf, max_depth=max_depth)
+
+def is_jupyter():
+    """
+    Check current file is whether jupyter or not
+    
+    return (boolean)
+    """
+    try:
+        # get_ipython() is only available in Jupyter notebooks.
+        if get_ipython():
+            return True
+    except NameError:
+        # If get_ipython() is not defined, we are in a regular Python script.
+        return False
     
 if __name__ == "__main__":
     """
@@ -524,4 +538,4 @@ if __name__ == "__main__":
     file_name = "dataset_all_20220801_DP02_mri_with_fmri.hdf5"
     get_hdf5_info(os.path.join(dir_path, file_name))
     
-    
+    is_jupyter()

@@ -201,6 +201,7 @@ def make_cluster_meshes(cluster_df, mesh_paths, color):
                                               validation_type = File_validation.exist_only)
         cluster_mesh = vedo.load(mesh_path).color(color)
         cluster_mesh.name = cluster_df.loc[cluster_number - 1]["name"]
+        print(f"naming: {cluster_mesh.name}")
         clusters.append(cluster_mesh)
         
     return clusters
@@ -272,6 +273,7 @@ def show_clusterize_brain(
     n_datas = None,
     cluster_plot_style = "point", # mesh, point
     atlas_query_method = "center", # peak, center
+    atlas_name = "Haskins_Pediatric_Nonlinear_1.01",
     thresholds = None,
     candidate_p_values = [0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001],
     cluster_size = 40,
@@ -306,6 +308,8 @@ def show_clusterize_brain(
         -kind: mesh, point
     :param atlas_query_method: Find atlas based on the location
         -kind: peak, center
+    :param atlas_name: atlas name
+        -kind: "Haskins_Pediatric_Nonlinear_1.01"
     :param thresholds: Thresholds to do clustering analysis [list - float]
         -example: [3.14]
     :param candidate_p_values: Threshold was calculated by candidate p values.(list - float)
@@ -389,6 +393,7 @@ def show_clusterize_brain(
                                 is_positive = True,
                                 pref_maps = pref_maps,
                                 atlas_query_method = atlas_query_method,
+				atlas_name = atlas_name,
                                 NN_level = NN_level,
                                 stat_indexes = stat_indexes)
 
@@ -418,7 +423,7 @@ def show_clusterize_brain(
         roi_vtk_volume = vedo.load(vtk_path)
 
 	    # color
-        if isinstance(roi_colors, Iterable):
+        if (isinstance(roi_colors, Iterable)) and type(roi_colors) != str:
             roi_vtk_volume = roi_vtk_volume.color(roi_colors[i])
         else:
             roi_vtk_volume = roi_vtk_volume.color(roi_colors)
@@ -448,7 +453,7 @@ def show_clusterize_brain(
             roi_vtk_volume = roi_vtk_volume.lc(roi_line_colors)
 
 
-        roi_adjusts = roi_style_info.get("adjust_methods", None)
+        roi_adjusts = roi_style_info.get("adjust_methods", [])
         for adjust_type, value in roi_adjusts:
             if adjust_type == "subdivide":
                 method = value.get("method", 0)
@@ -653,11 +658,11 @@ def show_clusterize_brain(
     # plot
     """"""
     plotter = Plotter(axes = 1, bg = background_color)
-    plotter.addCallback('mouse click', mouse_click)
-    plotter.addCallback("KeyPress", key_pressed)
+    plotter.add_callback('mouse click', mouse_click)
+    plotter.add_callback("KeyPress", key_pressed)
     
     x_indexes = np.arange(n_stat)
-    plotter.addSlider2D(
+    plotter.add_slider(
         sliderfunc = slider,
         xmin = xmin,
         xmax = xmax,

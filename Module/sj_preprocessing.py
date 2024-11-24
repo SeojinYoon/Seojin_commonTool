@@ -405,6 +405,30 @@ def sampling(start_sampling_timing, sampling_interval, sampling_count, timings, 
 
     return sampling_values
 
+def make_grouping_indexes(n_group, n_data, postProcessing = "absorbEndGroup"):
+    """
+    Make indexes for grouping elements of list
+
+    :param n_group(int): the number of group
+    :param n_data(int): the number of data
+    :param postProcessing(string): post processing method
+
+    return (list - (start_group_index, end_group_index)
+    """
+    n_element_perGroup = int(np.trunc(n_data / n_group))
+    grouping_indexes = [[i, i + n_element_perGroup] for i in range(0, n_data, n_element_perGroup)]
+    
+    for i in range(len(grouping_indexes)):
+        start_i = grouping_indexes[i][0]
+        end_i = grouping_indexes[i][1]
+
+        if postProcessing == "absorbEndGroup":
+            if end_i > n_data -1:
+                grouping_indexes[i-1][1] = n_data
+                del grouping_indexes[i]
+
+    return grouping_indexes
+    
 ####### Examples #######
 if __name__ == "__main__":
     is_nan(np.NaN)
@@ -503,4 +527,5 @@ if __name__ == "__main__":
          sampling_count = 6, 
          timings = [0,1], 
          values = [10, 100])
-    
+
+    make_grouping_indexes(12, 202)

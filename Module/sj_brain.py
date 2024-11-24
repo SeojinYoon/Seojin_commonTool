@@ -609,7 +609,7 @@ class RDM_model:
         """
         :param rdm: numpy 2d array
         :param conditions: list of condition
-        :param y_range: (y_min, y_max)
+        :param fig: matplotlib figure
         :param axis: axis
         :param style_info: style information
             -k, cmap(str): color map ex) seismic
@@ -618,6 +618,7 @@ class RDM_model:
             -k, title_size(float): title font size ex) 10
             -k, x_tick_rotation(int): rotation of x_tick ex) 90
             -k, tick_weight(str): tick weight ex) "bold"
+            -k, tick_size(int): tick size ex) 20
             -k, color_range(tuple): visualization range ex) (-0.1, 0.1)
             -k, legend_padding(float): spacing between rdm and legend ex) 0.1
             -k, legend_label(str): legend label ex) "label"
@@ -627,6 +628,7 @@ class RDM_model:
             -k, legend_tick_weight(str): legend tick weight ex) "bold"
             -k, legend_ticks(list): ticks ex) [1,2,3]
             -k, legend_labels(list): tick label ex) ["1","2","3"]
+            -k, decimal_digit(int): decimal digit for visualization
         """
         cmap = style_info.get("cmap", "coolwarm")
         
@@ -642,6 +644,10 @@ class RDM_model:
         ticks_range = np.arange(0, len(conditions))
         
         # range
+        decimal_digit = style_info.get("decimal_digit", None)
+        if decimal_digit != None:
+            rdm = np.round(rdm, decimal_digit)
+        
         v_min = np.min(rdm)
         v_max = np.max(rdm)
         color_range = style_info.get("color_range", (v_min, v_max))
@@ -752,7 +758,8 @@ def RSA(models,
             pass
         else:
             # check all model's condition is same
-            assert model.conditions == models[0].conditions, "all models condition is not matched!!"
+            is_same_cond = np.all(models[0].conditions == models[0].conditions)
+            assert is_same_cond, "all models condition is not matched!!"
             
             if eval_method == Similarity_type.spearman:
                 # check model degree of freedom for computing correlation
@@ -949,8 +956,8 @@ def make_rdm(conditions, pair_values):
     
     return dataframe
     """
-    rdm = pd.DataFrame(index = trial_conds,
-                       columns = trial_conds)
+    rdm = pd.DataFrame(index = conditions,
+                       columns = conditions)
     
     for cond1, cond2, value in pair_values:
         rdm[cond1][cond2] = value
@@ -1598,27 +1605,6 @@ def calc_crossnobis_with_prewhitening(subj_number,
                                              cv_descriptor='sessions')
     
     return rdm_crossnobis
-
-def make_rdm(conditions, pair_values):
-    """
-    Make rdm using dataframe
-    
-    :param conditions: conditions(list)
-    :param pair_values: (cond1, cond2, value)
-    
-    return dataframe
-    """
-    rdm = pd.DataFrame(index = conditions,
-                       columns = conditions)
-    
-    for cond1, cond2, value in pair_values:
-        rdm[cond1][cond2] = value
-        rdm[cond2][cond1] = value
-    
-    for cond in conditions:
-        rdm[cond][cond] = 0
-        
-    return rdm
 
 def check_condition_withinRun(run_conditions, population_conds):
     """

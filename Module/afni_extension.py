@@ -160,7 +160,7 @@ def whereami(x,
     # command
     output = subprocess.check_output(command, shell=True)
     output = output.decode('utf-8').split("\n")
-    
+
     if is_parsing == False:
         return output
     else:
@@ -261,7 +261,7 @@ def cluster_infos(stat_map_paths,
                   thresholds, 
                   cluster_sizes,
                   NN_level = 1,
-                  atlas_name = "Haskins_Pediatric_Nonlinear_1.0",
+                  atlas_name = "Haskins_Pediatric_Nonlinear_1.01",
                   atlas_query_method = "center",
                   orientation = "LPI",
                   is_positive = False,

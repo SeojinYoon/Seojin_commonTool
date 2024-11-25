@@ -24,7 +24,7 @@ from sj_brain_mask import untangle_mask_img
 from sj_file_system import str_join
 from sj_string import search_stringAcrossTarget
 from sj_enum import File_validation
-from afni_extension import cluster_infos, clusterize, find_thresholds_1samp
+from afni_extension import cluster_infos, clusterize
 from sj_higher_function import flatten
 
 def cluster_to_mesh(cluster_map_path, 
@@ -269,18 +269,14 @@ def show_clusterize_brain(
     cluster_dir_path,
     base_brain_nii_path,
     roi_vtk_files,
-    n_cluster_criterias = None,
-    n_datas = None,
     cluster_plot_style = "point", # mesh, point
     atlas_query_method = "center", # peak, center
     atlas_name = "Haskins_Pediatric_Nonlinear_1.01",
     thresholds = None,
-    candidate_p_values = [0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001],
     cluster_size = 40,
     NN_level = 1,
     cluster_map_colors = None,
     stat_indexes = None,
-    upper_limit_cluster_n_voxels = 200,
     background_color = "black",
     roi_style_info = {},
     is_custom_lightening = False,
@@ -299,9 +295,6 @@ def show_clusterize_brain(
         -example: "/Users/clmn/Downloads/vedo_dir/group_mask.nii"
     :param roi_vtk_files: paths of roi vtk file
         -example: ["/Users/clmn/Downloads/vedo_vis/brain_rois/a.vtk"]
-    :param n_datas: number of data(list - int)
-        -des: The stat's threshold was calculated based on the value.
-        -example: [3]
      :param n_cluster_criterias: Each statmap needs to have under the number of cluster.(Int)
         -example: [5]
     :param cluster_plot_style: plotting style of cluster(string)
@@ -312,8 +305,6 @@ def show_clusterize_brain(
         -kind: "Haskins_Pediatric_Nonlinear_1.01"
     :param thresholds: Thresholds to do clustering analysis [list - float]
         -example: [3.14]
-    :param candidate_p_values: Threshold was calculated by candidate p values.(list - float)
-        -example: [0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
     :param cluster_size: The cluster's voxel must exceed the size.(Int)
         -example: 40
     :param NN_level: NN level(int)
@@ -326,8 +317,6 @@ def show_clusterize_brain(
         -example: [ "#cdcd00" ]
     :param stat_indexes: statmap index of file_paths(list - int)
         -example: [1]
-    :param upper_limit_cluster_n_voxels: upper limit of cluster voxel size(int)
-        -example: 200
     :param background_color: background color(string)
         -example: "#000000"
     :param is_custom_lightening: is_custom_lightening (boolean)
@@ -341,29 +330,6 @@ def show_clusterize_brain(
 
     if type(stat_indexes) == type(None):
         stat_indexes = np.repeat(1, n_stat)
-        
-    # Calculate optimizing threshold
-    if thresholds == None:
-        clust_infos = []
-        for path, n_data, n_cluster, stat_index in zip(stat_map_paths, n_datas, n_cluster_criterias, stat_indexes):
-            clust_info = find_thresholds_1samp(stat_path = path, 
-                                            candidate_p_values = candidate_p_values,
-                                            criteria_n_cluster = n_cluster, 
-                                            n_data = n_data, 
-                                            cluster_size = cluster_size,
-                                            NN_level = NN_level,
-                                            stat_index = stat_index,
-                                            upper_limit_voxel_size = upper_limit_cluster_n_voxels)
-            clust_infos.append(clust_info)
-        
-        thresholds = [info["t_thres"] for info in clust_infos]
-        p_values = [info["p_value"] for info in clust_infos]
-        n_clusters = [info["n_cluster"] for info in clust_infos]
-
-        print("p_values: ", p_values)
-        print("n_clusters: ", n_clusters)
-    print("thresholds: ", thresholds)
-    
     
     # Load base brain
     base_brain_vtk_path = os.path.join(cluster_dir_path, f"{Path(base_brain_nii_path).stem}.vtk")
@@ -480,6 +446,8 @@ def show_clusterize_brain(
 
                 roi_vtk_volume = roi_vtk_volume.decimate(fraction = fraction, method = method, boundaries = boundaries)
 
+        roi_vtk_volume.pickable(False)
+
         # Accumulate element
         roi_vtk_volumes.append(roi_vtk_volume)
 
@@ -496,12 +464,12 @@ def show_clusterize_brain(
 
     if cluster_plot_style == "point":
         for cluster_df, color in zip(cluster_dfs, cluster_map_colors):
-            l_clusters = make_cluster_spheres(cluster_df = cluster_df, color = color)
-            clusters.append(l_clusters)
+            clusters_ = make_cluster_spheres(cluster_df = cluster_df, color = color)
+            clusters.append(clusters_)
     else:
         for cluster_df, mesh_paths, color in zip(cluster_dfs, cluster_mesh_paths, cluster_map_colors):
-            l_clusters = make_cluster_meshes(cluster_df = cluster_df, mesh_paths = mesh_paths, color = color)
-            clusters.append(l_clusters)
+            clusters_ = make_cluster_meshes(cluster_df = cluster_df, mesh_paths = mesh_paths, color = color)
+            clusters.append(clusters_)
 
     for c in flatten(clusters):
         c.opacity(1.0)
@@ -532,7 +500,10 @@ def show_clusterize_brain(
             try:
                 origin = evt.actor.c()
                 # sil = evt.actor.c('red5')
-                msg.text("area name: "+ evt.actor.name)
+                if evt.actor.name != "Mesh":
+                    msg.text("area name: "+ evt.actor.name)
+                else:
+                    print(1)
                 # plotter.remove('silu').add(sil)
             except:
                 pass

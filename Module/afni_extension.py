@@ -146,7 +146,7 @@ def whereami(x,
         -and so on...
         
     return (pd.DataFrame)
-        -row: atals info
+        -row: atlas info
     """
     
     if atlas != None:
@@ -338,70 +338,6 @@ def cluster_infos(stat_map_paths,
         
     return clusterize_dfs
 
-def find_thresholds_1samp(stat_path,
-                          criteria_n_cluster, 
-                          n_data, 
-                          candidate_p_values = [0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001],
-                          cluster_size = 40, 
-                          NN_level = 1, 
-                          is_positive = True,
-                          stat_index = 1,
-                          upper_limit_voxel_size = 200):
-    """
-    Find t-stat threshold from stat-map
-    
-    :param stat_path: stat-map path(t-stat)
-    :param criteria_n_cluster: contraint of n_cluster
-    :param n_data: #data (to calculate stat)
-    :param candidate_p_values: p-values(list)
-    :param cluster_size: voxel cluster size(int)
-    :param NN_level: NN level(int)
-    :param is_positive: Whether cluster is positive only(boolean)
-    :param stat_index: statmap index of file_path(int)
-
-    return (dictionary) {
-        t_thres: t-stat threshold
-        p_value: p-value
-        n_cluster : number of cluster
-    }
-    """
-    target_t_thres = None
-    n_cluster = None
-    p_value = None
-    for c_p_value in candidate_p_values:
-        # Take t-stat corresponding p-value
-        t_thres = t_critical_value(c_p_value, df = n_data - 1)
-        
-        # Query clusterize analysis
-        cluster_d = clusterize(file_path = stat_path,
-                               threshold = t_thres, 
-                               cluster_size = cluster_size,
-                               NN_level = NN_level,
-                               is_positive = is_positive,
-                               stat_index = stat_index)
-
-        # Validation check
-        if type(cluster_d) == type(None) or len(cluster_d) == 0:
-            continue
-        
-        # Check cluster which has too many voxels
-        if sum(cluster_d["#Volume"].astype(int) > upper_limit_voxel_size) > 1:
-            continue
-        
-        # Check the results exceeding maximum #cluster
-        if len(cluster_d) <= criteria_n_cluster:
-            n_cluster = len(cluster_d)
-            target_t_thres = t_thres
-            p_value = c_p_value
-            
-            break
-            
-    return {
-        "t_thres" : target_t_thres,
-        "p_value" : p_value,
-        "n_cluster" : n_cluster
-    }
-
 def afni_to_nifti(afni_brain):
     # Get the AFNI data and header information
     data = afni_brain.get_fdata()
@@ -464,8 +400,3 @@ if __name__ == "__main__":
     cluster_infos(stat_map_paths = stat_map_paths,
                   thresholds = thresholds,
                   cluster_sizes = cluster_sizes)
-
-    find_thresholds_1samp(stat_path = stat_map_path,
-                      criteria_n_cluster = 8,
-                      n_data = 6,
-                      is_positive = True)

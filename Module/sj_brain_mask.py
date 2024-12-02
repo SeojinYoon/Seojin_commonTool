@@ -452,7 +452,7 @@ if __name__ == "__main__":
     bn_df = pd.read_csv(label_info_path, delimiter='\t', header = None)
     bn_df.columns = ["key", "value"]
     bn_info = sj_dictionary.df_to_dict(bn_df)
-    roi_manager = multi_label_roi_manager(labeled_img = bn_brain, label_info = bn_info, full_mask_img = mask_img)
+    roi_manager = multi_label_roi_manager(labeled_img = bn_brain, label_info = bn_info, reference_img = mask_img)
     roi_img = roi_manager.search_mask_info(["C"])
 
     # untangle img

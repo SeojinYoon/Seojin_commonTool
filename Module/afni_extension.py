@@ -79,12 +79,12 @@ def clusterize(file_path,
         f"-pref_map {pref_map}" if pref_map != None else "",
         f"-pref_dat {pref_dat}" if pref_dat != None else "",
     ], delimiter = " ")
-    
-    output = subprocess.check_output(command, shell=True)
-    output = output.decode('utf-8').split("\n")
-    
+
     if is_show_command:
         print("command: ", command)
+        
+    output = subprocess.check_output(command, shell=True)
+    output = output.decode('utf-8').split("\n")
     
     if not is_parsing:
         return output

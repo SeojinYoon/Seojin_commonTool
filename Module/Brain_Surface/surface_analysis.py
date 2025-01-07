@@ -14,11 +14,17 @@ def surface_cross_section(template_surface_path,
     Do sampling using virtual strip
 
     :param template_surface_path(string): template gii file ex) '/home/seojin/single-finger-planning/data/surf/fs_LR.164k.L.flat.surf.gii'
-    :param surface_data(string or np.array - shape: (n_vertex, n_data): data gii file path or data array ex) '/home/seojin/single-finger-planning/data/surf/group.psc.L.Planning.func.gii'
+    :param surface_data(string or np.array - shape: (#vertex, #data): data gii file path or data array ex) '/home/seojin/single-finger-planning/data/surf/group.psc.L.Planning.func.gii'
     :param from_point(list): location of start virtual strip - xy coord ex) [-43, 86]
     :param to_point(list): location of end virtual strip - xy coord ex) [87, 58]
     :param width(int): width of virtual strip ex) 20
     :param n_sampling(int): the number of sampling across virtual strip
+
+    return 
+        -k virtual_stip_mask(np.array - #vertex): mask
+        -k sampling_datas(np.array - #sampling, #data): sampling datas based on virtual strip
+        -k sampling_coverages(np.array - #sampling, #vertex): spatial coverage per sampling point
+        -k sampling_center_coords(np.array - #sampling, #coord): sampling center coordinates
     """
     if n_sampling == None:
         n_sampling = abs(from_point[0] - to_point[0])
@@ -64,12 +70,14 @@ def surface_cross_section(template_surface_path,
     # Distance between vertex and virtual vector
     distance = np.sqrt(np.sum(residual**2, axis=1))
 
+    ## Dummy for sampling result
+    sampling_datas = np.zeros((n_sampling, n_data))
+    virtual_stip_mask = np.zeros(n_vertex)
+    sampling_center_coords = np.zeros((n_sampling, flat_coord.shape[1]))
+    sampling_coverages = np.zeros((n_sampling, n_vertex))
+
     # Find points on the strip
     graduation_onVirtualVec = np.linspace(0, 1, n_sampling + 1)
-    Y = np.zeros((n_sampling, n_data))
-    mask = np.zeros(n_vertex)
-    coord = np.zeros((n_sampling, flat_coord.shape[1]))
-    
     for i in range(n_sampling):
         # Filter only the vertices that are inside the virtual strip from all vertices
         start_grad = graduation_onVirtualVec[i]
@@ -82,13 +90,20 @@ def surface_cross_section(template_surface_path,
         
         is_virtual_strip = within_distance & upper_start & lower_end & no_origin
         indx = np.where(is_virtual_strip)[0]
-    
-        # Perform cross-section
-        Y[i, :] = np.nanmean(data_arrays[indx, :], axis=0) if len(indx) > 0 else 0
-        mask[indx] = 1
-        coord[i, :] = np.nanmean(flat_coord[indx, :], axis=0) if len(indx) > 0 else 0
 
-    return [Y, mask, coord]
+        sampling_coverages[i, indx] = 1
+        
+        # Perform cross-section
+        sampling_datas[i, :] = np.nanmean(data_arrays[indx, :], axis=0) if len(indx) > 0 else 0
+        virtual_stip_mask[indx] = 1
+        sampling_center_coords[i, :] = np.nanmean(flat_coord[indx, :], axis=0) if len(indx) > 0 else 0
+
+    result_info = {}
+    result_info["sampling_datas"] = sampling_datas
+    result_info["virtual_stip_mask"] = virtual_stip_mask
+    result_info["sampling_center_coords"] = sampling_center_coords
+    result_info["sampling_coverages"] = sampling_coverages
+    return result_info
 
 def vol_to_surf(volume_data_path, 
                 pial_surf_path, 

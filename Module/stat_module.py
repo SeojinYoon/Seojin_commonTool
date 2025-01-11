@@ -285,19 +285,6 @@ def FWER(a, n_test):
     """
     return 1 - (1 - a) ** n_test
 
-def bonferroni_correction(a, n_test):
-    """
-    bonferroni p-value correction
-        - correct single test's significance level to satisfy with FWER
-        
-    :param a(float): significance level
-    :param n_test(int): the number of test
-    
-    return corrected p-value
-    """
-
-    return a / n_test
-
 def check_p(target_p, ref_p):
     """
     Check target p-value whether the target p-value is more greater than reference p-value

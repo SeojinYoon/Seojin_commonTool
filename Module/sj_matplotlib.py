@@ -7,8 +7,7 @@ import matplotlib.pylab as plt
 from scipy.stats import cumfreq
 
 from sj_sequence import slice_list_usingDiff
-from sj_string import search_stringAcrossTarget
-from sj_file_system import str_join
+from sj_string import search_stringAcrossTarget, str_join
 
 def multi_font_strings(texts, sep = " ", info = {}):    
     """

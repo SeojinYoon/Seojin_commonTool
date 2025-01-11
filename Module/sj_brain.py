@@ -1518,8 +1518,6 @@ def calc_roi_crossnobis(subj_number,
     :param full_mask(nifti - shape: (nx, ny, nz)): full mask img
     :param residual_cov_method(string): residual covariance method ex) shrinkage_eye
     """
-    select_data = 0
-    select_first = 0
     
     """
     Step 1: Apply roi mask

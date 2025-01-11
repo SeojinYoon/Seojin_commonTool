@@ -12,7 +12,6 @@ from nltools.data import Brain_Data
 
 # Custom Libraries
 from sj_dictionary import search_dict
-from sj_string import str_join
 
 def apply_mask_change_shape(fMRI_datas, mask):
     """
@@ -23,7 +22,11 @@ def apply_mask_change_shape(fMRI_datas, mask):
 
     return masked_fmri_datas(1d array), mask_img
     """
-    resampled_mask = resample_to_img(mask, fMRI_datas[0], interpolation="nearest")
+    resampled_mask = resample_to_img(mask, 
+                                     fMRI_datas[0], 
+                                     interpolation = "nearest", 
+                                     force_resample = True,
+                                     copy_header = True)
     resampled_mask = nb.Nifti1Image(np.array(resampled_mask.get_fdata() > 0, dtype=np.int8), resampled_mask.affine)
 
     # Multiply the functional image with the mask
@@ -91,8 +94,15 @@ def apply_mask_with_img(anatomy_data, fMRI_datas, mask, is_show_img = True):
         reference_img = fMRI_datas[0]
     else:
         reference_img = mean_img(fMRI_datas[0])
-    resampled_anatomy = resample_to_img(anatomy_data, reference_img)
-    resampled_mask = resample_to_img(mask, fMRI_datas[0], interpolation="nearest")
+    resampled_anatomy = resample_to_img(anatomy_data, 
+                                        reference_img, 
+                                        force_resample = True,
+                                        copy_header = True)
+    resampled_mask = resample_to_img(mask, 
+                                     fMRI_datas[0], 
+                                     interpolation="nearest", 
+                                     force_resample = True,
+                                     copy_header = True)
     
     if is_show_img:
         plot_roi(resampled_mask,
@@ -170,9 +180,9 @@ class fan_roi_mask_manager:
         """
         :param keywords: keyword to search(list)
         """
-        name = str_join(keywords)
+        name = "_".join(keywords)
         if exclude_keywords != None:
-            name += "_exclude_" + str_join(exclude_keywords)
+            name += "_exclude_" + "_".join(exclude_keywords)
             
         return brain_mask(mask_nifti_img = self.make_roi_with_search(keywords = keywords, exclude_keywords = exclude_keywords),
                           name = name)
@@ -273,7 +283,11 @@ class parcellation_roi_mask_manager:
             local_masks.append(local_mask)
     
         roi_img = add_imgs(local_masks)
-        roi_img = resample_to_img(roi_img, self.reference_img, interpolation="nearest")
+        roi_img = resample_to_img(roi_img, 
+                                  self.reference_img, 
+                                  interpolation = "nearest",
+                                  force_resample = True,
+                                  copy_header = True)
 
         return roi_img
 
@@ -286,7 +300,10 @@ class multi_label_roi_manager:
         :params label_info: (dictionary)
         :params reference_img: reference_img (nitfti)
         """
-        self.labeled_array = resample_to_img(labeled_img, reference_img, interpolation="nearest").get_fdata()
+        self.labeled_array = resample_to_img(labeled_img, 
+                                             reference_img, 
+                                             interpolation = "nearest", 
+                                             force_resample = True).get_fdata()
         self.label_info = label_info
         self.reference_img = reference_img
         
@@ -338,7 +355,10 @@ class multi_label_roi_manager:
         return roi_img
         
 def load_mask(mask_path, resample_target):
-    resampled_mask = resample_to_img(nb.load(mask_path), resample_target, interpolation="nearest")
+    resampled_mask = resample_to_img(nb.load(mask_path), 
+                                     resample_target, 
+                                     interpolation = "nearest",
+                                     copy_header = True)
     return resampled_mask
 
 def add_imgs(imgs, is_use_path = False):
@@ -399,7 +419,7 @@ def make_roi(roi_paths, reference_img):
     return: roi(nifiti img)
     """
     roi = add_imgs(roi_paths)
-    roi = resample_to_img(roi, reference_img, interpolation="nearest")
+    roi = resample_to_img(roi, reference_img, interpolation="nearest", force_resample = True)
 
     return roi
 
@@ -452,7 +472,7 @@ if __name__ == "__main__":
     bn_df = pd.read_csv(label_info_path, delimiter='\t', header = None)
     bn_df.columns = ["key", "value"]
     bn_info = sj_dictionary.df_to_dict(bn_df)
-    roi_manager = multi_label_roi_manager(labeled_img = bn_brain, label_info = bn_info, full_mask_img = mask_img)
+    roi_manager = multi_label_roi_manager(labeled_img = bn_brain, label_info = bn_info, reference_img = mask_img)
     roi_img = roi_manager.search_mask_info(["C"])
 
     # untangle img

@@ -124,8 +124,8 @@ def draw_label(axis, label_info = {}):
     x_weight = dict(weight = label_info.get("x_weight", "bold"))
     y_weight = dict(weight = label_info.get("y_weight", "bold"))
     
-    x_label_size = label_info.get("x_size", 14)
-    y_label_size = label_info.get("y_size", 14)
+    x_label_size = label_info.get("x_size", 16)
+    y_label_size = label_info.get("y_size", 16)
     
     x_label_pad = label_info.get("x_label_pad", 10)
     y_label_pad = label_info.get("y_label_pad", 10)
@@ -232,16 +232,17 @@ def draw_ticks(axis, tick_info = {}):
     x_names = tick_info.get("x_names", [])
     
     x_tick_weight = tick_info.get("x_tick_weight", "normal")
-    x_tick_size = tick_info.get("x_tick_size", 12)
+    x_tick_size = tick_info.get("x_tick_size", 14)
     x_tick_rotation = tick_info.get("x_tick_rotation", 90)
-
+    
     y_data = tick_info.get("y_data", [])
     y_names = tick_info.get("y_names", [])
     
     y_tick_weight = tick_info.get("y_tick_weight", "normal")
-    y_tick_size = tick_info.get("y_tick_size", 12)
+    y_tick_size = tick_info.get("y_tick_size", 14)
     y_tick_rotation = tick_info.get("y_tick_rotation", 0)
-
+    y_tick_round = tick_info.get("y_tick_round", None)
+    
     # X
     x_data = np.array(x_data)
     x_names = np.array(x_names)
@@ -251,6 +252,7 @@ def draw_ticks(axis, tick_info = {}):
         x_names = x_names[x_tick_duplication]
         x_pos_dup = x_data[x_tick_duplication]
         x_data = x_pos_dup
+        
     axis.set_xticks(x_data, 
                     x_names, 
                     rotation = x_tick_rotation, 
@@ -520,6 +522,49 @@ def plot_histogram_and_cdf(data,
     axis.set_ylabel('Frequency / Cumulative Probability')
     axis.legend()
 
+def make_colorbar(vmin, 
+                  vmax, 
+                  figsize = (2, 6), 
+                  n_div = 4, 
+                  cmap = "jet", 
+                  tick_decimal = 4, 
+                  orientation = "horizontal"):
+    """
+    Creates a customizable colorbar using matplotlib.
+
+
+    :param vmin (float): The minimum value for the colorbar.
+    :param vmax (float): The maximum value for the colorbar.
+    :param figsize (tuple): The size of the figure (width, height). Defaults to (2, 6).
+    :param n_div (int): Number of divisions (ticks) on the colorbar. Defaults to 4.
+    :param cmap (str): Colormap to use for the colorbar. Defaults to "jet".
+    :param tick_decimal (int): Number of decimal places to display on the tick labels. Defaults to 4.
+    :param orientation (str): Orientation of the colorbar, either "horizontal" or "vertical". Defaults to "horizontal".
+
+    return (tuple): A tuple containing the matplotlib figure and axis objects.
+    """
+    interval = (vmax - vmin) / n_div
+    ticks = np.arange(vmin, vmax + interval, interval)
+
+    # Create the figure and axis for the colorbar
+    fig = plt.figure(figsize = figsize)
+
+    if orientation == "vertical":
+        axis = fig.add_axes([0.05, 0.05, 0.15, 0.9])  # [left, bottom, width, height]
+    else:
+        axis = fig.add_axes([0.1, 0.5, 0.8, 0.3])  # [left, bottom, width, height]
+    
+    # Create the colorbar
+    cmap = plt.get_cmap(cmap)
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=axis, orientation=orientation)
+    
+    # Set the ticks and labels
+    cbar.set_ticks(ticks)
+    cbar.set_ticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks])
+
+    return fig, axis, ticks
+    
 if __name__=="__main__":
     multi_font_strings(["a", "b"])
     
@@ -531,4 +576,7 @@ if __name__=="__main__":
 
     # Call the function with the first axis
     plot_histogram_and_cdf(random_data, axis=axes[0])
-    
+
+    # Color bar
+    fig, axis = make_colorbar(0.0007, 0.0014, figsize = (2, 4), n_div = 4, orientation = "vertical")
+    plt.show()

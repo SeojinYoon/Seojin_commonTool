@@ -1,9 +1,56 @@
 
+# Common Libraries
+import os
+import sys
 import numpy as np
 import nibabel as nb
 import nitools as nt
 import warnings
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.image as mpimg
+from scipy.spatial import KDTree
+import matplotlib.pylab as plt
+from copy import copy
+from cv2 import minAreaRect, boxPoints, pointPolygonTest
+import json
+from collections import Counter
+from matplotlib.patches import Rectangle
 
+# Custom Libraries
+sys.path.append("/home/seojin")
+import surfAnalysisPy as surf # Dierdrichsen lab's library
+from sj_matplotlib import make_colorbar
+
+# Functions
+def surf_paths(surf_hemisphere, 
+               surf_dir_path = "/mnt/sda2/Common_dir/Atlas/Surface", 
+               surf_resolution = 32,
+               atlas = "Brodmann"):
+    surf_dir_path = os.path.join(surf_dir_path, f"fs_LR_{surf_resolution}")
+    
+    # Template
+    pial_surf_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.pial.surf.gii")
+    white_surf_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.white.surf.gii")
+    template_surface_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.flat.surf.gii")
+    inflated_brain_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.inflated.surf.gii")
+    shape_gii_path = os.path.join(surf_dir_path, f"fs_LR.32k.{surf_hemisphere}.shape.gii")
+    
+    # Sulcus
+    sulcus_path = os.path.join(surf_dir_path, "borders", f"{surf_hemisphere}_sulcus.json")
+    
+    # ROI
+    roi_label_path = os.path.join(surf_dir_path, atlas, f"{surf_hemisphere}_rois.npy")
+
+    return {
+        f"{surf_hemisphere}_pial_surf_path" : pial_surf_path,
+        f"{surf_hemisphere}_white_surf_path" : white_surf_path,
+        f"{surf_hemisphere}_template_surface_path" : template_surface_path,
+        f"{surf_hemisphere}_inflated_brain_path" : inflated_brain_path,
+        f"{surf_hemisphere}_shape_gii_path" : shape_gii_path,
+        f"{surf_hemisphere}_sulcus_path" : sulcus_path,
+        f"{surf_hemisphere}_roi_label_path" : roi_label_path,
+    }
+    
 def surface_cross_section(template_surface_path, 
                           surface_data, 
                           from_point, 
@@ -205,6 +252,553 @@ def vol_to_surf(volume_data_path,
         mapped_data  = stats(data_consideringGraymatterDepth)
         
     return mapped_data
+
+def draw_surf_roi(roi_value_array, roi_info, surf_hemisphere, resolution = 32, alpha = 0.3):
+    """
+    Draw surface roi
+
+    :param roi_value_array(np.array - shape: #vertex): roi value array
+    :param roi_info(dictionary -k: roi_name, -v: location(xy)): roi information dictionary
+    :param surf_hemisphere(string): orientation of hemisphere ex) "L", "R"
+    """
+    ax = surf.plot.plotmap(data = roi_value_array, 
+                           surf = f"fs{resolution}k_{surf_hemisphere}",
+                           threshold = 0.01,
+                           alpha = alpha)
+    for i, roi_name in enumerate(roi_info):
+        loc = roi_info[roi_name]
+        ax.text(x = loc[0], y = loc[1], s = roi_name)
+    return (ax.get_figure(), ax) 
+
+def draw_surf_selectedROI(surf_roi_labels, roi_name, surf_hemisphere, resolution = 32, alpha = 0.3):
+    """
+    Draw surface roi
+
+    :param surf_roi_labels(np.array - shape: #vertex): roi label array
+    :param roi_name(string): roi name
+    :param surf_hemisphere(string): orientation of hemisphere ex) "L", "R"
+    """
+    roi_value_array = np.where(surf_roi_labels == roi_name, 1, 0)
+    ax = surf.plot.plotmap(data = roi_value_array, 
+                           surf = f"fs{resolution}k_{surf_hemisphere}",
+                           threshold = 0.01,
+                           alpha = alpha)
+    return (ax.get_figure(), ax) 
+
+def load_surfData_fromVolume(volume_data_paths, hemisphere):
+    """
+    Load surface data from volume data
+
+    :param volume_data_paths(list - string): volume data path(.nii)
+    :param hemisphere(string): "L" or "R"
+    """
+    surf_info = surf_paths(hemisphere)
+    
+    surface_datas = []
+    for path in volume_data_paths:
+        surface_data = vol_to_surf(volume_data_path = path,
+                                   pial_surf_path = surf_info[f"{hemisphere}_pial_surf_path"],
+                                   white_surf_path = surf_info[f"{hemisphere}_white_surf_path"])
+        surface_datas.append(surface_data)
+    surface_datas = np.array(surface_datas).T
+
+    return surface_datas
+    
+def gaussian_weighted_smoothing(coords, values, sigma=1.0):
+    """
+    Apply Gaussian smoothing to scattered data without using a grid.
+    
+    Args:
+    - coords: (N, 2) array of x, y coordinates.
+    - values: (N,) array of corresponding values.
+    - sigma: Standard deviation for Gaussian weighting.
+    
+    Returns:
+    - smoothed_values: Smoothed values at each original coordinate.
+    """
+    tree = KDTree(coords)
+    smoothed_values = np.zeros_like(values)
+    for i, point in enumerate(coords):
+        distances, indices = tree.query(point, k=50)  # Consider 50 nearest neighbors
+        weights = np.exp(-distances**2 / (2 * sigma**2))
+        smoothed_values[i] = np.sum(values[indices] * weights) / np.sum(weights)
+    return smoothed_values
+
+def surface_cross_section_nifti(volume_data_paths, 
+                                surf_hemisphere, 
+                                from_point, 
+                                to_point, 
+                                width,
+                                n_sampling = None):
+    """
+    Do sampling using virtual strip
+
+    :param template_surface_path(string): template gii file ex) '/home/seojin/single-finger-planning/data/surf/fs_LR.164k.L.flat.surf.gii'
+    :param surface_data(string or np.array - shape: (#vertex, #data): data gii file path or data array ex) '/home/seojin/single-finger-planning/data/surf/group.psc.L.Planning.func.gii'
+    :param from_point(list): location of start virtual strip - xy coord ex) [-43, 86]
+    :param to_point(list): location of end virtual strip - xy coord ex) [87, 58]
+    :param width(int): width of virtual strip ex) 20
+    :param n_sampling(int): the number of sampling across virtual strip
+
+    return 
+        -k virtual_stip_mask(np.array - #vertex): mask
+        -k sampling_datas(np.array - #sampling, #data): sampling datas based on virtual strip
+        -k sampling_coverages(np.array - #sampling, #vertex): spatial coverage per sampling point
+        -k sampling_center_coords(np.array - #sampling, #coord): sampling center coordinates
+    """
+    template_surface_path = surf_paths(surf_hemisphere)[f"{surf_hemisphere}_template_surface_path"]
+    surface_datas = load_surfData_fromVolume(volume_data_paths, surf_hemisphere)
+    
+    if n_sampling == None:
+        n_sampling = abs(from_point[0] - to_point[0])
+    
+    # Load data metric file
+    surface_gii = nb.load(template_surface_path)
+    flat_coord = surface_gii.darrays[0].data
+    
+    if type(surface_datas) == str:
+        data_gii = nb.load(surface_data_path)
+    
+        # Check - all data has same vertex shape
+        darrays = data_gii.darrays
+        is_valid = np.all([darray.dims[0] == darrays[0].dims[0] for darray in darrays])
+        assert is_valid, "Please check data shape"
+    
+        data_arrays = np.array([e.data for e in darrays]).T
+    else:
+        data_arrays = surface_datas
+        
+    # Data information
+    n_vertex = data_arrays.shape[0]
+    n_data = data_arrays.shape[1]
+    
+    # Check - surface and data have same vertex
+    assert flat_coord.shape[0] == n_vertex, "Data vertex must be matched with surface"
+    
+    # Extract vertices (x, y)
+    vertex_2d = flat_coord[:, :2]
+    
+    # Move vertex origin
+    points = vertex_2d - from_point
+    
+    # Set virtual vector(orientation of virtual strip)
+    virtual_vec = to_point - from_point
+    
+    # Values for explaining vertex relative to virtual vector
+    project = (np.dot(points, virtual_vec)) / np.dot(virtual_vec, virtual_vec)
+    
+    # Difference between vertex and projection vector
+    residual = points - np.outer(project, virtual_vec)
+    
+    # Distance between vertex and virtual vector
+    distance = np.sqrt(np.sum(residual**2, axis=1))
+
+    ## Dummy for sampling result
+    sampling_datas = np.zeros((n_sampling, n_data))
+    virtual_stip_mask = np.zeros(n_vertex)
+    sampling_center_coords = np.zeros((n_sampling, flat_coord.shape[1]))
+    sampling_coverages = np.zeros((n_sampling, n_vertex))
+
+    # Find points on the strip
+    graduation_onVirtualVec = np.linspace(0, 1, n_sampling + 1)
+    for i in range(n_sampling):
+        # Filter only the vertices that are inside the virtual strip from all vertices
+        start_grad = graduation_onVirtualVec[i]
+        next_grad = graduation_onVirtualVec[i + 1]
+    
+        within_distance = distance < width
+        upper_start = (project >= start_grad)
+        lower_end = (project <= next_grad)
+        no_origin = (np.sum(vertex_2d ** 2, axis=1) > 0)
+        
+        is_virtual_strip = within_distance & upper_start & lower_end & no_origin
+        indx = np.where(is_virtual_strip)[0]
+
+        sampling_coverages[i, indx] = 1
+        
+        # Perform cross-section
+        sampling_datas[i, :] = np.nanmean(data_arrays[indx, :], axis=0) if len(indx) > 0 else 0
+        virtual_stip_mask[indx] = 1
+        sampling_center_coords[i, :] = np.nanmean(flat_coord[indx, :], axis=0) if len(indx) > 0 else 0
+
+    result_info = {}
+    result_info["sampling_datas"] = sampling_datas
+    result_info["virtual_stip_mask"] = virtual_stip_mask
+    result_info["sampling_center_coords"] = sampling_center_coords
+    result_info["sampling_coverages"] = sampling_coverages
+    return result_info
+
+def get_bounding_box(hemisphere, virtual_strip_mask):
+    """
+    Get bounding box from virtual strip mask
+
+    :param hemisphere(string): "L" or "R"
+    :param virtual_strip_mask(np.array): strip mask
+
+    return rect
+    """
+    template_path = surf_paths(hemisphere)[f"{hemisphere}_template_surface_path"]
+    temploate_surface_data = nb.load(template_path)
+    vertex_locs = temploate_surface_data.darrays[0].data[:, :2]
+    
+    rect_vertexes = vertex_locs[np.where(virtual_strip_mask == 1, True, False)]
+    min_rect_x, max_rect_x = np.min(rect_vertexes[:, 0]), np.max(rect_vertexes[:, 0])
+    min_rect_y, max_rect_y = np.min(rect_vertexes[:, 1]), np.max(rect_vertexes[:, 1])
+
+    left_bottom = (min_rect_x, min_rect_y)
+    width = max_rect_x - min_rect_x
+    height = max_rect_y - min_rect_y
+
+    return {
+        "left_bottom" : left_bottom,
+        "width" : width,
+        "height" : height,
+    }
+
+def show_surf_withGrid(surf_vis_ax, x_count = 30, y_count = 30):
+    """
+    Show surface with grid
+
+    :param surf_vis_ax(axis)
+    :param x_count: #count for dividing x
+    :param y_count: #count for dividing y
+
+    return figure
+    """
+    copy_ax = copy(surf_vis_ax)
+    
+    copy_ax.grid(True)
+    copy_ax.axis("on")
+    x_min, x_max = int(copy_ax.get_xlim()[0]), int(copy_ax.get_xlim()[1])
+    y_min, y_max = int(copy_ax.get_ylim()[0]), int(copy_ax.get_ylim()[1])
+    
+    x_interval = (x_max - x_min) / x_count
+    y_interval = (y_max - y_min) / y_count
+    copy_ax.set_xticks(np.arange(x_min, x_max, x_interval).astype(int))
+    copy_ax.set_xticklabels(np.arange(x_min, x_max, x_interval).astype(int), rotation = 90)
+    
+    copy_ax.set_yticks(np.arange(y_min, y_max, y_interval).astype(int))
+    copy_ax.set_yticklabels(np.arange(y_min, y_max, y_interval).astype(int), rotation = 0)
+    
+    return copy_ax
+
+def show_sulcus(surf_ax, hemisphere, color = "white", linestyle = "dashed"):
+    """
+    Show sulcus base on surf axis
+
+    :param surf_ax(axis)
+    :param hemisphere(string): "L" or "R"
+
+    return axis
+    """
+    sulcus_path = surf_paths(hemisphere)[f"{hemisphere}_sulcus_path"]
+    with open(sulcus_path, "r") as file:
+        marking_data_info = json.load(file)
+    
+    copy_ax = copy(surf_ax)
+    for sulcus_name in marking_data_info:
+        copy_ax.plot(np.array(marking_data_info[sulcus_name])[:, 0], 
+                     np.array(marking_data_info[sulcus_name])[:, 1], 
+                     color = color,  
+                     linestyle = linestyle)
+    return copy_ax
+
+def detect_sulcus(hemisphere, sampling_coverages, is_first_index = False):
+    """
+    Detect sulcus based on surface map
+    
+    :param hemisphere(string): "L" or "R"
+    :param sampling_coverages(np.array - shape: (#vertex)): cross-section area coverages
+    :param is_first_index: select sulcus name if the sulcus name appears firstly when same sulcus name appears sequentially
+    """
+    surf_info = surf_paths(hemisphere)
+    
+    # Sulcus marking data
+    sulcus_path = surf_info[f"{hemisphere}_sulcus_path"]
+    with open(sulcus_path, "r") as file:
+        marking_data_info = json.load(file)
+
+    # Template
+    template_path = surf_info[f"{hemisphere}_template_surface_path"]
+    temploate_surface_data = nb.load(template_path)
+    vertex_locs = temploate_surface_data.darrays[0].data[:, :2]
+
+    # Sulcus prob
+    having_sulcus_prob_info = {}
+    for sulcus_name in marking_data_info:
+        sulcus_pts = marking_data_info[sulcus_name]
+    
+        having_sulcus_probs = []
+        for coverage in sampling_coverages:
+            coverage_vertexes = vertex_locs[np.where(coverage == 0, False, True)]
+            rect = minAreaRect(coverage_vertexes)
+            box = boxPoints(rect)
+        
+            is_having_sulcus = np.array([pointPolygonTest(box, pts, False) for pts in sulcus_pts])
+            having_sulcus_prob = np.sum(is_having_sulcus == 1) / len(sulcus_pts)
+            having_sulcus_probs.append(having_sulcus_prob)
+        having_sulcus_prob_info[sulcus_name] = np.array(having_sulcus_probs)
+
+    # Sulcus names
+    sulcus_names = ["" for _ in range(sampling_coverages.shape[0])]
+    for sulcus_name in having_sulcus_prob_info:    
+        if is_first_index:
+            searches = np.where(having_sulcus_prob_info[sulcus_name] != 0)[0]
+    
+            if len(searches) > 0:
+                first_index = searches[0]
+                sulcus_names[first_index] = sulcus_name
+        else:
+            max_prob = max(having_sulcus_prob_info[sulcus_name])
+        
+            if max_prob != 0:
+                max_prob_index = np.argmax(having_sulcus_prob_info[sulcus_name])
+                sulcus_names[max_prob_index] = sulcus_name
+    sulcus_names = np.array(sulcus_names)
+
+    return sulcus_names
+
+def detect_roi_names(sampling_coverages, hemisphere = "L", atlas = "Brodmann"):
+    """
+    Detect sampling coverage's roi name
+
+    :param sampling_coverages(np.array - (#sampling, #vertex)): sampling coverage array
+    :param hemisphere(string): brain hemisphere ex) "L" or "R"
+    :param atlas(string): atlas name ex) "Brodmann"
+    """
+    # ROIs
+    n_sampling = sampling_coverages.shape[0]
+    roi_labels = np.load(surf_paths(surf_hemisphere = hemisphere, atlas = atlas)[f"{hemisphere}_roi_label_path"])
+
+    # Calculate ROI probs
+    sampling_coverage_roi_probs = []
+    for sampling_i in range(n_sampling):
+        # Cover labels
+        is_covering = sampling_coverages[sampling_i] == 1
+        cover_labels = roi_labels[np.where(is_covering, True, False)]
+
+        # Prob
+        n_convering = np.sum(is_covering)
+        counter = Counter(cover_labels)
+        rois = np.array(list(counter.keys()))
+        probs = np.array(list(counter.values())) / n_convering
+        
+        # Decending order
+        sorted_prob_indexes = np.argsort(probs)[::-1]
+        
+        prob_info = {}
+        for prob_index in sorted_prob_indexes:
+            prob_info[rois[prob_index]] = probs[prob_index]
+        
+        sampling_coverage_roi_probs.append(prob_info)
+
+    # Allocate roi using maximum prob
+    rois = [max(roi_prob, key = roi_prob.get) for roi_prob in sampling_coverage_roi_probs]
+
+    return rois
+
+def show_both_hemi_sampling_coverage(l_sampling_coverage, 
+                                     r_sampling_coverage,
+                                     save_dir_path,
+                                     surf_resolution = 32,
+                                     left_bounding_box = None,
+                                     right_bounding_box = None):
+    """
+    Show sampling coverage on both hemispheres
+
+    :param l_sampling_coverage(np.array - shape: (#sampling, #vertex)): coverage per sampling for left hemi
+    :param r_sampling_coverage(np.array - shape: (#sampling, #vertex)): coverage per sampling for right hemi
+    :param save_dir_path(string): directory path for saving images
+    :param surf_resolution(int): surface resolution
+    :param left_bounding_box(dictionary): data for drawing bounding box of left hemi
+    :param right_bounding_box(dictionary): data for drawing bounding box of right hemi
+    """
+    # Left
+    plt.clf()
+    l_sampling_coverages_sum = np.array([np.where(e != 0, i/10, 0) for i, e in enumerate(l_sampling_coverage)]).T
+    l_sampling_coverages_sum = np.sum(l_sampling_coverages_sum, axis = 1)
+    l_coverage_ax = surf.plot.plotmap(data = l_sampling_coverages_sum, 
+                                      surf = f"fs{surf_resolution}k_L", 
+                                      colorbar = False, 
+                                      threshold = 0.001,
+                                      alpha = 0.5)
+    show_sulcus(l_coverage_ax, "L")
+
+    if type(left_bounding_box) != type(None):
+        rect = Rectangle(xy = left_bounding_box["left_bottom"], 
+                         width = left_bounding_box["width"], 
+                         height = left_bounding_box["height"], 
+                         linewidth = 1, 
+                         edgecolor = "r",
+                         facecolor = "none")
+        l_coverage_ax.add_patch(rect)
+    
+    l_surf_path = os.path.join(save_dir_path, f"L_hemi_coverage.png")
+    l_coverage_ax.get_figure().savefig(l_surf_path, dpi = 96, transparent = True)
+    print(f"save: {l_surf_path}")
+
+    # Right
+    plt.clf()
+    r_sampling_coverages_sum = np.array([np.where(e != 0, i/10, 0) for i, e in enumerate(r_sampling_coverage)]).T
+    r_sampling_coverages_sum = np.sum(r_sampling_coverages_sum, axis = 1)
+    r_coverage_ax = surf.plot.plotmap(data = r_sampling_coverages_sum, 
+                                      surf = f"fs{surf_resolution}k_R",
+                                      colorbar = False, 
+                                      threshold = 0.001,
+                                      alpha = 0.5)
+    show_sulcus(r_coverage_ax, "R")
+
+    if type(right_bounding_box) != type(None):
+        rect = Rectangle(xy = right_bounding_box["left_bottom"], 
+                         width = right_bounding_box["width"], 
+                         height = right_bounding_box["height"], 
+                         linewidth = 1, 
+                         edgecolor = "r",
+                         facecolor = "none")
+        r_coverage_ax.add_patch(rect)
+        
+    r_surf_path = os.path.join(save_dir_path, f"R_hemi_coverage.png")
+    r_coverage_ax.get_figure().savefig(r_surf_path, dpi = 96, transparent = True)
+    print(f"save: {r_surf_path}")
+
+    # Both
+    plt.clf()
+    both_surf_img_path = os.path.join(save_dir_path, f"both_hemi_coverage.png")
+    show_both_hemi_images(l_surf_img_path = l_surf_path, 
+                          r_surf_img_path = r_surf_path, 
+                          both_surf_img_path = both_surf_img_path)
+
+
+def show_both_hemi_images(l_surf_img_path, 
+                          r_surf_img_path, 
+                          both_surf_img_path,
+                          colorbar_path = None,
+                          xlim = [0,1],
+                          ylim = [0,1]):
+    """
+    Show both surf hemi images
+
+    :param l_surf_img_path(string): left hemisphere image path 
+    :param r_surf_img_path(string): right hemisphere image path
+    :param both_surf_img_path(string): save image location
+
+    return fig, axis
+    """
+    fig, ax = plt.subplots()
+    
+    # Left    
+    img = mpimg.imread(l_surf_img_path)
+    imagebox = OffsetImage(img, zoom = 0.7)  # Adjust zoom for size
+    ab = AnnotationBbox(imagebox, (0, 0.5), frameon=False)
+    ax.add_artist(ab)
+
+    # Right
+    img = mpimg.imread(r_surf_img_path)
+    imagebox = OffsetImage(img, zoom = 0.7)  # Adjust zoom for size
+    ab = AnnotationBbox(imagebox, (0.9, 0.5), frameon=False)
+    ax.add_artist(ab)
+
+    # Colorbar
+    if colorbar_path != None:
+        colorbar_img = mpimg.imread(colorbar_path)
+        colorbar_box = OffsetImage(colorbar_img, zoom = 0.65)  # Adjust zoom for size
+        ab = AnnotationBbox(colorbar_box, (0.5, 1.0), frameon=False)
+        ax.add_artist(ab)
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    fig.savefig(both_surf_img_path, dpi = 96, transparent = True)
+    print(f"save: {both_surf_img_path}.png")
+
+    return fig, ax
+
+def show_both_hemi_stats(l_stat, 
+                         r_stat,
+                         threshold,
+                         cscale,
+                         save_dir_path,
+                         surf_resolution = 32,
+                         left_bounding_box = None,
+                         right_bounding_box = None,
+                         ):
+    """
+    Show stats on both surf hemispheres
+
+    :param l_stat(np.array - #vertex): left hemisphere stat
+    :param r_stat(np.array - #vertex): right hemisphere stat
+    :param threshold(int): 
+    :param cscale(tuple - (vmin, vmax))
+    :param save_dir_path(string): directory path for saving images
+    :param surf_resolution(int): surface resolution
+    :param left_bounding_box(dictionary): bounding box for left hemi
+    :param right_bounding_box(dictionary): bounding box for right hemi
+
+    return fig, axis
+    """
+    
+    rect_linewidth = 1
+    rect_edgecolor = "r"
+    
+    # Left
+    plt.clf()
+    l_ax = surf.plot.plotmap(data = l_stat, 
+                           surf = f"fs{surf_resolution}k_L", 
+                           colorbar = False, 
+                           threshold = threshold,
+                           cscale = cscale)
+    show_sulcus(l_ax, "L")
+
+    l_rect = Rectangle(xy = left_bounding_box["left_bottom"], 
+                       width = left_bounding_box["width"], 
+                       height = left_bounding_box["height"], 
+                       linewidth = rect_linewidth, 
+                       edgecolor = rect_edgecolor,
+                       facecolor = "none")
+    l_ax.add_patch(l_rect)
+    l_surf_img_path = os.path.join(save_dir_path, f"L_hemi_stat.png")
+    l_ax.get_figure().savefig(l_surf_img_path, dpi = 96, transparent = True)
+    print(f"save: {l_surf_img_path}")
+    
+    # Right
+    plt.clf()
+    r_ax = surf.plot.plotmap(data = r_stat, 
+                           surf = f"fs{surf_resolution}k_R", 
+                           colorbar = False, 
+                           threshold = threshold,
+                           cscale = cscale)
+    show_sulcus(r_ax, "R")
+
+    r_rect = Rectangle(xy = right_bounding_box["left_bottom"], 
+                       width = right_bounding_box["width"], 
+                       height = right_bounding_box["height"], 
+                       linewidth = rect_linewidth, 
+                       edgecolor = rect_edgecolor,
+                       facecolor = "none")
+    r_ax.add_patch(r_rect)
+    r_surf_img_path = os.path.join(save_dir_path, f"R_hemi_stat.png")
+    r_ax.get_figure().savefig(r_surf_img_path, dpi = 96, transparent = True)
+    print(f"save: {r_surf_img_path}")
+
+    # Colorbar
+    plt.clf()
+    tick_decimal = 4
+    colorbar_path = os.path.join(save_dir_path, "colorbar.png")
+    fig, axis, ticks = make_colorbar(cscale[0], cscale[1], figsize = (10, 1), orientation = "horizontal")
+    axis.set_xticks(ticks)
+    axis.set_xticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = 12, fontweight = "bold")
+    axis.get_yaxis().set_visible(False)
+    fig.savefig(colorbar_path, dpi = 96, transparent = True)
+    print(f"save: {colorbar_path}")
+    
+    # Both
+    plt.clf()
+    both_surf_img_path = os.path.join(save_dir_path, f"Both_hemi_stat.png")
+    fig, ax = show_both_hemi_images(l_surf_img_path, 
+                                    r_surf_img_path, 
+                                    both_surf_img_path,
+                                    colorbar_path)
+    return fig, ax
     
 if __name__ == "__main__":
     # Parameters
@@ -214,14 +808,25 @@ if __name__ == "__main__":
     to_point = np.array([87, 58])    # x_end, y_end
     width = 20
     
-    values, mask, coords = surface_cross_section(template_surface_path = template_surface_path, 
+    cross_section_result_info = surface_cross_section(template_surface_path = template_surface_path, 
                                                  urface_data_path = surface_data_path, 
                                                  from_point = from_point, 
                                                  to_point = to_point, 
                                                  width = width)
-
+    virtual_stip_mask = cross_section_result_info["virtual_stip_mask"]
+    
     vol_to_surf(volume_data_path = "/mnt/ext1/seojin/temp/stat.nii",
                 pial_surf_path = "/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.pial.surf.gii",
                 white_surf_path = "/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.white.surf.gii")
 
+    hemisphere = "L"
+    roi_values = np.load(f"/mnt/ext1/seojin/dierdrichsen_surface_mask/Brodmann/{hemisphere}_roi_values.npy")
+    with open(os.path.join(surface_mask_dir_path, f"{hemisphere}_roi_vertex_info.json"), 'rb') as f:
+        loaded_info = json.load(f)
+    draw_surf_roi(roi_values, loaded_info, "L")
+
+    surf_roi_labels = np.load(f"/mnt/ext1/seojin/dierdrichsen_surface_mask/Brodmann/{hemisphere}_rois.npy")
+    draw_surf_selectedROI(surf_roi_labels, "1+2+3", f"{hemisphere}")
+
+    surf_paths("L")
     

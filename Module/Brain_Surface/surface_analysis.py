@@ -15,6 +15,7 @@ from cv2 import minAreaRect, boxPoints, pointPolygonTest
 import json
 from collections import Counter
 from matplotlib.patches import Rectangle
+from nilearn.plotting import plot_surf_roi
 
 # Custom Libraries
 sys.path.append("/home/seojin")
@@ -673,14 +674,13 @@ def show_both_hemi_images(l_surf_img_path,
                           r_surf_img_path, 
                           both_surf_img_path,
                           colorbar_path = None,
-                          xlim = [0,1],
-                          ylim = [0,1]):
+                          zoom = 0.7):
     """
     Show both surf hemi images
 
     :param l_surf_img_path(string): left hemisphere image path 
     :param r_surf_img_path(string): right hemisphere image path
-    :param both_surf_img_path(string): save image location
+    :param both_surf_img_path(string): save image path
 
     return fig, axis
     """
@@ -688,20 +688,20 @@ def show_both_hemi_images(l_surf_img_path,
     
     # Left    
     img = mpimg.imread(l_surf_img_path)
-    imagebox = OffsetImage(img, zoom = 0.7)  # Adjust zoom for size
+    imagebox = OffsetImage(img, zoom = zoom)  # Adjust zoom for size
     ab = AnnotationBbox(imagebox, (0, 0.5), frameon=False)
     ax.add_artist(ab)
 
     # Right
     img = mpimg.imread(r_surf_img_path)
-    imagebox = OffsetImage(img, zoom = 0.7)  # Adjust zoom for size
+    imagebox = OffsetImage(img, zoom = zoom)  # Adjust zoom for size
     ab = AnnotationBbox(imagebox, (0.9, 0.5), frameon=False)
     ax.add_artist(ab)
 
     # Colorbar
     if colorbar_path != None:
         colorbar_img = mpimg.imread(colorbar_path)
-        colorbar_box = OffsetImage(colorbar_img, zoom = 0.65)  # Adjust zoom for size
+        colorbar_box = OffsetImage(colorbar_img, zoom = zoom)  # Adjust zoom for size
         ab = AnnotationBbox(colorbar_box, (0.5, 1.0), frameon=False)
         ax.add_artist(ab)
 
@@ -721,6 +721,8 @@ def show_both_hemi_stats(l_stat,
                          surf_resolution = 32,
                          left_bounding_box = None,
                          right_bounding_box = None,
+                         is_focusing_bounding_box = False,
+                         zoom = 0.7,
                          ):
     """
     Show stats on both surf hemispheres
@@ -733,7 +735,8 @@ def show_both_hemi_stats(l_stat,
     :param surf_resolution(int): surface resolution
     :param left_bounding_box(dictionary): bounding box for left hemi
     :param right_bounding_box(dictionary): bounding box for right hemi
-
+    :param zoom(float): zoom to load image
+    
     return fig, axis
     """
     
@@ -749,13 +752,20 @@ def show_both_hemi_stats(l_stat,
                            cscale = cscale)
     show_sulcus(l_ax, "L")
 
-    l_rect = Rectangle(xy = left_bounding_box["left_bottom"], 
-                       width = left_bounding_box["width"], 
-                       height = left_bounding_box["height"], 
-                       linewidth = rect_linewidth, 
-                       edgecolor = rect_edgecolor,
-                       facecolor = "none")
-    l_ax.add_patch(l_rect)
+    if is_focusing_bounding_box:
+        min_x, min_y = left_bounding_box["left_bottom"]
+        max_x, max_y = min_x + left_bounding_box["width"], min_y + left_bounding_box["height"]
+        l_ax.set_xlim(min_x, max_x)
+        l_ax.set_ylim(min_y, max_y)
+    else:
+        l_rect = Rectangle(xy = left_bounding_box["left_bottom"], 
+                           width = left_bounding_box["width"], 
+                           height = left_bounding_box["height"], 
+                           linewidth = rect_linewidth, 
+                           edgecolor = rect_edgecolor,
+                           facecolor = "none")
+        l_ax.add_patch(l_rect)
+        
     l_surf_img_path = os.path.join(save_dir_path, f"L_hemi_stat.png")
     l_ax.get_figure().savefig(l_surf_img_path, dpi = 96, transparent = True)
     print(f"save: {l_surf_img_path}")
@@ -769,13 +779,20 @@ def show_both_hemi_stats(l_stat,
                            cscale = cscale)
     show_sulcus(r_ax, "R")
 
-    r_rect = Rectangle(xy = right_bounding_box["left_bottom"], 
-                       width = right_bounding_box["width"], 
-                       height = right_bounding_box["height"], 
-                       linewidth = rect_linewidth, 
-                       edgecolor = rect_edgecolor,
-                       facecolor = "none")
-    r_ax.add_patch(r_rect)
+    if is_focusing_bounding_box:
+        min_x, min_y = right_bounding_box["left_bottom"]
+        max_x, max_y = min_x + right_bounding_box["width"], min_y + right_bounding_box["height"]
+        r_ax.set_xlim(min_x, max_x)
+        r_ax.set_ylim(min_y, max_y)
+    else:
+        r_rect = Rectangle(xy = right_bounding_box["left_bottom"], 
+                           width = right_bounding_box["width"], 
+                           height = right_bounding_box["height"], 
+                           linewidth = rect_linewidth, 
+                           edgecolor = rect_edgecolor,
+                           facecolor = "none")
+        r_ax.add_patch(r_rect)
+        
     r_surf_img_path = os.path.join(save_dir_path, f"R_hemi_stat.png")
     r_ax.get_figure().savefig(r_surf_img_path, dpi = 96, transparent = True)
     print(f"save: {r_surf_img_path}")
@@ -793,12 +810,62 @@ def show_both_hemi_stats(l_stat,
     
     # Both
     plt.clf()
-    both_surf_img_path = os.path.join(save_dir_path, f"Both_hemi_stat.png")
+    both_surf_img_path = os.path.join(save_dir_path, f"Both_hemi_stat")
     fig, ax = show_both_hemi_images(l_surf_img_path, 
                                     r_surf_img_path, 
                                     both_surf_img_path,
-                                    colorbar_path)
+                                    colorbar_path,
+                                    zoom)
     return fig, ax
+
+def plot_virtualStrip_on3D_surf(virtual_stip_mask, 
+                                save_dir_path, 
+                                vmax,
+                                hemisphere = "L",
+                                view = "lateral",
+                                cmap = "Purples",
+                                darkness = 1):
+    """
+    Plot a virtual strip on a 3D brain surface and save the result as a PNG image.
+
+    :param virtual_stip_mask(numpy array):  Binary mask indicating vertices that form the virtual strip.
+    :param save_dir_path(string):  Path to the directory where the output image will be saved.
+    :param vmax(float):  Maximum value for color mapping.
+    :param hemisphere(string):  Hemisphere to plot ("L" for left, "R" for right). Default is "L".
+    :param view(string):  View angle for plotting the brain surface (e.g., "lateral", "medial"). Default is "lateral".
+    :param cmap(string):  Colormap used to visualize the strip on the surface. Default is "Purples".
+
+    :return: The generated figure.
+    """
+    
+    path_info = surf_paths(hemisphere)
+    template_path = surf_paths(hemisphere)[f"{hemisphere}_template_surface_path"]
+    temploate_surface_data = nb.load(template_path)
+    vertex_locs = temploate_surface_data.darrays[0].data[:, :2]
+
+    rect_vertexes = vertex_locs[np.where(virtual_stip_mask == 1, True, False)]
+    min_rect_x, max_rect_x = np.min(rect_vertexes[:, 0]), np.max(rect_vertexes[:, 0])
+    min_rect_y, max_rect_y = np.min(rect_vertexes[:, 1]), np.max(rect_vertexes[:, 1])
+    within_x = (vertex_locs[:, 0] >= min_rect_x) & (vertex_locs[:, 0] <= max_rect_x)
+    within_y = (vertex_locs[:, 1] >= min_rect_y) & (vertex_locs[:, 1] <= max_rect_y)
+    is_within_rectangle = np.logical_and(within_x, within_y)
+
+    fig = plot_surf_roi(surf_mesh = path_info[f"{hemisphere}_inflated_brain_path"],
+                        roi_map = np.where(virtual_stip_mask, 0.7, np.where(is_within_rectangle, 1, 0)),
+                        bg_map = path_info[f"{hemisphere}_shape_gii_path"],
+                        hemi = "left" if hemisphere == "L" else "right",
+                        cmap = cmap,
+                        alpha = 2, 
+                        vmax = vmax,
+                        bg_on_data = True,
+                        darkness = darkness,
+                        view = view,
+    )
+    path = os.path.join(save_dir_path, f"{hemisphere}_virtual_strip.png")
+    fig.savefig(path, dpi = 96, transparent = True)
+    print(f"save: {path}")
+    
+    return fig
     
 if __name__ == "__main__":
     # Parameters

@@ -201,7 +201,7 @@ def make_cluster_meshes(cluster_df, mesh_paths, color):
                                               validation_type = File_validation.exist_only)
         cluster_mesh = vedo.load(mesh_path).color(color)
         cluster_mesh.name = cluster_df.loc[cluster_number - 1]["name"]
-        print(f"naming: {cluster_mesh.name}")
+        print(f"cluster{cluster_number}, name: {cluster_mesh.name}")
         clusters.append(cluster_mesh)
         
     return clusters
@@ -311,8 +311,6 @@ def show_clusterize_brain(
         -example: 1
     :param roi_style_info.get: style of roi(dictionary)
         -example: colors : [ "#cdcd00" ], opacities : [ 0.3 ], lightenings : [ "glossy" ], line_widths : [ 1 ], line_colors : [ "#000000" ], adjust_methods : [("smooth", {}), ("decimate", { "fraction" : 0.9})]
-    :param roi_opacities: opacity of roi(list - string)
-        -example: [ 0.3 ]
     :param cluster_map_colors: colors to visualize cluster map(list - string)
         -example: [ "#cdcd00" ]
     :param stat_indexes: statmap index of file_paths(list - int)
@@ -446,6 +444,7 @@ def show_clusterize_brain(
 
                 roi_vtk_volume = roi_vtk_volume.decimate(fraction = fraction, method = method, boundaries = boundaries)
 
+        # Set enable interaction as false
         roi_vtk_volume.pickable(False)
 
         # Accumulate element
@@ -456,8 +455,9 @@ def show_clusterize_brain(
         cluster_map_colors = plt.cm.rainbow(np.linspace(0, 1, len(cluster_dfs)))
         cluster_map_colors = cluster_map_colors[::-1]
         io.imshow(np.expand_dims(cluster_map_colors[:,:-1], 1))
-    
-    cluster_map_colors = [to_hex(color) for color in cluster_map_colors]
+        cluster_map_colors = [to_hex(color) for color in cluster_map_colors]
+    elif type(cluster_map_colors) == str:
+        cluster_map_colors = np.repeat(cluster_map_colors, len(cluster_dfs))
 
     # stack result
     clusters = []
@@ -627,11 +627,10 @@ def show_clusterize_brain(
     auxilary_msg = Text2D("", pos="top-left", c='k', bg='r9', alpha=0.8)
 
     # plot
-    """"""
     plotter = Plotter(axes = 1, bg = background_color)
     plotter.add_callback('mouse click', mouse_click)
     plotter.add_callback("KeyPress", key_pressed)
-    
+
     x_indexes = np.arange(n_stat)
     plotter.add_slider(
         sliderfunc = slider,
@@ -643,13 +642,13 @@ def show_clusterize_brain(
         title = "stat_index"
     )
 
-    # Show
-    objs = clusters + roi_vtk_volumes + [base_brain_volume]
+    # Show - What is set later appears first
+    objs = roi_vtk_volumes + clusters
     objs = flatten(objs)
 
     # Change axis
     ch_objs = []
-    for obj in flatten(objs):
+    for obj in objs:
         for axis_key in axis_info:
             if axis_info[axis_key] == False:
                 continue
@@ -662,14 +661,15 @@ def show_clusterize_brain(
                 obj = obj.clone().mirror("z")
 
         ch_objs.append(obj)
+    objs = ch_objs
 
     if is_custom_lightening:
-        plotter.show(ch_objs, msg, auxilary_msg, l1, s1,
+        plotter.show(objs, msg, auxilary_msg, l1, s1,
                 __doc__, 
                 axes = 2,
                 zoom=1.2)
     else:
-        plotter.show(ch_objs, msg, auxilary_msg,
+        plotter.show(objs, msg, auxilary_msg,
                 __doc__, 
                 axes = 2,
                 zoom=1.2)

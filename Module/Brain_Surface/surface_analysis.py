@@ -16,11 +16,13 @@ import json
 from collections import Counter
 from matplotlib.patches import Rectangle
 from nilearn.plotting import plot_surf_roi
+from scipy.stats import sem
+from scipy.stats import ttest_1samp
 
 # Custom Libraries
 sys.path.append("/home/seojin")
 import surfAnalysisPy as surf # Dierdrichsen lab's library
-from sj_matplotlib import make_colorbar
+from sj_matplotlib import make_colorbar, draw_ticks, draw_spine, draw_label
 
 # Functions
 def surf_paths(surf_hemisphere, 
@@ -664,7 +666,7 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage,
 
     # Both
     plt.clf()
-    both_surf_img_path = os.path.join(save_dir_path, f"both_hemi_coverage.png")
+    both_surf_img_path = os.path.join(save_dir_path, f"both_hemi_coverage")
     show_both_hemi_images(l_surf_img_path = l_surf_path, 
                           r_surf_img_path = r_surf_path, 
                           both_surf_img_path = both_surf_img_path)
@@ -702,15 +704,16 @@ def show_both_hemi_images(l_surf_img_path,
     if colorbar_path != None:
         colorbar_img = mpimg.imread(colorbar_path)
         colorbar_box = OffsetImage(colorbar_img, zoom = zoom)  # Adjust zoom for size
+
         ab = AnnotationBbox(colorbar_box, (0.5, 1.0), frameon=False)
         ax.add_artist(ab)
-
+    
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
     fig.savefig(both_surf_img_path, dpi = 96, transparent = True)
     print(f"save: {both_surf_img_path}.png")
-
+    
     return fig, ax
 
 def show_both_hemi_stats(l_stat, 
@@ -723,6 +726,7 @@ def show_both_hemi_stats(l_stat,
                          right_bounding_box = None,
                          is_focusing_bounding_box = False,
                          zoom = 0.7,
+                         colorbar_decimal = 4,
                          ):
     """
     Show stats on both surf hemispheres
@@ -736,7 +740,7 @@ def show_both_hemi_stats(l_stat,
     :param left_bounding_box(dictionary): bounding box for left hemi
     :param right_bounding_box(dictionary): bounding box for right hemi
     :param zoom(float): zoom to load image
-    
+    :param colorbar_decimal(int): decimal value of colorbar
     return fig, axis
     """
     
@@ -799,12 +803,10 @@ def show_both_hemi_stats(l_stat,
 
     # Colorbar
     plt.clf()
-    tick_decimal = 4
     colorbar_path = os.path.join(save_dir_path, "colorbar.png")
-    fig, axis, ticks = make_colorbar(cscale[0], cscale[1], figsize = (10, 1), orientation = "horizontal")
-    axis.set_xticks(ticks)
-    axis.set_xticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = 12, fontweight = "bold")
-    axis.get_yaxis().set_visible(False)
+    
+    figsize = (10, 1)
+    fig, axis, ticks = make_colorbar(cscale[0], cscale[1], figsize = figsize, orientation = "horizontal")
     fig.savefig(colorbar_path, dpi = 96, transparent = True)
     print(f"save: {colorbar_path}")
     
@@ -866,7 +868,137 @@ def plot_virtualStrip_on3D_surf(virtual_stip_mask,
     print(f"save: {path}")
     
     return fig
+
+def sulcus_abbreviation_name(sulcus_name):
+    if sulcus_name == "Precentral sulcus":
+        return "prCS"
+    elif sulcus_name == "Central sulcus":
+        return "CS"
+    elif sulcus_name == "Post central sulcus":
+        return "poCS"
+    elif sulcus_name == "Intra parietal sulcus":
+        return "IPS"
+
+def draw_cross_section_1dPlot(ax, 
+                              sampling_datas, 
+                              sulcus_names, 
+                              roi_names,
+                              p_threshold = 0.05,
+                              y_range = None,
+                              tick_size = 18,
+                              sulcus_text_size = 10):
+    """
+    Draw 1d plot for cross-section coverage analysis
     
+    :param ax(plt.Axes): Matplotlib Axes object where the plot will be drawn
+    :param sampling_datas(np.array): 2D array of shape (n_conditions, n_samples) with data to be plotted
+    :param sulcus_names(np.array): 1D array containing sulcus names for each condition (can be empty strings or None)
+    :param roi_names(np.array): 1D array containing ROI (Region of Interest) names for each condition
+    :param p_threshold(float): P-value threshold for marking significant areas (default is 0.05)
+    :param y_range(tuple): specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
+    """
+    
+    y_min_padding = 0
+    y_max_padding = 0
+    
+    # Plot
+    xs = np.arange(sampling_datas.shape[0]).astype(str)
+    mean_values = np.mean(sampling_datas, axis = 1)
+    errors = sem(sampling_datas, axis = 1)
+    ax.plot(xs, mean_values)
+    ax.fill_between(xs,
+                    mean_values - errors, mean_values + errors, 
+                    alpha = 0.2)
+
+    # Set ticks
+    y_tick_round = 4
+
+    if type(y_range) == type(None):    
+        y_min_ = 0
+        y_max_ = np.max(mean_values + errors)
+    else:
+        y_min_, y_max_ = y_range
+        
+    n_div = 3 
+    interval = (y_min_ + y_max_) / n_div
+    y_data = np.arange(y_min_, y_max_ + interval, interval)
+    tick_info = {}
+
+    unique_rois = np.unique(roi_names)
+    roi_names = copy(roi_names)
+    roi_start_indexes = np.array(sorted([list(roi_names).index(roi) for roi in unique_rois])) # Select start index of ROI
+    roi_names[roi_start_indexes] = ""
+    
+    tick_info["x_data"] = np.arange(len(roi_names))
+    tick_info["x_names"] = roi_names
+    tick_info["x_tick_rotation"] = 0
+    tick_info["x_tick_size"] = tick_size
+    tick_info["y_data"] = y_data
+    tick_info["y_names"] = y_data
+    tick_info["y_tick_size"] = tick_size
+    draw_ticks(ax, tick_info)
+    
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.{y_tick_round}f}"))
+    
+    # Draw spines
+    draw_spine(ax)
+
+    # Draw labels
+    label_info = {}
+    label_info["x_label"] = "Brodmann area"
+    label_info["y_label"] = "Distance (a.u.)"
+    label_info["x_size"] = tick_size
+    label_info["y_size"] = tick_size
+    draw_label(ax, label_info)
+
+    # Sulcus
+    y_max_padding += (interval / 3)
+    
+    sulcus_indexes = np.where(sulcus_names != None)[0]
+    sulcuses = sulcus_names[sulcus_indexes]
+    sulcus_indexes = np.where(sulcus_names != "")[0]
+    for sulcus_i in sulcus_indexes:
+        sulcus_name = sulcus_names[sulcus_i]
+        sulcus_name = sulcus_abbreviation_name(sulcus_name)
+        print(sulcus_name)
+        
+        ax.text(x = sulcus_i, 
+                y = y_max_ + (y_max_padding * 1.5), 
+                s = sulcus_name,  
+                va = "center", 
+                ha = "center",
+                size = sulcus_text_size,
+                rotation = 30)
+        
+        ax.text(x = sulcus_i, 
+                y = y_max_ + (y_max_padding / 2), 
+                s = "▼",  
+                va = "center", 
+                ha = "center",
+                size = 11,
+                rotation = 0)
+        
+    # Show significant areas
+    y_min_padding += interval
+    
+    stat_result = ttest_1samp(sampling_datas, popmean = 0, axis = 1)
+    significant_indexes = np.where(stat_result.pvalue < p_threshold)[0]
+
+    rect_height = interval / 10
+    for sig_i in significant_indexes:
+        ax.add_patch(Rectangle(xy = (sig_i, y_min_ - interval + rect_height), width = 1, height = rect_height))
+
+    # Draw roi
+    for roi_start_i in list(roi_start_indexes) + [len(roi_names) - 1]:
+        ax.axvline(x = roi_start_i, 
+                   color = "black", 
+                   linestyle = "dashed", 
+                   alpha = 0.3,
+                   ymin = 0,
+                   ymax = (y_max_ - y_min_ + y_min_padding) / (y_max_ - y_min_ + y_min_padding + y_max_padding))
+    
+    ax.set_ylim(y_min_ - y_min_padding, y_max_ + y_max_padding)
+
 if __name__ == "__main__":
     # Parameters
     template_surface_path = '/home/seojin/single-finger-planning/data/surf/fs_LR.164k.L.flat.surf.gii'

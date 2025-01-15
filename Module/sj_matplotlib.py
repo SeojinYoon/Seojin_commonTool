@@ -234,6 +234,7 @@ def draw_ticks(axis, tick_info = {}):
     x_tick_weight = tick_info.get("x_tick_weight", "normal")
     x_tick_size = tick_info.get("x_tick_size", 14)
     x_tick_rotation = tick_info.get("x_tick_rotation", 90)
+    x_tick_viewType = tick_info.get("x_tick_viewType", "remove_duplication")
     
     y_data = tick_info.get("y_data", [])
     y_names = tick_info.get("y_names", [])
@@ -246,12 +247,14 @@ def draw_ticks(axis, tick_info = {}):
     # X
     x_data = np.array(x_data)
     x_names = np.array(x_names)
-    x_tick_duplication = np.array([int((start + end) / 2) for start, end in slice_list_usingDiff(x_names)], dtype = int)
-
-    if len(x_tick_duplication) > 0:
-        x_names = x_names[x_tick_duplication]
-        x_pos_dup = x_data[x_tick_duplication]
-        x_data = x_pos_dup
+    
+    if x_tick_viewType == "remove_duplication":
+        x_tick_duplication = np.array([int((start + end) / 2) for start, end in slice_list_usingDiff(x_names)], dtype = int)
+        x_tick_data = np.array([(start + end) / 2 for start, end in slice_list_usingDiff(x_names)])
+        
+        if len(x_tick_duplication) > 0:
+            x_names = x_names[x_tick_duplication]
+            x_data = x_tick_data
         
     axis.set_xticks(x_data, 
                     x_names, 
@@ -528,7 +531,8 @@ def make_colorbar(vmin,
                   n_div = 4, 
                   cmap = "jet", 
                   tick_decimal = 4, 
-                  orientation = "horizontal"):
+                  orientation = "horizontal",
+                  fontsize = 12):
     """
     Creates a customizable colorbar using matplotlib.
 
@@ -560,9 +564,15 @@ def make_colorbar(vmin,
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=axis, orientation=orientation)
     
     # Set the ticks and labels
-    cbar.set_ticks(ticks)
-    cbar.set_ticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks])
-
+    if orientation == "vertical":
+        axis.set_yticks(ticks)
+        axis.set_yticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = 12, fontweight = "bold")
+        axis.get_xaxis().set_visible(False)
+    else:
+        axis.set_xticks(ticks)
+        axis.set_xticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = 12, fontweight = "bold")
+        axis.get_yaxis().set_visible(False)
+    
     return fig, axis, ticks
     
 if __name__=="__main__":

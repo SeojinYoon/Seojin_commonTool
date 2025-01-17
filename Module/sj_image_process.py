@@ -5,6 +5,7 @@ Created on Wed Jul  8 10:39:39 2020
 @author: seojin
 """
 
+# Common Libraries
 import cv2
 import numpy as np
 import matplotlib.pylab as plt
@@ -12,11 +13,14 @@ import sys
 from skimage import measure
 from matplotlib.cm import get_cmap
 from matplotlib.colors import rgb2hex
+from collections import defaultdict, deque
 
+# Custom Libraries
 import sj_higher_function
 from sj_timer import convert_time_to_second, convert_second_to_time, convert_second_to_frame
 from sj_sequence import slice_list_usingDiff
 
+# Functions
 def shift_image(X, dx, dy):
     """
     shift numpy image
@@ -589,6 +593,60 @@ def detect_high_gradients_regions(frames,
         plt.imshow(frames[time_index, :, :], cmap = "gray")
             
     return region_indexes
+
+def find_connected_components_faces(faces):
+    """
+    Find connected components based on faces
+    
+    :param faces(np.array - shape: (#face, 3)): each containing 3 vertex indices
+
+    return list
+    """
+    # Step 1: Build an adjacency list for faces based on shared vertices
+    face_adjacency = defaultdict(list)
+    
+    # Map vertices to the faces they belong to
+    vertex_to_faces = defaultdict(list)
+    for face_index, face in enumerate(faces):
+        for vertex in face:
+            vertex_to_faces[vertex].append(face_index)
+    
+    # Build the adjacency list for faces
+    for face_index, face in enumerate(faces):
+        neighbors = set()
+        for vertex in face:
+            neighbors.update(vertex_to_faces[vertex])
+        neighbors.discard(face_index)  # Remove the face itself from its neighbors
+        face_adjacency[face_index] = list(neighbors)
+    
+    # Step 2: Find connected components using BFS
+    visited = set()
+    connected_components = []
+    
+    def bfs(start):
+        """Perform BFS to find all faces in the connected component."""
+        queue = deque([start])
+        component = []
+        visited.add(start)
+        
+        while queue:
+            current = queue.popleft()
+            component.append(current)
+            
+            for neighbor in face_adjacency[current]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+        return component
+    
+    # Iterate through all faces to find all connected components
+    for face_index in range(len(faces)):
+        if face_index not in visited:
+            # Start a BFS for this component
+            component = bfs(face_index)
+            connected_components.append(component)
+    
+    return connected_components
 
 if __name__ == "__main__":
     frames = convert_gray(video_path)

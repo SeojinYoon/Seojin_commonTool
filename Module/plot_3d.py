@@ -39,7 +39,8 @@ def draw_uv_map(uv_coordinates,
         The function displays a 2D scatter plot of UV coordinates with the option to highlight specified faces 
         on the plot.
     """
-    plt.scatter(uv_coordinates[:, 0], uv_coordinates[:, 1], s=1)
+    plt.scatter(uv_coordinates[:, 0], uv_coordinates[:, 1], s = 1)
+    
     for face_i, face in enumerate(faces):
         # Extract the UV coordinates for each vertex of the face
         uv_face = uv_coordinates[face]
@@ -157,4 +158,51 @@ def show_non_interactive_mesh(vertices,
     plt.show()
 
     return fig, ax
-    
+
+def show_mesh(vertices, 
+              faces, 
+              vertex_index_info = {}):
+    """
+    Show a static 3D mesh with an option to highlight specific faces.
+
+    The vertex's coordinate system must be RAS+ (this is correspond to MNI space)
+
+    :param vertices (np.array - shape (#vertex, 3)): An array of 3D coordinates for the vertices of the mesh.
+    :param faces (np.array - shape (#face, 3)): An array defining the triangular faces of the mesh.
+    :param vertex_index_info (dictionary): A info for highligtiing faces consisted by vertex_index
+    """
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Draw the main mesh
+    for face in faces:
+        poly = vertices[face]
+        collection = Poly3DCollection([poly], color='lightblue', edgecolor='k', alpha=0.8)
+        ax.add_collection3d(collection)
+
+    # Highlight specified faces
+    for face_index, face in enumerate(faces):
+        for name in vertex_index_info:
+            vertex_index_set = vertex_index_info[name]["set"]
+            color = vertex_index_info[name]["color"]
+            
+            is_all_inSet = np.isin(element = face, test_elements = vertex_index_set)
+            if np.alltrue(is_all_inSet):
+                poly = vertices[face]
+                highlighted_collection = Poly3DCollection([poly], color=color, edgecolor='k', alpha=1.0)
+                ax.add_collection3d(highlighted_collection)
+            
+    # Set axis limits
+    ax.set_xlim(vertices[:, 0].min(), vertices[:, 0].max())
+    ax.set_ylim(vertices[:, 1].min(), vertices[:, 1].max())
+    ax.set_zlim(vertices[:, 2].min(), vertices[:, 2].max())
+
+    # Set axis labels
+    ax.set_xlabel("R+")
+    ax.set_ylabel("A+")
+    ax.set_zlabel("S+")
+
+    ax.set_title("Static 3D Mesh with Highlighted Faces")
+    plt.show()
+
+    return fig, ax

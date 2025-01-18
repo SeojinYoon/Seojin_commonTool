@@ -1,4 +1,5 @@
 
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import matplotlib.pylab as plt
 import plotly.graph_objects as go
 

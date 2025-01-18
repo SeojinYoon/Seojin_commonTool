@@ -1,5 +1,7 @@
+import numpy as np
 import matplotlib.pylab as plt
 import plotly.graph_objects as go
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 def draw_uv_map(uv_coordinates, 
                 faces,
@@ -110,3 +112,49 @@ def show_interactive_mesh(vertices,
     )
 
     return fig
+
+def show_non_interactive_mesh(vertices, 
+                              faces, 
+                              highlight_face_info={}):
+    """
+    Show a static 3D mesh with an option to highlight specific faces.
+
+    :param vertices (np.array - shape (#vertex, 3)): An array of 3D coordinates for the vertices of the mesh.
+    :param faces (np.array - shape (#face, 3)): An array defining the triangular faces of the mesh.
+    :param highlight_face_info (dict): A dictionary specifying face indexes to be highlighted and their colors.
+    """
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Draw the main mesh
+    for face in faces:
+        poly = vertices[face]
+        collection = Poly3DCollection([poly], color='lightblue', edgecolor='k', alpha=0.8)
+        ax.add_collection3d(collection)
+
+    # Highlight specified faces
+    for name in highlight_face_info:
+        color = highlight_face_info[name]["color"]
+        highlight_face_indexes = highlight_face_info[name]["data"]
+
+        for face_index in highlight_face_indexes:
+            face = faces[face_index]
+            poly = vertices[face]
+            highlighted_collection = Poly3DCollection([poly], color=color, edgecolor='k', alpha=1.0)
+            ax.add_collection3d(highlighted_collection)
+
+    # Set axis limits
+    ax.set_xlim(vertices[:, 0].min(), vertices[:, 0].max())
+    ax.set_ylim(vertices[:, 1].min(), vertices[:, 1].max())
+    ax.set_zlim(vertices[:, 2].min(), vertices[:, 2].max())
+
+    # Set axis labels
+    ax.set_xlabel("X Axis")
+    ax.set_ylabel("Y Axis")
+    ax.set_zlabel("Z Axis")
+
+    ax.set_title("Static 3D Mesh with Highlighted Faces")
+    plt.show()
+
+    return fig, ax
+    

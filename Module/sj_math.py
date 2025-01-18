@@ -40,8 +40,34 @@ def discrete_frechet(P, Q):
 
     return c(n - 1, m - 1)
 
+def projection(data, on_vector):
+    """
+    Projection data on on_vector
+    
+    :param data(np.array - shape: (#data, #component))
+    :param on(np.array - shape: (#component))
+
+    return: 
+        tuple
+            - scalar(np.array - shape(: #data))
+            - projected vector consisting of components
+    """
+    norm = np.linalg.norm(on_vector)
+
+    dot = np.dot(data, on_vector)
+    scalar = dot / (norm ** 2)
+    
+    return scalar, np.outer(scalar, on_vector)
+    
 if __name__ == "__main__":
     round_down(0.011, 2)
 
     digit_length(30)
+
+    a = np.array([
+        [1,2,3],
+        [1,2,4],
+    ])
+
+    projection(a, [1,2,3])
     

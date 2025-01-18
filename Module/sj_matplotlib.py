@@ -566,11 +566,11 @@ def make_colorbar(vmin,
     # Set the ticks and labels
     if orientation == "vertical":
         axis.set_yticks(ticks)
-        axis.set_yticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = 12, fontweight = "bold")
+        axis.set_yticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = fontsize)
         axis.get_xaxis().set_visible(False)
     else:
         axis.set_xticks(ticks)
-        axis.set_xticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = 12, fontweight = "bold")
+        axis.set_xticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = fontsize)
         axis.get_yaxis().set_visible(False)
     
     return fig, axis, ticks

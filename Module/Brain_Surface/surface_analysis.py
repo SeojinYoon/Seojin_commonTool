@@ -886,39 +886,54 @@ def draw_cross_section_1dPlot(ax,
                               p_threshold = 0.05,
                               y_range = None,
                               tick_size = 18,
-                              sulcus_text_size = 10):
+                              sulcus_text_size = 10,
+                              y_tick_round = 4,
+                              cmap = "tab10"):
     """
     Draw 1d plot for cross-section coverage analysis
     
     :param ax(plt.Axes): Matplotlib Axes object where the plot will be drawn
-    :param sampling_datas(np.array): 2D array of shape (n_conditions, n_samples) with data to be plotted
+    :param sampling_datas(np.array): 3D array of shape (n_condition, n_sampling_coverage, n_samples) with data to be plotted
     :param sulcus_names(np.array): 1D array containing sulcus names for each condition (can be empty strings or None)
     :param roi_names(np.array): 1D array containing ROI (Region of Interest) names for each condition
     :param p_threshold(float): P-value threshold for marking significant areas (default is 0.05)
     :param y_range(tuple): specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
     """
+
+    n_cond, n_coverage, n_samples = sampling_datas.shape
     
     y_min_padding = 0
     y_max_padding = 0
+
+    cmap = plt.get_cmap(cmap, 10)
+    cmap_colors = cmap.colors
     
     # Plot
-    xs = np.arange(sampling_datas.shape[0]).astype(str)
-    mean_values = np.mean(sampling_datas, axis = 1)
-    errors = sem(sampling_datas, axis = 1)
-    ax.plot(xs, mean_values)
-    ax.fill_between(xs,
-                    mean_values - errors, mean_values + errors, 
-                    alpha = 0.2)
+    y_min_ = None
+    y_max_ = None
+    for cond_i, sampling_data in enumerate(sampling_datas):
+        color = cmap_colors[cond_i]
+        
+        xs = np.arange(sampling_data.shape[0]).astype(str)
+        mean_values = np.mean(sampling_data, axis = 1)
+        errors = sem(sampling_data, axis = 1)
+        ax.plot(xs, mean_values, color = color)
+        ax.fill_between(xs,
+                        mean_values - errors, mean_values + errors, 
+                        alpha = 0.2,
+                        color = color)
+
+        if type(y_range) == type(None):
+            if y_max_ == None:
+                y_min_ = np.min(mean_values - errors)
+                y_max_ = np.max(mean_values + errors)
+            else:
+                y_min_ = max(y_min_, np.max(mean_values - errors))
+                y_max_ = max(y_max_, np.max(mean_values + errors))
+        else:
+            y_min_, y_max_ = y_range
 
     # Set ticks
-    y_tick_round = 4
-
-    if type(y_range) == type(None):    
-        y_min_ = 0
-        y_max_ = np.max(mean_values + errors)
-    else:
-        y_min_, y_max_ = y_range
-        
     n_div = 3 
     interval = (y_min_ + y_max_) / n_div
     y_data = np.arange(y_min_, y_max_ + interval, interval)
@@ -960,7 +975,6 @@ def draw_cross_section_1dPlot(ax,
     for sulcus_i in sulcus_indexes:
         sulcus_name = sulcus_names[sulcus_i]
         sulcus_name = sulcus_abbreviation_name(sulcus_name)
-        print(sulcus_name)
         
         ax.text(x = sulcus_i, 
                 y = y_max_ + (y_max_padding * 1.5), 
@@ -977,16 +991,28 @@ def draw_cross_section_1dPlot(ax,
                 ha = "center",
                 size = 11,
                 rotation = 0)
-        
+
     # Show significant areas
     y_min_padding += interval
-    
-    stat_result = ttest_1samp(sampling_datas, popmean = 0, axis = 1)
-    significant_indexes = np.where(stat_result.pvalue < p_threshold)[0]
-
     rect_height = interval / 10
-    for sig_i in significant_indexes:
-        ax.add_patch(Rectangle(xy = (sig_i, y_min_ - interval + rect_height), width = 1, height = rect_height))
+
+    max_height_forSig = n_cond * rect_height
+
+    for cond_i, sampling_data in enumerate(sampling_datas):
+        color = cmap_colors[cond_i]
+        
+        stat_result = ttest_1samp(sampling_data, popmean = 0, axis = 1)
+        significant_indexes = np.where(stat_result.pvalue < p_threshold)[0]
+
+        cond_number = cond_i + 1
+        y = y_min_ - y_min_padding + max_height_forSig - (rect_height * cond_number)
+
+        print(cond_i, significant_indexes)
+        for sig_i in significant_indexes:
+            ax.add_patch(Rectangle(xy = (sig_i, y), 
+                                   width = 1, 
+                                   height = rect_height, 
+                                   color = color))
 
     # Draw roi
     for roi_start_i in list(roi_start_indexes) + [len(roi_names) - 1]:
@@ -996,7 +1022,8 @@ def draw_cross_section_1dPlot(ax,
                    alpha = 0.3,
                    ymin = 0,
                    ymax = (y_max_ - y_min_ + y_min_padding) / (y_max_ - y_min_ + y_min_padding + y_max_padding))
-    
+
+    ax.set_xlim(0, n_coverage - 1)
     ax.set_ylim(y_min_ - y_min_padding, y_max_ + y_max_padding)
 
 if __name__ == "__main__":

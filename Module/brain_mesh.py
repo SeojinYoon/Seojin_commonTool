@@ -1,6 +1,6 @@
 
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import matplotlib.pylab as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import plotly.graph_objects as go
 
 def show_interactive_mesh(vertices, 

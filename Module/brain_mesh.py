@@ -2,6 +2,8 @@
 # Commoon Libraries
 import numpy as np
 import nibabel as nb
+import trimesh
+
 import matplotlib.pylab as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import plotly.graph_objects as go
@@ -275,4 +277,36 @@ def show_stat_onUV(vertices,
     sm.set_array([])  # Required for the colorbar to work
     cbar = plt.colorbar(sm)
     cbar.set_label("Statistical Value", fontsize=12)
+
+def load_mesh(path, type_ = "normal"):
+    """
+    Load mesh
+
+    :param path(string): path of obj file representing brain mesh
+
+    return (dictionary): 
+        -k vertex(np.array - shape: #vertex, 3): vertices
+        -k face(np.array - shape: #face, 3): faces based on vertex index
+        -k uv(np.array - shape: #vertex, 2): uv coordinates
+    """
+    
+    # Load data
+    mesh = trimesh.load(path)
+
+    # Dummy
+    info = {}
+
+    # Vertex
+    vertices = mesh.vertices
+    info["vertex"] = vertices
+
+    # Face
+    faces = mesh.faces
+    info["face"] = faces
+
+    # UV
+    if type_ == "uv":
+        uv_coordinates = mesh.visual.uv
+        info["uv"] = uv_coordinates
+    return info
     

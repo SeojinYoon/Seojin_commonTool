@@ -64,7 +64,17 @@ def show_interactive_mesh(vertices,
     :param faces(np.array - shape (#face, 3)): An array defining the triangular faces of the mesh. Each row contains three indices into the vertices array, specifying the vertices that form a triangular face.
     :param highlight_face_info(dict): A dictionary that specifies the face indexes to be highlighted and their associated colors
     """
+
+    # Default face colors: lightblue
+    face_colors = ["lightblue"] * len(faces)
     
+    # Apply highlighting colors
+    for name in highlight_face_info:
+        color = highlight_face_info[name]["color"]
+        highlight_face_indexes = highlight_face_info[name]["data"]
+        for face_index in highlight_face_indexes:
+            face_colors[face_index] = color
+            
     # Default mesh trace
     mesh_trace = go.Mesh3d(
         x=vertices[:, 0],

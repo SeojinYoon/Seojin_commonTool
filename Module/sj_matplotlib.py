@@ -560,7 +560,7 @@ def make_colorbar(vmin,
     
     # Create the colorbar
     cmap = plt.get_cmap(cmap)
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    norm = plt.Normalize(vmin = vmin, vmax = vmax)
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=axis, orientation=orientation)
     
     # Set the ticks and labels

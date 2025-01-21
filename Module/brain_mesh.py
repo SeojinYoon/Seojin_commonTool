@@ -303,15 +303,16 @@ def load_mesh(path, type_ = "normal"):
 
     # Vertex
     vertices = mesh.vertices
-    info["vertex"] = vertices
+    info["vertex"] = np.array(vertices)
 
     # Face
     faces = mesh.faces
-    info["face"] = faces
+    info["face"] = np.array(faces)
 
     # UV
     if type_ == "uv":
         uv_coordinates = mesh.visual.uv
-        info["uv"] = uv_coordinates
+        info["uv"] = np.array(uv_coordinates)
+        
     return info
     

@@ -23,7 +23,8 @@ from plot_3d import draw_uv_map
 def show_interactive_mesh(vertices, 
                           faces, 
                           highlight_face_info = {},
-                          tick_interval = 20):
+                          tick_interval = 20,
+                          default_color = "lightblue"):
     """
     Show interactive mesh with optimized face highlighting.
 
@@ -33,7 +34,7 @@ def show_interactive_mesh(vertices,
     """
     
     # Default face colors: lightblue
-    face_colors = ["lightblue"] * len(faces)
+    face_colors = [default_color] * len(faces)
     
     # Apply highlighting colors
     for name in highlight_face_info:

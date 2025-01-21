@@ -1,17 +1,23 @@
 
 # Commoon Libraries
 import numpy as np
+import pandas as pd
 import nibabel as nb
 import trimesh
 
 import matplotlib.pylab as plt
+from matplotlib.lines import Line2D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import plotly.graph_objects as go
 import plotly.io as pio
 pio.renderers.default = 'iframe' 
 
 # Custom Libraries
+from sj_array import map_indicies
 from brain_coord import RASp_toLPSp, reference2imageCoord
+from sj_image_process import find_connected_components_faces
+from sj_matplotlib import get_color
+from plot_3d import draw_uv_map
 
 # Functions
 def show_interactive_mesh(vertices, 
@@ -315,4 +321,119 @@ def load_mesh(path, type_ = "normal"):
         info["uv"] = np.array(uv_coordinates)
         
     return info
+
+def show_components(mesh_info,
+                    uv_mesh_info, 
+                    cmap_name = "jet"):
+    """
+    Show collection of faces
+
+    :param mesh_info: mesh info containing vertex, face
+    :param uv_mesh_info(dictionary): uv mesh info containing vertex, face, uv coordinates
+    :param cmap_name(string): color map name
+
+    return face_components, (axis1, axis2)
+    """
+    face_components = find_connected_components_faces(faces = uv_mesh_info["face"])
+    
+    highlight_face_info = {}
+    for i in range(len(face_components)):
+        color = get_color(cmap_name = cmap_name, min_value = 0, max_value = len(face_components), value = i)
+        highlight_face_info[i] = {
+            "data" : face_components[i],
+            "color" : color,
+        }
+    fig1, axis1 = plt.subplots(1)
+    axis = draw_uv_map(axis = axis1, 
+                       uv_coordinates = uv_mesh_info["uv"], 
+                       faces = uv_mesh_info["face"], 
+                       highlight_face_info = highlight_face_info)
+
+    custom_lines = []
+    for number in highlight_face_info:
+        custom_lines.append(Line2D([0], 
+                                   [0], 
+                                   color = highlight_face_info[number]["color"], 
+                                   lw = 2, 
+                                   label = number))
+
+    # Add the legend to the figure
+    fig1.legend(handles = custom_lines, 
+               loc = "upper right", 
+               ncol = 1, 
+               bbox_to_anchor = (1, 1),
+               fontsize = 14)
+
+    fig2, axis2 = show_non_interactive_mesh(mesh_info["vertex"], 
+                                        mesh_info["face"], 
+                                        highlight_face_info = highlight_face_info)
+    fig2.set_figwidth(10)
+    fig2.set_figheight(15)
+    axis2.set_xlabel("R+")
+    axis2.set_ylabel("A+")
+    axis2.set_zlabel("S+")
+    fig2.tight_layout()
+    plt.show()
+
+    return face_components, (axis1, axis2)
+
+def component_mesh_info(uv_mesh_info, components):
+    """
+    Get component mesh information
+
+    :param uv_mesh_info(dictionary):
+    :param components(list): index of verticies
+
+    return (dictionary):
+        -k vertex: vertex data
+        -k face: face data comprised of vertex index
+        -k uv: uv coordinates
+        -k mapping_ori2conv: mapping information from original to converted verticies
+    """
+    reduced_vertices = np.unique(uv_mesh_info["face"][components].reshape(-1))
+    
+    # Vertex index mapping
+    mapping = map_indicies(original_indices = np.arange(len(uv_mesh_info["vertex"])), 
+                           including_indices = reduced_vertices)
+    mapping_df = pd.DataFrame({
+        "original_index" : list(mapping.keys()),
+        "converted_index" : list(mapping.values()),
+        "x" : uv_mesh_info["vertex"][:, 0],
+        "y" : uv_mesh_info["vertex"][:, 1],
+        "z" : uv_mesh_info["vertex"][:, 2],
+    })
+
+    # Change face based on vertex mapping
+    vectorized_function = np.vectorize(mapping.get)
+    coverted_faces = vectorized_function(uv_mesh_info["face"])
+    coverted_faces = coverted_faces[np.alltrue(coverted_faces != -1, axis = 1)]
+
+    # Subset verticies
+    is_subset_vertices = np.array(list(mapping.values())) != -1
+    subset_vertices = uv_mesh_info["vertex"][is_subset_vertices]
+    subset_uv_vertices = uv_mesh_info["uv"][is_subset_vertices]
+
+    return {
+        "vertex" : subset_vertices,
+        "face" : coverted_faces,
+        "uv" : subset_uv_vertices,
+        "mapping_ori2conv" : mapping,
+    }
+
+def inverse_component_mesh_info(mapping_ori2conv, mask_basedOn_component):
+    """
+    Convert reduced vertex index to original vertex index
+
+    :param mapping_ori2conv(dictionary): mapping info from original to convert index
+    :param mask_basedOn_component(np.array): Mask represented as a reduced set of vertices
+
+    return (np.array): converted vertex indices
+    """
+    inverse_mapping = {v: k for k, v in mapping_ori2conv.items()}
+    del inverse_mapping[-1]
+    
+    vectorized_function = np.vectorize(inverse_mapping.get)
+    highlight_vertex_indices = vectorized_function(np.where(mask_basedOn_component)[0])
+
+    return highlight_vertex_indices
     

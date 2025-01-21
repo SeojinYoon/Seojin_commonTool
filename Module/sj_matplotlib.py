@@ -574,6 +574,21 @@ def make_colorbar(vmin,
         axis.get_yaxis().set_visible(False)
     
     return fig, axis, ticks
+
+def get_color(cmap_name, min_value, max_value, value):
+    """
+    Get color from color map
+
+    :param cmap_name(string): color map name
+    :param min_value(float): minimum value
+    :param min_value(float): maximum value
+    :param value(float): value
+    """
+    cmap = plt.get_cmap(cmap_name)
+    norm = plt.Normalize(vmin = min_value, vmax = max_value)
+    color = cmap(norm(value))
+    
+    return color
     
 if __name__=="__main__":
     multi_font_strings(["a", "b"])
@@ -590,3 +605,5 @@ if __name__=="__main__":
     # Color bar
     fig, axis = make_colorbar(0.0007, 0.0014, figsize = (2, 4), n_div = 4, orientation = "vertical")
     plt.show()
+
+    color = get_color("jet", 0, 1, 0.5)

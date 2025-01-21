@@ -3,12 +3,14 @@ import matplotlib.pylab as plt
 import plotly.graph_objects as go
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-def draw_uv_map(uv_coordinates, 
+def draw_uv_map(axis, 
+                uv_coordinates, 
                 faces,
                 highlight_face_info):
     """
     Draws a 2D UV map representation of a 3D mesh with an option to highlight specific faces.
 
+    :param axis(matplotlib.axes._axes.Axes): axis
     :param uv_coordinates(np.array - shape (#vertex, 2)): A 2D array where each row represents the UV coordinates 
         of a vertex in the mesh. Each UV coordinate is represented as (u, v).
 
@@ -39,7 +41,7 @@ def draw_uv_map(uv_coordinates,
         The function displays a 2D scatter plot of UV coordinates with the option to highlight specified faces 
         on the plot.
     """
-    plt.scatter(uv_coordinates[:, 0], uv_coordinates[:, 1], s = 1)
+    axis.scatter(uv_coordinates[:, 0], uv_coordinates[:, 1], s = 1)
     
     for face_i, face in enumerate(faces):
         # Extract the UV coordinates for each vertex of the face
@@ -52,7 +54,8 @@ def draw_uv_map(uv_coordinates,
             color = info["color"]
 
             if face_i in component_indexes:
-                plt.fill(uv_face[:, 0], uv_face[:, 1], edgecolor = "black", alpha = 0.5, color = color)
+                axis.fill(uv_face[:, 0], uv_face[:, 1], edgecolor = "black", alpha = 0.5, color = color)
+    return axis
 
 def show_interactive_mesh(vertices, 
                           faces, 

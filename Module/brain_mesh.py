@@ -16,8 +16,8 @@ from brain_coord import RASp_toLPSp, reference2imageCoord
 # Functions
 def show_interactive_mesh(vertices, 
                           faces, 
-                          highlight_face_info={},
-                          tick_interval=20):
+                          highlight_face_info = {},
+                          tick_interval = 20):
     """
     Show interactive mesh with optimized face highlighting.
 
@@ -79,7 +79,7 @@ def show_interactive_mesh(vertices,
 
 def show_non_interactive_mesh(vertices, 
                               faces, 
-                              highlight_face_info={}):
+                              highlight_face_info = {}):
     """
     Show a static 3D mesh with an option to highlight specific faces.
 
@@ -180,10 +180,10 @@ def show_stat_on3d(vertices,
                 j=faces[:, 1],
                 k=faces[:, 2],
                 intensity=stats,
-                colorscale=colorscale,  # Define the color scale
-                colorbar=dict(title="Intensity"),  # Add colorbar with a title
+                colorscale=colorscale,
+                colorbar=dict(title="Intensity"),
                 hoverinfo="text",
-                text=[f"Face {i}, vertices: {faces[i]}, stat: {stats[i]:.3f}" for i in range(len(faces))],  # Face indices in tooltip
+                text=[f"Face {i}, vertices: {faces[i]}, stat: {stats[i]:.3f}" for i in range(len(faces))],
                 cmax=color_max, 
                 cmin=color_min,
             )
@@ -227,11 +227,13 @@ def show_stat_onUV(vertices,
     :param color_max(float): Maximum value for colormap normalization.
     :param tick_interval(int): Interval for axis ticks.
     """
+    # Figure
+    fig, axis = plt.subplots(1)
+    
     # Load stat
     stat = nb.load(stat_path)
     affine = stat.affine
     stat_array = stat.get_fdata()
-    cmap = plt.get_cmap(colorscale)
     
     # Stat values
     stats = []
@@ -256,6 +258,7 @@ def show_stat_onUV(vertices,
         color_max = np.max(stats)
 
     # Apply highlighting colors
+    cmap = plt.get_cmap(colorscale)
     norm = plt.Normalize(vmin=color_min, vmax=color_max)
     face_colors = []
     for stat in stats:
@@ -268,7 +271,7 @@ def show_stat_onUV(vertices,
     for face, stat, color in zip(faces, stats, face_colors):
         # Extract the UV coordinates for each vertex of the face
         uv_face = uv_coordinates[face]
-        plt.fill(uv_face[:, 0], uv_face[:, 1], alpha = 1, color = color)
+        axis.fill(uv_face[:, 0], uv_face[:, 1], alpha = 1, color = color)
 
         face_i += 1
         
@@ -278,6 +281,8 @@ def show_stat_onUV(vertices,
     cbar = plt.colorbar(sm)
     cbar.set_label("Statistical Value", fontsize=12)
 
+    return fig, axis
+    
 def load_mesh(path, type_ = "normal"):
     """
     Load mesh

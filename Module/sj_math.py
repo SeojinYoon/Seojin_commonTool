@@ -40,24 +40,44 @@ def discrete_frechet(P, Q):
 
     return c(n - 1, m - 1)
 
-def projection(data, on_vector):
+def projection(data, 
+               from_point, 
+               to_point,
+               type_ = "origin"):
     """
     Projection data on on_vector
     
-    :param data(np.array - shape: (#data, #component))
-    :param on(np.array - shape: (#component))
-
+    :param data(np.array - shape: (#data, #component)): Datas to be projected 
+    :param from_point(np.array - shape: (#component)): Starting point of vector 
+    :param to_point(np.array - shape: (#component)): End point of vector 
+    
     return: 
         tuple
             - scalar(np.array - shape(: #data))
             - projected vector consisting of components
+            - residual vector consisting of components
     """
+    if type == "origin":
+        # Interpret vertors from view point of origial origin
+        pass
+    elif type_ == "origin_correction":
+        # Interpret vertors from view point of from_point
+        data = data - from_point
+    
+    on_vector = to_point - from_point
     norm = np.linalg.norm(on_vector)
 
     dot = np.dot(data, on_vector)
     scalar = dot / (norm ** 2)
+    projected_vectors = np.outer(scalar, on_vector)
     
-    return scalar, np.outer(scalar, on_vector)
+    residual_vectors = data - projected_vectors
+    
+    return {
+        "scalar" : scalar,
+        "projected_data" : projected_vectors,
+        "residual_data" : residual_vectors,
+    } 
     
 if __name__ == "__main__":
     round_down(0.011, 2)

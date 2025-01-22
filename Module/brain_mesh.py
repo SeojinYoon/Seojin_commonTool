@@ -24,13 +24,15 @@ def show_interactive_mesh(vertices,
                           faces, 
                           highlight_face_info = {},
                           tick_interval = 20,
-                          default_color = "lightblue"):
+                          default_color = "lightblue",
+                          is_visible_axis = True):
     """
     Show interactive mesh with optimized face highlighting.
 
     :param vertices(np.array - shape (#vertex, 3)): An array of 3D coordinates for the vertices of the mesh.
     :param faces(np.array - shape (#face, 3)): An array defining the triangular faces of the mesh. Each row contains three indices into the vertices array, specifying the vertices that form a triangular face.
     :param highlight_face_info(dict): A dictionary that specifies the face indexes to be highlighted and their associated colors.
+    :param is_visible_axis(boolean): flag whether to see axis
     """
     
     # Default face colors: lightblue
@@ -65,21 +67,24 @@ def show_interactive_mesh(vertices,
         scene=dict(
             xaxis=dict(
                 title = "R+",
-                dtick = tick_interval,  # Adjust tick interval for X-axis
+                dtick = tick_interval,
+                visible = is_visible_axis
             ),
             yaxis=dict(
                 title = "A+",
-                dtick = tick_interval,  # Adjust tick interval for Y-axis
+                dtick = tick_interval,
+                visible = is_visible_axis
             ),
             zaxis=dict(
                 title = "S+",
-                dtick = tick_interval,  # Adjust tick interval for Z-axis
+                dtick = tick_interval,
+                visible = is_visible_axis
             ),
             camera=dict(
                 eye = dict(x=0, y=-2.5, z=1.5)  # Adjust camera view
             )
         ),
-        title = "Interactive 3D Mesh with Highlighted Faces",
+        title = "",
     )
 
     return fig

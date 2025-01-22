@@ -5,6 +5,7 @@ This file contains the basic source code to visualize graph using matplotlib
 import numpy as np
 import matplotlib.pylab as plt
 from scipy.stats import cumfreq
+from matplotlib.lines import Line2D
 
 from sj_sequence import slice_list_usingDiff
 from sj_string import search_stringAcrossTarget, str_join
@@ -589,6 +590,25 @@ def get_color(cmap_name, min_value, max_value, value):
     color = cmap(norm(value))
     
     return color
+
+def make_line_legend(labels,
+                     cmap_name = "tab10", 
+                     lw = 2):
+    """
+    Make line legend
+
+    :param labels(list - string): label of each line
+    :param cmap_name(string): name of color map representing line colors
+    :param lw(float): line width
+
+    return custom lines(list - Line2D)
+    """
+    cmap = plt.get_cmap(cmap_name)
+
+    custom_lines = []
+    for i, label in enumerate(labels):
+        custom_lines.append(Line2D([0], [0], color = cmap.colors[i], lw = lw, label = label))
+    return custom_lines
     
 if __name__=="__main__":
     multi_font_strings(["a", "b"])
@@ -607,3 +627,5 @@ if __name__=="__main__":
     plt.show()
 
     color = get_color("jet", 0, 1, 0.5)
+
+    make_line_legend(["A", "B"])

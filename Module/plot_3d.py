@@ -174,24 +174,25 @@ def show_non_interactive_mesh(vertices,
 
 def show_mesh(vertices, 
               faces, 
-              vertex_index_info = {}):
+              vertex_index_info = {},
+              edgeColor = "k",
+              camera_elev = 30,
+              camera_azim = 90,
+              is_hide_axis = False):
     """
     Show a static 3D mesh with an option to highlight specific faces.
 
-    The vertex's coordinate system must be RAS+ (this is correspond to MNI space)
+    The vertex's coordinate system must be RAS+ (this corresponds to MNI space)
 
     :param vertices (np.array - shape (#vertex, 3)): An array of 3D coordinates for the vertices of the mesh.
     :param faces (np.array - shape (#face, 3)): An array defining the triangular faces of the mesh.
-    :param vertex_index_info (dictionary): A info for highligtiing faces consisted by vertex_index
+    :param vertex_index_info (dictionary): Info for highlighting faces consisting of specific vertex indices.
     """
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 
-    # Draw the main mesh
-    for face in faces:
-        poly = vertices[face]
-        collection = Poly3DCollection([poly], color='lightblue', edgecolor='k', alpha=0.8)
-        ax.add_collection3d(collection)
+    # Track faces to highlight
+    highlighted_faces = set()
 
     # Highlight specified faces
     for face_index, face in enumerate(faces):
@@ -199,12 +200,20 @@ def show_mesh(vertices,
             vertex_index_set = vertex_index_info[name]["set"]
             color = vertex_index_info[name]["color"]
             
-            is_all_inSet = np.isin(element = face, test_elements = vertex_index_set)
+            is_all_inSet = np.isin(element=face, test_elements=vertex_index_set)
             if np.alltrue(is_all_inSet):
                 poly = vertices[face]
-                highlighted_collection = Poly3DCollection([poly], color=color, edgecolor='k', alpha=1.0)
+                highlighted_collection = Poly3DCollection([poly], color=color, edgecolor=edgeColor, alpha=1.0)
                 ax.add_collection3d(highlighted_collection)
-            
+                highlighted_faces.add(face_index)
+    
+    # Draw the main mesh excluding highlighted faces
+    for face_index, face in enumerate(faces):
+        if face_index not in highlighted_faces:  # Only draw non-highlighted faces
+            poly = vertices[face]
+            collection = Poly3DCollection([poly], color = "lightblue", edgecolor=edgeColor, alpha=1.0)
+            ax.add_collection3d(collection)
+
     # Set axis limits
     ax.set_xlim(vertices[:, 0].min(), vertices[:, 0].max())
     ax.set_ylim(vertices[:, 1].min(), vertices[:, 1].max())
@@ -215,7 +224,10 @@ def show_mesh(vertices,
     ax.set_ylabel("A+")
     ax.set_zlabel("S+")
 
-    ax.set_title("Static 3D Mesh with Highlighted Faces")
-    plt.show()
+    ax.set_title("")
 
+    ax.view_init(elev=camera_elev, azim=camera_azim)
+
+    if is_hide_axis:
+        ax.axis("off")
     return fig, ax

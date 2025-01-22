@@ -892,7 +892,9 @@ def draw_cross_section_1dPlot(ax,
                               tick_size = 18,
                               sulcus_text_size = 10,
                               y_tick_round = 4,
-                              cmap = "tab10"):
+                              cmap = "tab10",
+                              xlabel = "Brodmann area",
+                              ylabel = "Distance (a.u.)"):
     """
     Draw 1d plot for cross-section coverage analysis
     
@@ -909,12 +911,19 @@ def draw_cross_section_1dPlot(ax,
     y_min_padding = 0
     y_max_padding = 0
 
-    cmap = plt.get_cmap(cmap, 10)
+    cmap = plt.get_cmap(cmap)
     cmap_colors = cmap.colors
     
     # Plot
-    y_min_ = None
-    y_max_ = None
+    is_set_minMax = False
+    if type(y_range) != type(None):
+        y_min_, y_max_ = y_range
+        is_set_minMax = True
+        print(y_min_, y_max_)
+    else:
+        y_min_ = None
+        y_max_ = None
+    
     for cond_i, sampling_data in enumerate(sampling_datas):
         color = cmap_colors[cond_i]
         
@@ -927,27 +936,30 @@ def draw_cross_section_1dPlot(ax,
                         alpha = 0.2,
                         color = color)
 
-        if type(y_range) == type(None):
-            if y_max_ == None:
+        if is_set_minMax == False:
+            if y_min_ == None:
                 y_min_ = np.min(mean_values - errors)
+                
+            if y_max_ == None:
                 y_max_ = np.max(mean_values + errors)
-            else:
-                y_min_ = max(y_min_, np.max(mean_values - errors))
-                y_max_ = max(y_max_, np.max(mean_values + errors))
-        else:
-            y_min_, y_max_ = y_range
-
+                
+            y_min_ = min(y_min_, np.max(mean_values - errors))
+            y_max_ = max(y_max_, np.max(mean_values + errors))
+    print(y_min_, y_max_)
+    
     # Set ticks
     n_div = 3 
-    interval = (y_min_ + y_max_) / n_div
+    interval = (y_max_ - y_min_) / n_div
     y_data = np.arange(y_min_, y_max_ + interval, interval)
-    tick_info = {}
-
+    y_data = np.round(y_data, y_tick_round)
+    y_data = [0 if y == 0 else y for y in y_data]
+    
     unique_rois = np.unique(roi_names)
     roi_names = copy(roi_names)
     roi_start_indexes = np.array(sorted([list(roi_names).index(roi) for roi in unique_rois])) # Select start index of ROI
     roi_names[roi_start_indexes] = ""
     
+    tick_info = {}
     tick_info["x_data"] = np.arange(len(roi_names))
     tick_info["x_names"] = roi_names
     tick_info["x_tick_rotation"] = 0
@@ -964,37 +976,38 @@ def draw_cross_section_1dPlot(ax,
 
     # Draw labels
     label_info = {}
-    label_info["x_label"] = "Brodmann area"
-    label_info["y_label"] = "Distance (a.u.)"
+    label_info["x_label"] = xlabel
+    label_info["y_label"] = ylabel
     label_info["x_size"] = tick_size
     label_info["y_size"] = tick_size
     draw_label(ax, label_info)
 
     # Sulcus
-    y_max_padding += (interval / 3)
-    
     sulcus_indexes = np.where(sulcus_names != None)[0]
-    sulcuses = sulcus_names[sulcus_indexes]
-    sulcus_indexes = np.where(sulcus_names != "")[0]
-    for sulcus_i in sulcus_indexes:
-        sulcus_name = sulcus_names[sulcus_i]
-        sulcus_name = sulcus_abbreviation_name(sulcus_name)
-        
-        ax.text(x = sulcus_i, 
-                y = y_max_ + (y_max_padding * 1.5), 
-                s = sulcus_name,  
-                va = "center", 
-                ha = "center",
-                size = sulcus_text_size,
-                rotation = 30)
-        
-        ax.text(x = sulcus_i, 
-                y = y_max_ + (y_max_padding / 2), 
-                s = "▼",  
-                va = "center", 
-                ha = "center",
-                size = 11,
-                rotation = 0)
+    if (len(sulcus_indexes) > 0) and (len(sulcus_names) > 0):
+        y_max_padding += (interval / 3)
+            
+        sulcuses = sulcus_names[sulcus_indexes]
+        sulcus_indexes = np.where(sulcus_names != "")[0]
+        for sulcus_i in sulcus_indexes:
+            sulcus_name = sulcus_names[sulcus_i]
+            sulcus_name = sulcus_abbreviation_name(sulcus_name)
+            
+            ax.text(x = sulcus_i, 
+                    y = y_max_ + (y_max_padding * 1.5), 
+                    s = sulcus_name,  
+                    va = "center", 
+                    ha = "center",
+                    size = sulcus_text_size,
+                    rotation = 30)
+            
+            ax.text(x = sulcus_i, 
+                    y = y_max_ + (y_max_padding / 2), 
+                    s = "▼",  
+                    va = "center", 
+                    ha = "center",
+                    size = 11,
+                    rotation = 0)
 
     # Show significant areas
     y_min_padding += interval
@@ -1011,7 +1024,6 @@ def draw_cross_section_1dPlot(ax,
         cond_number = cond_i + 1
         y = y_min_ - y_min_padding + max_height_forSig - (rect_height * cond_number)
 
-        print(cond_i, significant_indexes)
         for sig_i in significant_indexes:
             ax.add_patch(Rectangle(xy = (sig_i, y), 
                                    width = 1, 
@@ -1029,7 +1041,7 @@ def draw_cross_section_1dPlot(ax,
 
     ax.set_xlim(0, n_coverage - 1)
     ax.set_ylim(y_min_ - y_min_padding, y_max_ + y_max_padding)
-
+    
 def surface_profile_onUV(data_paths,
                          vertices, 
                          uv_coordinates, 

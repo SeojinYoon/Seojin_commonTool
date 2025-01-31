@@ -30,7 +30,6 @@ from sj_matplotlib import draw_legend, draw_vlines, vline_pos, draw_label
 from sj_color import rgb_to_hex
 
 # Sources
- 
 def bar_plot(ax, data, colors=None, total_width=0.8, single_width=1, legend=True):
     """Draws a bar plot with multiple bars per data point.
 

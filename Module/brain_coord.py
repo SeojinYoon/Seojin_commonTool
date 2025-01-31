@@ -6,13 +6,28 @@ def image2referenceCoord(ijk, affine):
     change image coordinate to reference coordinate
     reference coordinate can be scanner coordinate or MNI coordinate...
     
-    :param ijk: image coordinate(np.array)
-    :param affine: affine matrix(np.array)
+    :param ijk: image coordinate(np.array): image coordinates ex) [0,0,0]
+    :param affine: affine matrix(np.array): affine transformation matrix 
     
-    return scanner coordinate(np.array)
+    :return scanner coordinate(np.array): reference coordinates 
     """
     return np.matmul(affine, np.array([ijk[0], ijk[1], ijk[2], 1]))[0:3]
 
+def img2ref(ijk, affine):
+    """
+    Change image coordinates to reference coordinates
+    (e.g., scanner or MNI coordinates) for multiple input points.
+
+    :param ijk(N x 3 numpy array): image coordinates 
+    :param affine(4 x 4 numpy array): affine transformation matrix 
+    
+    :return (N x 3 numpy array): reference coordinates 
+    """
+    homogeneous_coords = np.c_[ijk, np.ones(ijk.shape[0])]
+    transformed_coords = np.dot(homogeneous_coords, affine.T)
+    
+    return transformed_coords[:, :3]
+    
 def reference2imageCoord(xyz, affine):
     """
     change reference coordinate(MNI, RAS+) to image coordinate

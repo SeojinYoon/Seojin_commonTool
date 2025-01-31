@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import copy
 import datetime
+import nltools
 
 # Preprocessing
-
 from sklearn.model_selection import LeaveOneGroupOut, GroupKFold
 from scipy.stats import zscore
 from multiprocessing.pool import ThreadPool
@@ -1402,6 +1402,72 @@ def construct_dataset(subj_number, beta_values, run_length, conditions):
     
     return dataset
 
+def calc_crossnobis(subj_number,
+                    masked_betas, 
+                    masked_residuals, 
+                    conditions, 
+                    residual_cov_method = "shrinkage_diag"):
+    """
+    Calculate crossnobis
+    
+    :param subj_number(int): subject number ex) 1
+    :param masked_betas(list - (Brain_Data - shape: (#cond, #voxels): beta values 
+    :param masked_residuals(list - (Brain_Data - shape: (#data, #voxels)): beta residual
+    :param conditions(np.array - 1d): condition of betas ex) ["a", "b", "c", "d", "a", "b", "c", "d"]
+    :param residual_cov_method(string): residual covariance method ex) shrinkage_eye
+    """
+        
+    """
+    Step 1: Make dataset
+    """
+    # Session
+    sessions = []
+    for sess_i in np.arange(len(masked_betas)):
+        sess_number = sess_i + 1
+        n_cond = masked_betas[sess_i].data.shape[0]
+    
+        session_numbers = np.repeat(sess_number, n_cond)
+        sessions.append(session_numbers)
+    sessions = np.array(sessions).reshape(-1)
+
+    # measurment information
+    masked_betas = nltools.utils.concatenate(masked_betas)
+    measurements = masked_betas.data
+
+    residual_measurements = []
+    for r_i in range(len(masked_residuals)):
+        residual_measurements.append(masked_residuals[r_i].data)
+    
+    des = {'subj': subj_number}
+    obs_des = {'conds': conditions, 'sessions': sessions}
+    nVox = measurements.shape[-1]
+    chn_des = {'voxels': np.array(['voxel_' + str(x) for x in np.arange(nVox)])}
+
+    dataset = Dataset(measurements = measurements,
+                      descriptors = des,
+                      obs_descriptors = obs_des,
+                      channel_descriptors = chn_des)
+    """
+    Step 2: Calculate precision matrix
+    """
+    noise_precision_mats = []
+    for r_i in range(len(residual_measurements)):
+        noise_precision_mat = prec_from_residuals(residuals = residual_measurements[r_i],
+                                                  method = residual_cov_method)
+        noise_precision_mats.append(noise_precision_mat)
+
+    
+    """
+    Step 3: Calculate crossnobis distance
+    """
+    rdm_crossnobis = calc_rdm(dataset = dataset, 
+                              descriptor = 'conds', 
+                              method = 'crossnobis',
+                              noise = noise_precision_mats,
+                              cv_descriptor = 'sessions')
+    
+    return rdm_crossnobis
+    
 def calc_roi_crossnobis(subj_number,
                         betas, 
                         conditions, 

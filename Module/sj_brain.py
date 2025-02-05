@@ -1169,7 +1169,7 @@ def searchlight_with_beta(Xs,
     """
     Do searchlight Decoding analysis using beta values
     
-    :param Xs: list of nifti image(list) seperated by run, shape (n_x, n_y, n_z, n_conditions)
+    :param Xs: list of nifti image(list - shape (#x, #y, #z, #conditions)) seperated by run, 
     :param Ys: list of label(list) seperated by run ex) [ [condition1, condition1, condition2, condition2], [condition1, condition1, condition2, condition2] ]
     :param full_mask: full_mask(nifti image)
     :param searchlight_dir_path: directory path where the result is located.

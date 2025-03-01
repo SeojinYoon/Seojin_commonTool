@@ -899,7 +899,7 @@ def draw_cross_section_1dPlot(ax,
     Draw 1d plot for cross-section coverage analysis
     
     :param ax(plt.Axes): Matplotlib Axes object where the plot will be drawn
-    :param sampling_datas(np.array): 3D array of shape (n_condition, n_sampling_coverage, n_samples) with data to be plotted
+    :param sampling_datas(np.array): 3D array of shape (n_condition, n_sampling_coverage, n_data) with data to be plotted
     :param sulcus_names(np.array): 1D array containing sulcus names for each condition (can be empty strings or None)
     :param roi_names(np.array): 1D array containing ROI (Region of Interest) names for each condition
     :param p_threshold(float): P-value threshold for marking significant areas (default is 0.05)
@@ -945,7 +945,6 @@ def draw_cross_section_1dPlot(ax,
                 
             y_min_ = min(y_min_, np.max(mean_values - errors))
             y_max_ = max(y_max_, np.max(mean_values + errors))
-    print(y_min_, y_max_)
     
     # Set ticks
     n_div = 3 

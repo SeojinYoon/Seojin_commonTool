@@ -98,6 +98,15 @@ def search_dict(dictionary, keywords):
             infos.append(dictionary[key])
     return dict(zip(keys, infos))
 
+def get_values(dict_, excluding_key):
+    result = []
+    for key, value in dict_.items():
+        if key != excluding_key:
+            result.append(key)
+        if isinstance(value, dict):
+            result.extend(get_values(value, excluding_key))
+    return result
+
 if __name__ == "__main__":
     df = pd.DataFrame({ "key" : [1,2,3], "value" : ["a", "b", "c"]} )
     df_to_dict(bn_df)

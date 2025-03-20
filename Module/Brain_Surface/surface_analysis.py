@@ -25,7 +25,7 @@ import surfAnalysisPy as surf # Dierdrichsen lab's library
 
 sys.path.append("/home/seojin/Seojin_commonTool/Module")
 from sj_matplotlib import make_colorbar, draw_ticks, draw_spine, draw_label
-from sj_math import projection
+from sj_math import projection, round_down
 from brain_coord import reference2imageCoord
 
 # Functions
@@ -489,7 +489,11 @@ def show_surf_withGrid(surf_vis_ax, x_count = 30, y_count = 30):
     
     return copy_ax
 
-def show_sulcus(surf_ax, hemisphere, color = "white", linestyle = "dashed"):
+def show_sulcus(surf_ax, 
+                hemisphere, 
+                color = "white", 
+                linestyle = "dashed",
+                isLabel = False):
     """
     Show sulcus base on surf axis
 
@@ -508,6 +512,18 @@ def show_sulcus(surf_ax, hemisphere, color = "white", linestyle = "dashed"):
                      np.array(marking_data_info[sulcus_name])[:, 1], 
                      color = color,  
                      linestyle = linestyle)
+
+        if isLabel:
+            x = np.mean(np.array(marking_data_info[sulcus_name])[:, 0])
+            y = np.max(np.array(marking_data_info[sulcus_name])[:, 1]) + 5
+            surf_ax.text(x = x, 
+                         y = y, 
+                         s = sulcus_abbreviation_name(sulcus_name), 
+                         color = "white", 
+                         horizontalalignment = "center", 
+                         verticalalignment = "center",
+                         size = 10)
+
     return copy_ax
 
 def detect_sulcus(hemisphere, sampling_coverages, is_first_index = False):
@@ -609,7 +625,9 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage,
                                      save_dir_path,
                                      surf_resolution = 32,
                                      left_bounding_box = None,
-                                     right_bounding_box = None):
+                                     right_bounding_box = None,
+                                     dpi = 300,
+                                     is_sulcus_label = False):
     """
     Show sampling coverage on both hemispheres
 
@@ -629,7 +647,9 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage,
                                       colorbar = False, 
                                       threshold = 0.001,
                                       alpha = 0.5)
-    show_sulcus(l_coverage_ax, "L")
+    show_sulcus(surf_ax = l_coverage_ax, 
+                hemisphere = "L", 
+                isLabel = is_sulcus_label)
 
     if type(left_bounding_box) != type(None):
         rect = Rectangle(xy = left_bounding_box["left_bottom"], 
@@ -641,7 +661,7 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage,
         l_coverage_ax.add_patch(rect)
     
     l_surf_path = os.path.join(save_dir_path, f"L_hemi_coverage.png")
-    l_coverage_ax.get_figure().savefig(l_surf_path, dpi = 96, transparent = True)
+    l_coverage_ax.get_figure().savefig(l_surf_path, dpi = dpi, transparent = True)
     print(f"save: {l_surf_path}")
 
     # Right
@@ -653,7 +673,9 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage,
                                       colorbar = False, 
                                       threshold = 0.001,
                                       alpha = 0.5)
-    show_sulcus(r_coverage_ax, "R")
+    show_sulcus(surf_ax = r_coverage_ax, 
+                hemisphere = "R",
+                isLabel = is_sulcus_label)
 
     if type(right_bounding_box) != type(None):
         rect = Rectangle(xy = right_bounding_box["left_bottom"], 
@@ -665,7 +687,7 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage,
         r_coverage_ax.add_patch(rect)
         
     r_surf_path = os.path.join(save_dir_path, f"R_hemi_coverage.png")
-    r_coverage_ax.get_figure().savefig(r_surf_path, dpi = 96, transparent = True)
+    r_coverage_ax.get_figure().savefig(r_surf_path, dpi = dpi, transparent = True, bbox_inches = "tight")
     print(f"save: {r_surf_path}")
 
     # Both
@@ -680,7 +702,8 @@ def show_both_hemi_images(l_surf_img_path,
                           r_surf_img_path, 
                           both_surf_img_path,
                           colorbar_path = None,
-                          zoom = 0.7):
+                          zoom = 0.2,
+                          dpi = 300):
     """
     Show both surf hemi images
 
@@ -715,7 +738,7 @@ def show_both_hemi_images(l_surf_img_path,
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    fig.savefig(both_surf_img_path, dpi = 96, transparent = True)
+    fig.savefig(both_surf_img_path, dpi = dpi, transparent = True, bbox_inches = "tight")
     print(f"save: {both_surf_img_path}.png")
     
     return fig, ax
@@ -725,26 +748,33 @@ def show_both_hemi_stats(l_stat,
                          threshold,
                          cscale,
                          save_dir_path,
+                         n_middle_tick = 3,
                          surf_resolution = 32,
                          left_bounding_box = None,
                          right_bounding_box = None,
                          is_focusing_bounding_box = False,
-                         zoom = 0.7,
+                         zoom = 0.2,
                          colorbar_decimal = 4,
+                         dpi = 300,
+                         is_sulcus_label = False,
                          ):
     """
     Show stats on both surf hemispheres
 
     :param l_stat(np.array - #vertex): left hemisphere stat
     :param r_stat(np.array - #vertex): right hemisphere stat
-    :param threshold(int): 
-    :param cscale(tuple - (vmin, vmax))
+    :param threshold(int): threshold
+    :param cscale(tuple - (vmin, vmax)): color bar scale
+    :param n_middle_tick(int): the number of colorbar ticks without min and max value
     :param save_dir_path(string): directory path for saving images
     :param surf_resolution(int): surface resolution
     :param left_bounding_box(dictionary): bounding box for left hemi
     :param right_bounding_box(dictionary): bounding box for right hemi
     :param zoom(float): zoom to load image
     :param colorbar_decimal(int): decimal value of colorbar
+    :param dpi(int): dpi for saving image
+    :param is_sulcus_label(boolean): is showing sulcus label on the flatmap
+    
     return fig, axis
     """
     
@@ -758,24 +788,28 @@ def show_both_hemi_stats(l_stat,
                            colorbar = False, 
                            threshold = threshold,
                            cscale = cscale)
-    show_sulcus(l_ax, "L")
-
+    show_sulcus(surf_ax = l_ax, 
+                hemisphere = "L",
+                isLabel = is_sulcus_label)
+    
     if is_focusing_bounding_box:
-        min_x, min_y = left_bounding_box["left_bottom"]
-        max_x, max_y = min_x + left_bounding_box["width"], min_y + left_bounding_box["height"]
-        l_ax.set_xlim(min_x, max_x)
-        l_ax.set_ylim(min_y, max_y)
+        if type(left_bounding_box) != type(None):
+            min_x, min_y = left_bounding_box["left_bottom"]
+            max_x, max_y = min_x + left_bounding_box["width"], min_y + left_bounding_box["height"]
+            l_ax.set_xlim(min_x, max_x)
+            l_ax.set_ylim(min_y, max_y)
     else:
-        l_rect = Rectangle(xy = left_bounding_box["left_bottom"], 
-                           width = left_bounding_box["width"], 
-                           height = left_bounding_box["height"], 
-                           linewidth = rect_linewidth, 
-                           edgecolor = rect_edgecolor,
-                           facecolor = "none")
-        l_ax.add_patch(l_rect)
+        if type(left_bounding_box) != type(None):
+            l_rect = Rectangle(xy = left_bounding_box["left_bottom"], 
+                               width = left_bounding_box["width"], 
+                               height = left_bounding_box["height"], 
+                               linewidth = rect_linewidth, 
+                               edgecolor = rect_edgecolor,
+                               facecolor = "none")
+            l_ax.add_patch(l_rect)
         
     l_surf_img_path = os.path.join(save_dir_path, f"L_hemi_stat.png")
-    l_ax.get_figure().savefig(l_surf_img_path, dpi = 96, transparent = True)
+    l_ax.get_figure().savefig(l_surf_img_path, dpi = dpi, transparent = True, bbox_inches = "tight")
     print(f"save: {l_surf_img_path}")
     
     # Right
@@ -785,24 +819,28 @@ def show_both_hemi_stats(l_stat,
                            colorbar = False, 
                            threshold = threshold,
                            cscale = cscale)
-    show_sulcus(r_ax, "R")
+    show_sulcus(surf_ax = r_ax, 
+                hemisphere = "R",
+                isLabel = is_sulcus_label)
 
     if is_focusing_bounding_box:
-        min_x, min_y = right_bounding_box["left_bottom"]
-        max_x, max_y = min_x + right_bounding_box["width"], min_y + right_bounding_box["height"]
-        r_ax.set_xlim(min_x, max_x)
-        r_ax.set_ylim(min_y, max_y)
+        if type(right_bounding_box) != type(None):
+            min_x, min_y = right_bounding_box["left_bottom"]
+            max_x, max_y = min_x + right_bounding_box["width"], min_y + right_bounding_box["height"]
+            r_ax.set_xlim(min_x, max_x)
+            r_ax.set_ylim(min_y, max_y)
     else:
-        r_rect = Rectangle(xy = right_bounding_box["left_bottom"], 
-                           width = right_bounding_box["width"], 
-                           height = right_bounding_box["height"], 
-                           linewidth = rect_linewidth, 
-                           edgecolor = rect_edgecolor,
-                           facecolor = "none")
-        r_ax.add_patch(r_rect)
+        if type(right_bounding_box) != type(None):
+            r_rect = Rectangle(xy = right_bounding_box["left_bottom"], 
+                               width = right_bounding_box["width"], 
+                               height = right_bounding_box["height"], 
+                               linewidth = rect_linewidth, 
+                               edgecolor = rect_edgecolor,
+                               facecolor = "none")
+            r_ax.add_patch(r_rect)
         
     r_surf_img_path = os.path.join(save_dir_path, f"R_hemi_stat.png")
-    r_ax.get_figure().savefig(r_surf_img_path, dpi = 96, transparent = True)
+    r_ax.get_figure().savefig(r_surf_img_path, dpi = dpi, transparent = True, bbox_inches = "tight")
     print(f"save: {r_surf_img_path}")
 
     # Colorbar
@@ -810,8 +848,13 @@ def show_both_hemi_stats(l_stat,
     colorbar_path = os.path.join(save_dir_path, "colorbar.png")
     
     figsize = (10, 1)
-    fig, axis, ticks = make_colorbar(cscale[0], cscale[1], figsize = figsize, orientation = "horizontal")
-    fig.savefig(colorbar_path, dpi = 96, transparent = True)
+    fig, axis, ticks = make_colorbar(cscale[0], 
+                                     cscale[1], 
+                                     figsize = figsize, 
+                                     n_middle_tick = n_middle_tick, 
+                                     orientation = "horizontal",
+                                     tick_decimal = colorbar_decimal)
+    fig.savefig(colorbar_path, dpi = dpi, transparent = True, bbox_inches = "tight")
     print(f"save: {colorbar_path}")
     
     # Both
@@ -830,7 +873,8 @@ def plot_virtualStrip_on3D_surf(virtual_stip_mask,
                                 hemisphere = "L",
                                 view = "lateral",
                                 cmap = "Purples",
-                                darkness = 1):
+                                darkness = 1,
+                                dpi = 300):
     """
     Plot a virtual strip on a 3D brain surface and save the result as a PNG image.
 
@@ -868,7 +912,7 @@ def plot_virtualStrip_on3D_surf(virtual_stip_mask,
                         view = view,
     )
     path = os.path.join(save_dir_path, f"{hemisphere}_virtual_strip.png")
-    fig.savefig(path, dpi = 96, transparent = True)
+    fig.savefig(path, dpi = dpi, transparent = True, bbox_inches = "tight")
     print(f"save: {path}")
     
     return fig
@@ -882,7 +926,19 @@ def sulcus_abbreviation_name(sulcus_name):
         return "poCS"
     elif sulcus_name == "Intra parietal sulcus":
         return "IPS"
-
+    elif sulcus_name == "Parieto occipital sulcus":
+        return "POS"
+    elif sulcus_name == "Superior frontal sulcus":
+        return "SFS"
+    elif sulcus_name == "Inferior frontal sulcus":
+        return "IFS"
+    elif sulcus_name == "Superior temporal sulcus":
+        return "STS"
+    elif sulcus_name == "Middle temporal sulcus":
+        return "MTS"
+    elif sulcus_name == "Collateral sulcus":
+        return "CLS"
+    
 def draw_cross_section_1dPlot(ax, 
                               sampling_datas, 
                               sulcus_names, 
@@ -892,6 +948,7 @@ def draw_cross_section_1dPlot(ax,
                               tick_size = 18,
                               sulcus_text_size = 10,
                               y_tick_round = 4,
+                              n_middle_yTick = 1,
                               cmap = "tab10",
                               xlabel = "Brodmann area",
                               ylabel = "Distance (a.u.)"):
@@ -904,6 +961,8 @@ def draw_cross_section_1dPlot(ax,
     :param roi_names(np.array): 1D array containing ROI (Region of Interest) names for each condition
     :param p_threshold(float): P-value threshold for marking significant areas (default is 0.05)
     :param y_range(tuple): specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
+    :param y_tick_round(int): tick round location
+    :param n_middle_yTick(int): the number of y-tick without y_min and y_max
     """
 
     n_cond, n_coverage, n_samples = sampling_datas.shape
@@ -919,7 +978,6 @@ def draw_cross_section_1dPlot(ax,
     if type(y_range) != type(None):
         y_min_, y_max_ = y_range
         is_set_minMax = True
-        print(y_min_, y_max_)
     else:
         y_min_ = None
         y_max_ = None
@@ -939,19 +997,13 @@ def draw_cross_section_1dPlot(ax,
         if is_set_minMax == False:
             if y_min_ == None:
                 y_min_ = np.min(mean_values - errors)
-                
             if y_max_ == None:
                 y_max_ = np.max(mean_values + errors)
-                
-            y_min_ = min(y_min_, np.max(mean_values - errors))
-            y_max_ = max(y_max_, np.max(mean_values + errors))
     
     # Set ticks
-    n_div = 3 
+    n_div = n_middle_yTick + 2
     interval = (y_max_ - y_min_) / n_div
-    y_data = np.arange(y_min_, y_max_ + interval, interval)
-    y_data = np.round(y_data, y_tick_round)
-    y_data = [0 if y == 0 else y for y in y_data]
+    y_data = np.linspace(y_min_, y_max_, n_div)
     
     unique_rois = np.unique(roi_names)
     roi_names = copy(roi_names)
@@ -1019,12 +1071,12 @@ def draw_cross_section_1dPlot(ax,
         
         stat_result = ttest_1samp(sampling_data, popmean = 0, axis = 1)
         significant_indexes = np.where(stat_result.pvalue < p_threshold)[0]
-
+        
         cond_number = cond_i + 1
         y = y_min_ - y_min_padding + max_height_forSig - (rect_height * cond_number)
 
         for sig_i in significant_indexes:
-            ax.add_patch(Rectangle(xy = (sig_i, y), 
+            ax.add_patch(Rectangle(xy = (sig_i - 0.5, y), 
                                    width = 1, 
                                    height = rect_height, 
                                    color = color))
@@ -1039,7 +1091,12 @@ def draw_cross_section_1dPlot(ax,
                    ymax = (y_max_ - y_min_ + y_min_padding) / (y_max_ - y_min_ + y_min_padding + y_max_padding))
 
     ax.set_xlim(0, n_coverage - 1)
-    ax.set_ylim(y_min_ - y_min_padding, y_max_ + y_max_padding)
+
+    if y_range != None:
+        # ax.set_ylim(y_range[0], y_range[1])
+        ax.set_ylim(min(y_range[0], y_min_ - y_min_padding), max(y_range[1], y_max_ - y_max_padding))
+    else:
+        ax.set_ylim(y_min_ - y_min_padding, y_max_ + y_max_padding)
     
 def surface_profile_onUV(data_paths,
                          vertices, 

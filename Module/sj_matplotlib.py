@@ -122,26 +122,27 @@ def draw_label(axis, label_info = {}):
     x_label = label_info.get("x_label", "")
     y_label = label_info.get("y_label", "")
     
-    x_weight = dict(weight = label_info.get("x_weight", "bold"))
-    y_weight = dict(weight = label_info.get("y_weight", "bold"))
-    
+    x_weight = label_info.get("x_weight", "normal")
+    y_weight = label_info.get("y_weight", "normal")
+
     x_label_size = label_info.get("x_size", 16)
     y_label_size = label_info.get("y_size", 16)
     
     x_label_pad = label_info.get("x_label_pad", 10)
     y_label_pad = label_info.get("y_label_pad", 10)
+    
     axis.set_xlabel(x_label, 
                     color = color, 
-                    fontdict = x_weight, 
+                    weight = x_weight, 
                     size = x_label_size,
                     labelpad = x_label_pad)
-    
+
     axis.set_ylabel(y_label, 
                     color = color, 
-                    fontdict = y_weight, 
+                    weight = y_weight, 
                     size = y_label_size,
                     labelpad = y_label_pad)
-
+    
 def draw_threshold(axis, threshold_info = {}):
     """
     Draw threshold in the axis
@@ -251,7 +252,7 @@ def draw_ticks(axis, tick_info = {}):
     
     if x_tick_viewType == "remove_duplication":
         x_tick_duplication = np.array([int((start + end) / 2) for start, end in slice_list_usingDiff(x_names)], dtype = int)
-        x_tick_data = np.array([(start + end) / 2 for start, end in slice_list_usingDiff(x_names)])
+        x_tick_data = np.array([(x_data[start] + x_data[end]) / 2 for start, end in slice_list_usingDiff(x_names)])
         
         if len(x_tick_duplication) > 0:
             x_names = x_names[x_tick_duplication]
@@ -268,8 +269,7 @@ def draw_ticks(axis, tick_info = {}):
                     y_names,
                     rotation = y_tick_rotation,
                     weight = y_tick_weight,
-                    size = y_tick_size)
-    
+                    size = y_tick_size)    
 def draw_spine(axis, spine_info = {}):
     """
     Draw spine in the axis
@@ -279,7 +279,7 @@ def draw_spine(axis, spine_info = {}):
         -k, spine_color(string): spine line color ex) "black"
         -k, invisibles(list): invisible informations ex) ["right", "top"]
     """
-    spine_line_width = spine_info.get("spine_linewidth", 2)
+    spine_line_width = spine_info.get("spine_linewidth", 1)
     spine_color = spine_info.get("spine_color", "black")
     invisibles = spine_info.get("invisibles", ["right", "top"])
     
@@ -317,7 +317,6 @@ def draw_legend(axis, legend_info = {}):
     rect_width = legend_info.get("rect_width", 1)
     rect_height = legend_info.get("rect_height", 1)
     legends = legend_info.get("legends", None)
-    
     if is_draw_legend:
         if legends == None:
             handles = [plt.Rectangle((0,0), rect_width, rect_height, color = color) for color in colors]
@@ -529,7 +528,7 @@ def plot_histogram_and_cdf(data,
 def make_colorbar(vmin, 
                   vmax, 
                   figsize = (2, 6), 
-                  n_div = 4, 
+                  n_middle_tick = 3, 
                   cmap = "jet", 
                   tick_decimal = 4, 
                   orientation = "horizontal",
@@ -548,8 +547,10 @@ def make_colorbar(vmin,
 
     return (tuple): A tuple containing the matplotlib figure and axis objects.
     """
+    n_div = n_middle_tick + 1
+    
     interval = (vmax - vmin) / n_div
-    ticks = np.arange(vmin, vmax + interval, interval)
+    ticks = np.linspace(vmin, vmax, n_div + 1)
 
     # Create the figure and axis for the colorbar
     fig = plt.figure(figsize = figsize)
@@ -623,7 +624,7 @@ if __name__=="__main__":
     plot_histogram_and_cdf(random_data, axis=axes[0])
 
     # Color bar
-    fig, axis = make_colorbar(0.0007, 0.0014, figsize = (2, 4), n_div = 4, orientation = "vertical")
+    fig, axis = make_colorbar(0.0007, 0.0014, figsize = (2, 4), n_middle_tick = 4, orientation = "vertical")
     plt.show()
 
     color = get_color("jet", 0, 1, 0.5)

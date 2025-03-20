@@ -1,7 +1,12 @@
 
+import math
 from scipy.spatial.distance import euclidean
 import numpy as np
 
+def round_up(value, decimals):
+    factor = 10 ** decimals
+    return math.ceil(value * factor) / factor
+    
 def round_down(value, decimals):
     factor = 1 / (10 ** decimals)
     return (value // factor) * factor

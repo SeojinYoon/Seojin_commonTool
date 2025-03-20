@@ -6,6 +6,7 @@ import pandas as pd
 import copy
 import datetime
 import nltools
+import matplotlib.patches as patches
 
 # Preprocessing
 from sklearn.model_selection import LeaveOneGroupOut, GroupKFold
@@ -668,7 +669,7 @@ class RDM_model:
         
         # Matrix
         im = axis.imshow(rdm, cmap = cmap, vmin = color_range[0], vmax = color_range[1])
-        
+
         # Legend
         if is_legend:
             divider = make_axes_locatable(axis)
@@ -681,20 +682,24 @@ class RDM_model:
 
             # You can also set custom tick labels if desired
             colorbar.set_ticklabels(legend_tick_labels, weight = legend_tick_weight, size = legend_tick_size)
-        
+
         # Matrix Ticks
         slicing_indexes = slice_list_usingDiff(conditions)
         rdm_conditions = [conditions[start_i] for start_i, end_i in slicing_indexes]
         
-        axis.set_xticks([(start_i + end_i)/2 for start_i, end_i in slice_list_usingDiff(conditions)], 
+        xlocs = [(start_i + end_i)/2 for start_i, end_i in slicing_indexes]
+        ylocs = [(start_i + end_i)/2 for start_i, end_i in slicing_indexes]
+        axis.set_xticks(xlocs, 
                         rdm_conditions,
                         size = tick_size,
                         weight = tick_weight,
-                        rotation = x_tick_rotation)
-        axis.set_yticks([(start_i + end_i)/2 for start_i, end_i in slice_list_usingDiff(conditions)], 
+                        rotation = x_tick_rotation,
+                        minor = False)
+        axis.set_yticks(ylocs, 
                         rdm_conditions,
                         size = tick_size,
-                        weight = tick_weight)
+                        weight = tick_weight,
+                        minor = False)
        
         # Spine
         for spine in axis.spines.values():
@@ -702,9 +707,7 @@ class RDM_model:
     
         # Title
         axis.set_title(title, weight = title_wight, size = title_size)
-        
-        # Grid
-        axis.grid(False)
+    
         
 def RSA(models, 
         mask,
@@ -1163,7 +1166,7 @@ def searchlight_with_beta(Xs,
                           subj_name, 
                           searchlight_dir_path, 
                           n_jobs = 1, 
-                          radius=6, 
+                          radius = 6, 
                           estimator = "svc",
                           prefix = ""):
     """

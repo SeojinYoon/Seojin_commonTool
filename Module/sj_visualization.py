@@ -134,7 +134,6 @@ def draw_line_graph(axis, data_df, conds,
     """
     line_alpha = style_info.get("line_alpha", 0.5)
     line_fmt = style_info.get("line_fmt", "-o")
-    line_style = style_info.get("line_style", "-")
     
     error_bars = []
     for cond in conds:
@@ -144,8 +143,7 @@ def draw_line_graph(axis, data_df, conds,
                           y = sel_df["y"],
                           yerr = sel_df["err"],
                           alpha = line_alpha,
-                          fmt = line_fmt,
-                          ls = line_style)
+                          fmt = line_fmt)
         error_bars.append(p)
 
     draw_label(axis, label_info)
@@ -155,7 +153,6 @@ def draw_line_graph(axis, data_df, conds,
     
     cp_legend_info = legend_info.copy()
     cp_legend_info["legends"] = error_bars
-    cp_legend_info["names"] = conds
 
     draw_legend(axis, cp_legend_info)
     
@@ -333,15 +330,17 @@ def plot_timeseries(axis,
     
     # Plot
     linewidth = style_info.get("plot_linewidth", 1)
-    
+
+    legends = []
     n_column = data.shape[1]
     line_colors = style_info.get("line_colors", None)
     for i in range(n_column):
         if line_colors == None:
-            axis.plot(data.iloc[:, i], linewidth = linewidth)
+            legend = axis.plot(data.iloc[:, i], linewidth = linewidth)[0]
         else:
-            axis.plot(data.iloc[:, i], linewidth = linewidth, color = line_colors[i])
-    
+            legend = axis.plot(data.iloc[:, i], linewidth = linewidth, color = line_colors[i])[0]
+        legends.append(legend)
+        
     # Label
     draw_label(axis, label_info)
     
@@ -361,6 +360,7 @@ def plot_timeseries(axis,
     draw_title(axis, title_info)
     
     # Legends
+    legend_info["legends"] = legends
     draw_legend(axis, legend_info)
             
     # Spine

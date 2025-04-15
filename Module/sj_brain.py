@@ -24,7 +24,6 @@ from rsatoolbox.rdm import calc_rdm, RDMs
 from rsatoolbox.data.noise import prec_from_residuals
 
 # Visualize
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 
 # Brain
@@ -48,6 +47,7 @@ from sj_datastructure import quick_sort
 from sj_string import make_pad_fromInt, str_join
 from sj_brain_mask import apply_mask_change_shape
 from brain_coord import image3d_to_1d
+from RDM_tool.rdm_util import make_1dRDM, pattern_separation, make_2dRDM_from_1dRDM, RDM_model
 
 # Sources
 class Shrinkage_type:
@@ -380,72 +380,6 @@ def mean_img_within_diff_with_targetIndex(fMRI_data, lower_diff, upper_diff, tar
 
     return image.concat_imgs(mean_datas)
 
-def upper_tri(RDM):
-    """
-    upper_tri returns the upper triangular index of an RDM
-    
-    :param RDM: squareform RDM(numpy array)
-    
-    return upper triangular vector of the RDM(1D array) 
-    """
-    
-    # returns the upper triangle
-    m = RDM.shape[0]
-    r, c = np.triu_indices(m, 1)
-    return RDM[r, c]
-
-def total_RDM_dissimilarity(RDM):
-    """
-    total dissimilarity 
-    
-    :param RDM: RDM(numpy 2d array)
-    
-    return: scalar value
-    """
-    
-    up_RDM = upper_tri(RDM)
-    return np.mean(up_RDM)
-
-def make_rdm_from_1dTriangle(triangle_1d, mat_dim):
-    """
-    make rdm from triangle values
-    
-    :param triangle_1d: lower triangle values or upper triangle values(list - 1d)
-    :param mat_dim: dimension of square matrix(int)
-    
-    return array(2d)
-    """
-    
-    matrix = np.zeros((mat_dim, mat_dim))
-    
-    # upper triangle
-    upper_triangle_indexes = np.triu_indices(mat_dim, 1)
-    r_indexes = upper_triangle_indexes[0]
-    c_indexes = upper_triangle_indexes[1]
-    for e, r_i, c_i in zip(triangle_1d, r_indexes, c_indexes):
-        matrix[r_i, c_i] = e
-
-    # lower triangle
-    lower_triangle_indexes = np.tril_indices(mat_dim, -1)
-    lower_triangle_indexes = [(r_i,c_i) for r_i, c_i in zip(lower_triangle_indexes[0], lower_triangle_indexes[1])]
-    
-    def sort_func(e1, e2):
-        r1_i, c1_i = e1[0], e1[1]
-        r2_i, c2_i = e2[0], e2[1]
-
-        if c1_i == c2_i:
-            return r1_i < r2_i
-        else:
-            return c1_i < c2_i
-        
-    lower_triangle_indexes = quick_sort(lower_triangle_indexes, sort_func)
-    for e, index in zip(triangle_1d, lower_triangle_indexes):
-        r_i = index[0]
-        c_i = index[1]
-        matrix[r_i, c_i] = e
-    
-    return matrix
-
 def searchlight_RDM(betas, 
                     mask, 
                     conditions, 
@@ -567,148 +501,6 @@ def searchlight_RDM(betas,
         
     return SL_RDM
 
-class RDM_model:
-    """
-    This class's purpose is managing RDM model
-    """
-    
-    def __init__(self, model_2d_array, model_name, conditions):
-        """
-        :param model_2d_array: model(2d numpy array)
-        :param model_name: model name(str)
-        :param conditions: conditions(list of string)
-        """
-        self.model = model_2d_array
-        self.name = model_name
-        self.conditions = conditions
-        
-    def draw(self, 
-             fig = None, 
-             axis = None, 
-             style_info = {}):
-        """
-        Draw rdm matrix
-        
-        :param fig: figure
-        :param axis: axis
-        :param style_info: see draw_rdm style_info parameter
-        """
-        if fig is None and axis is None:
-            fig, axis = plt.subplots(1,1)
-        
-        RDM_model.draw_rdm(rdm = self.model, 
-                           conditions = self.conditions, 
-                           fig = fig,
-                           axis = axis,
-                           style_info = style_info)
-    
-    @staticmethod
-    def draw_rdm(rdm, 
-                 conditions, 
-                 fig,
-                 axis,
-                 style_info = {}):
-        """
-        :param rdm: numpy 2d array
-        :param conditions: list of condition
-        :param fig: matplotlib figure
-        :param axis: axis
-        :param style_info: style information
-            -k, cmap(str): color map ex) seismic
-            -k, title(str): title of RDM ex) "abc"
-            -k, title_wight(str): title weight ex) "bold"
-            -k, title_size(float): title font size ex) 10
-            -k, x_tick_rotation(int): rotation of x_tick ex) 90
-            -k, tick_weight(str): tick weight ex) "bold"
-            -k, tick_size(int): tick size ex) 20
-            -k, color_range(tuple): visualization range ex) (-0.1, 0.1)
-            -k, legend_padding(float): spacing between rdm and legend ex) 0.1
-            -k, legend_label(str): legend label ex) "label"
-            -k, legend_size(float): legend font size ex) 10
-            -k, legend_weight(float): legend font weight ex) 10
-            -k, legend_tick_size(float): legend font size ex) 10
-            -k, legend_tick_weight(str): legend tick weight ex) "bold"
-            -k, legend_ticks(list): ticks ex) [1,2,3]
-            -k, legend_labels(list): tick label ex) ["1","2","3"]
-            -k, decimal_digit(int): decimal digit for visualization
-        """
-        cmap = style_info.get("cmap", "coolwarm")
-        
-        # Title constants
-        title = style_info.get("title", "")
-        title_wight = style_info.get("title_wight", "bold")
-        title_size = style_info.get("title_size", 20)
-        
-        # Tick constants
-        x_tick_rotation = style_info.get("x_tick_rotation", 45)
-        tick_weight = style_info.get("tick_weight", "bold")
-        tick_size = style_info.get("tick_size", 20)
-        ticks_range = np.arange(0, len(conditions))
-        
-        # range
-        decimal_digit = style_info.get("decimal_digit", None)
-        if decimal_digit != None:
-            rdm = np.round(rdm, decimal_digit)
-        
-        v_min = np.min(rdm)
-        v_max = np.max(rdm)
-        color_range = style_info.get("color_range", (v_min, v_max))
-        
-        # legend constants
-        is_legend = style_info.get("is_legend", True)
-        legend_padding = style_info.get("legend_padding", 0.1)
-        legend_label = style_info.get("legend_label", "Dissimilarity")
-        legend_size = style_info.get("legend_size", 20)
-        legend_weight = style_info.get("legend_weight", "bold")
-        
-        legend_tick_size = style_info.get("legend_tick_size", 20)
-        legend_tick_weight = style_info.get("legend_tick_weight", "bold")
-        legend_ticks = style_info.get("legend_ticks", [color_range[0], color_range[1]])
-        legend_tick_labels = style_info.get("legend_labels", [str(e) for e in legend_ticks])
-        legend_font_properties = {'size': legend_tick_size, 'weight': legend_tick_weight}
-        
-        # Matrix
-        im = axis.imshow(rdm, cmap = cmap, vmin = color_range[0], vmax = color_range[1])
-
-        # Legend
-        if is_legend:
-            divider = make_axes_locatable(axis)
-            cax = divider.append_axes('right', size = '5%', pad = legend_padding)
-            colorbar = fig.colorbar(im, cax = cax, orientation = 'vertical')
-            colorbar.set_label(legend_label, weight = legend_weight, size = legend_size)
-
-            # Set custom ticks on the color bar
-            colorbar.set_ticks(legend_ticks)
-
-            # You can also set custom tick labels if desired
-            colorbar.set_ticklabels(legend_tick_labels, weight = legend_tick_weight, size = legend_tick_size)
-
-        # Matrix Ticks
-        slicing_indexes = slice_list_usingDiff(conditions)
-        rdm_conditions = [conditions[start_i] for start_i, end_i in slicing_indexes]
-        
-        xlocs = [(start_i + end_i)/2 for start_i, end_i in slicing_indexes]
-        ylocs = [(start_i + end_i)/2 for start_i, end_i in slicing_indexes]
-        axis.set_xticks(xlocs, 
-                        rdm_conditions,
-                        size = tick_size,
-                        weight = tick_weight,
-                        rotation = x_tick_rotation,
-                        minor = False)
-        axis.set_yticks(ylocs, 
-                        rdm_conditions,
-                        size = tick_size,
-                        weight = tick_weight,
-                        minor = False)
-       
-        # Spine
-        for spine in axis.spines.values():
-            spine.set_visible(False)
-    
-        # Title
-        axis.set_title(title, weight = title_wight, size = title_size)
-    
-        
 def RSA(models, 
         mask,
         rdms = None,
@@ -767,7 +559,7 @@ def RSA(models,
             
             if eval_method == Similarity_type.spearman:
                 # check model degree of freedom for computing correlation
-                assert len(np.unique(upper_tri(model.model))) != 1, "degree of freedom is 0!"
+                assert len(np.unique(make_1dRDM(model.model))) != 1, "degree of freedom is 0!"
 
     # Calculate RDM
     if type(rdms) == type(None):
@@ -789,8 +581,8 @@ def RSA(models,
     fixed_models = []
     for i, model in enumerate(models):
         # Filter if the rsa result exists already.
-        save_rsa_path = os.path.join(save_corr_brain_dir_path, 
-                                     str_join([eval_method, model.name]) + ".nii.gz")
+        file_name = "_".join([eval_method, model.name]) + ".nii.gz"
+        save_rsa_path = os.path.join(save_corr_brain_dir_path, file_name)
         
         if os.path.exists(save_rsa_path):
             print("RSA result exists aready!", save_rsa_path)
@@ -798,7 +590,7 @@ def RSA(models,
         
         # Stack fixed model
         if str(type(model)) == str(RDM_model):
-            t_model = ModelFixed(model.name, upper_tri(model.model))
+            t_model = ModelFixed(model.name, make_1dRDM(model.model))
         elif str(type(model)) == str(ModelFixed):
             t_model = model
         
@@ -919,7 +711,7 @@ def brain_total_dissimilarity(rdm_brain):
     for i in range(nx):
         for j in range(ny):
             for z in range(nz):
-                result[i][j][z] = total_RDM_dissimilarity(rdm_brain[i][j][z])
+                result[i][j][z] = pattern_separation(rdm_brain[i][j][z])
     return result
 
 def masked_rdm_brain(rdm_brain, nifti_mask, debug=None):
@@ -1074,7 +866,7 @@ def change_event_typeForLSS(lsa_event, rest_condition, target_condition, trial_i
     return event
     """
     event = lsa_event.copy()
-    target_conditionWithTrial = str_join([target_condition, str(trial_index)])
+    target_conditionWithTrial = "_".join([target_condition, str(trial_index)])
     
     # Rest to Nuisance Rest
     df = change_df(event, "trial_type", lambda t_type: "Nuisance_Rest" if t_type != target_conditionWithTrial and rest_condition in t_type else t_type)
@@ -1225,11 +1017,11 @@ def searchlight_with_beta(Xs,
     end = datetime.datetime.now()
     
     # Save
-    save_file_name = str_join([prefix, subj_name, estimator, "searchlight_clf"], deliminator = "_")   
+    save_file_name = "_".join([prefix, subj_name, estimator, "searchlight_clf"])
     save(searchlight, os.path.join(searchlight_dir_path, save_file_name))
                  
     score_img = image.new_img_like(ref_niimg = full_mask, data = searchlight.scores_)
-    nb.save(score_img, os.path.join(searchlight_dir_path, save_file_name + ".nii"))
+    nb.save(score_img, os.path.join(searchlight_dir_path, save_file_name + ".nii.gz"))
     
     print(start, end)
     
@@ -1264,69 +1056,6 @@ def get_uniquePattern(conds):
     """
     
     return list(dict.fromkeys(conds))
-
-def sort_rdm(rdm_array, origin_conditions, reordered_conditions):
-    """
-    Sort rdm by reordered_conditions
-    
-    :param rdm_array: rdm array(2d array)
-    :param origin_conditions: list of condition(1d list)
-    :param reordered_conditions: list of condition(1d list)
-    
-    retrun sorted rdm(2d array)
-    """
-    cond_length = len(origin_conditions)
-    
-    pattern_info = dict(zip(origin_conditions, np.arange(0, cond_length)))
-    
-    re_order_indexes = [pattern_info[cond] for cond in reordered_conditions]
-    
-    origin_axis1, origin_axis2 = np.meshgrid(origin_conditions, origin_conditions)
-    convert_axis1, convert_axis2 = np.meshgrid(reordered_conditions, reordered_conditions)
-    
-    orgin_grid = np.zeros((cond_length, cond_length)).tolist()
-    sorted_grid = np.zeros((cond_length, cond_length)).tolist()
-    result_grid = np.zeros((cond_length, cond_length)).tolist()
-    
-    for i in range(cond_length):
-        for j in range(cond_length):
-            orgin_grid[i][j] = (origin_axis2[i][j], origin_axis1[i][j])
-            sorted_grid[i][j] = (convert_axis2[i][j], convert_axis1[i][j])
-
-    for i in range(cond_length):
-        for j in range(cond_length):
-            target_pair = sorted_grid[i][j]
-            target_array = np.array(recursive_mapWithDepth(orgin_grid, 
-                                                           lambda x: x == target_pair, 
-                                                           1))
-
-            x_indexes, y_indexes = np.where(target_array == True)
-            assert len(x_indexes) == 1 and len(y_indexes) == 1, "Please check duplicate"
-            x_i = x_indexes[0]
-            y_i = y_indexes[0]
-
-            result_grid[i][j] = rdm_array[x_i][y_i]
-            
-    return np.array(result_grid)
-
-def filter_rdm(rdm, cond_origin, cond_target):
-    """
-    filter rdm from target condition
-    
-    :param rdm (np.array)
-    :param cond_origin (list)
-    :param cond_target (list)
-
-    return rdm(np.array)
-    """
-    cp_cond = cond_origin.copy()
-    for e in cond_target:
-        cp_cond.remove(e)
-    
-    sorted_rdm = sort_rdm(rdm, cond_origin, cond_target + cp_cond)
-    
-    n_target_cond = len(cond_target)
-    return sorted_rdm[:n_target_cond, :n_target_cond]
     
 """
 Related to Multivariate Noise Normalization
@@ -1822,8 +1551,8 @@ if __name__ == "__main__":
                       anat,
                       cmap=result["color_map"])
     
-    # upper_tri
-    upper_tri(np.repeat(3, 9).reshape(3,3))
+    # make_1dRDM
+    make_1dRDM(np.repeat(3, 9).reshape(3,3))
     
     # RSA
     a = RDM_model(np.array([1,0,1,0]).reshape(2,2), "transition", ["1","2"])
@@ -1839,15 +1568,6 @@ if __name__ == "__main__":
     # make_RDM_brain
     make_RDM_brain(brain_shape, rdm)
     
-    # sort_rdm
-    rdm = np.array(
-        [
-            [0,2,3],
-            [4,0,6],
-            [7,8,0],
-        ]
-    )
-    sort_rdm(rdm, ["A", "B", "C"], ["B", "A", "C"])
     
     # make_rdm
     make_rdm(conditions = ["a", "b", "c", "d"],
@@ -1867,14 +1587,8 @@ if __name__ == "__main__":
         [4,0,8],
         [7,8,0]
     ])
-    filter_rdm(rdm = a, cond_origin = [1,2,3], cond_target = [2,3])
     
     untangle_nii("nifti_path")
-    
-    rdm_model = RDM_model(a, 
-                          model_name = "abc",
-                          conditions = ["1", "2", "3"])
-    rdm_model.draw()
 
     # Roi index
     roi_img = nb.load("/mnt/sdb2/DeepDraw/mri_mask/targetROIs/Lt_BA6_ventrolateral.nii.gz")

@@ -6,6 +6,7 @@ import numpy as np
 import nibabel as nb
 import nitools as nt
 import warnings
+import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib.image as mpimg
 from scipy.spatial import KDTree
@@ -938,6 +939,8 @@ def sulcus_abbreviation_name(sulcus_name):
         return "MTS"
     elif sulcus_name == "Collateral sulcus":
         return "CLS"
+    elif sulcus_name == "Cingulate sulcus":
+        return "Cing"
     
 def draw_cross_section_1dPlot(ax, 
                               sampling_datas, 

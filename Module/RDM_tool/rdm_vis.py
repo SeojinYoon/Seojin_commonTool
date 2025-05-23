@@ -33,6 +33,7 @@ class RDM_model:
                            fig = fig,
                            axis = axis,
                            style_info = style_info)
+        return fig, axis
     
     @staticmethod
     def draw_rdm(rdm, 
@@ -139,6 +140,7 @@ class RDM_model:
     
         # Title
         axis.set_title(title, weight = title_wight, size = title_size)
+    return fig, axis
 
 if __name__ == "__main__":
     rdm_model = RDM_model(a, 

@@ -76,7 +76,6 @@ class Similarity_type:
     kendall_tau_b = "kendall"
     kendall_tau_a = "tau-a"
 
-
     @staticmethod
     def name(sim_type):
         if sim_type == Similarity_type.pearson:
@@ -559,7 +558,7 @@ def RSA(models,
             
             if eval_method == Similarity_type.spearman:
                 # check model degree of freedom for computing correlation
-                assert len(np.unique(make_1dRDM(model.model))) != 1, "degree of freedom is 0!"
+                assert len(np.unique(make_1dRDM(model.dissimilarities))) != 1, "degree of freedom is 0!"
 
     # Calculate RDM
     if type(rdms) == type(None):
@@ -590,7 +589,7 @@ def RSA(models,
         
         # Stack fixed model
         if str(type(model)) == str(RDM_model):
-            t_model = ModelFixed(model.name, make_1dRDM(model.model))
+            t_model = ModelFixed(model.name, make_1dRDM(model.dissimilarities))
         elif str(type(model)) == str(ModelFixed):
             t_model = model
         

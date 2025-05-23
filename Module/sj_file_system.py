@@ -16,10 +16,11 @@ import pathlib
 from pathlib import Path
 import h5py
 import re
+import filecmp
 
 # Custom Libraries
+from sj_linux import exec_command, exec_command_withSudo
 from sj_enum import File_comparison
-from sj_string import str_join
 
 # Sources
 def get_fileName(path):
@@ -194,7 +195,7 @@ def rename(dir_path, target_str, replace_str):
     target = os.path.join(dir_path, target_str)
     replace = os.path.join(dir_path, replace_str)
         
-    command = str_join(["mv", target, replace], delimiter = " ")
+    command = " ".join(["mv", target, replace])
     print(command)
     os.system(command)
 
@@ -500,6 +501,102 @@ def is_jupyter():
     except NameError:
         # If get_ipython() is not defined, we are in a regular Python script.
         return False
+
+def copy_file(src_path, 
+              dst_path, 
+              password = None,
+              log_file_path = None,
+             ):
+    """
+    copy file from src_path to dst_path
+    
+    :param src_path(string): source file path
+    :param dst_path(string): destination file path
+    :param password(string): password of current account
+    :param log_file_path(string): path for saving log
+    
+    return (string): result of copy process
+    """
+    # Check source path
+    if not os.path.exists(src_path):
+        return "No source file"
+
+    # Check destination path 
+    if os.path.exists(dst_path):
+        return "destination file already exists"        
+
+    # Copy
+    is_dir = os.path.isdir(src_path)
+    cmd = "cp -r" if is_dir else "cp"
+    
+    # exec_command_withSudo
+    if type(password) == type(None):
+        exec_command(cmd, parameter_info = {
+            1 : src_path,
+            2 : dst_path,
+        })
+    else:
+        exec_command_withSudo(cmd, 
+                              password = password, 
+                              parameter_info = {
+                                  1 : src_path,
+                                  2 : dst_path,
+                              },
+                              pipeline_info = {
+                                  ">>" : log_file_path,
+                              })
+
+    # Validation check
+    if is_dir:
+        comparison_types = np.array([
+                File_comparison.file_name.value,
+                File_comparison.file_type.value,
+                File_comparison.file_size.value,
+                File_comparison.file_checksum.value,
+        ])
+        target_comparison_types = [File_comparison.name(comparison_type) for comparison_type in comparison_types]
+        result = compare_directory(dirA_path = src_path,
+                                   dirB_path = dst_path,
+                                   file_comparisons = target_comparison_types,
+                                   n_job = 30)
+        return result
+    else:
+        is_same = filecmp.cmp(src_path, dst_path, shallow=False)
+        if is_same:
+            result = "Good"
+        else:
+            result = "Two contents are different"
+        return result
+    
+def copy_files(src_paths, save_dir_path, password = None):
+    """
+    Copy multiple files from src_paths to save_dir_path
+    
+    :param src_paths(list - string): source file paths
+    :param save_dir_path(string): destination directory path
+    :param password(string): password of current account
+    
+    return (pd.DataFrame): result of copy process
+    """
+    if type(src_paths) == str:
+        print("Please input src_paths using list form. ex) [ src_path ]")
+        return None
+        
+    result = pd.DataFrame(columns = ["src_path", "dst_path", "result"])
+    for src_path in src_paths:
+        if os.path.isfile(src_path):
+            file_name = Path(src_path).name
+            dst_path = os.path.join(save_dir_path, file_name)
+        else:
+            dst_path = save_dir_path
+        
+        copy_state = copy_file(src_path, dst_path, password)
+        result.loc[len(result)] = {
+            "src_path" : src_path,
+            "dst_path" : dst_path,
+            "result" : copy_state,
+        }
+    return result
     
 if __name__ == "__main__":
     """

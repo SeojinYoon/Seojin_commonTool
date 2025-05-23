@@ -1,6 +1,7 @@
 
 import numpy as np
 import matplotlib.pylab as plt
+from itertools import product
 from itertools import permutations
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -310,6 +311,25 @@ def filter_rdm(rdm, cond_origin, cond_target):
     
     n_target_cond = len(cond_target)
     return sorted_rdm[:n_target_cond, :n_target_cond]
+
+def make_RDM(conditions, dissim_mapping_func):
+    """
+    Make RDM using dissimilarity mapping function
+
+    :param conditions(list - 1d): condition of RDM
+    :param dissim_mapping_func(function): dissimilarity function
+
+    return RDM_model
+    """
+    row_conditions = list(conditions)
+    column_conditions = list(conditions)
+    rdm = np.tile(0, (len(conditions), len(conditions)))
+    for r_cond, c_cond in product(row_conditions, column_conditions):
+        if r_cond == c_cond:
+            continue
+        rdm[row_conditions.index(r_cond), column_conditions.index(c_cond)] = dissim_mapping_func(r_cond, c_cond)
+    rdm_model = RDM_model(dissimilarities = rdm, model_name = "temp", conditions = conditions)
+    return rdm_model
     
 if __name__ == "__main__":
     rdm_model = RDM_model(a, 
@@ -327,4 +347,5 @@ if __name__ == "__main__":
     )
     sort_rdm(rdm, ["A", "B", "C"], ["B", "A", "C"])
     filter_rdm(rdm = rdm, cond_origin = ["A","B","C"], cond_target = ["A","B"])
+    make_RDM([1,2,3], lambda x, y: 1 if x == 1 else 0).draw()
     

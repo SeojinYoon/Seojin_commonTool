@@ -64,6 +64,8 @@ def exec_command_withSudo(command,
         -k [argument_name]: [argument_value]
         -k 1, [value]: if there is not arg name, set the name using number
     :param pipeline_info(dictionary): pipeline
+        -k >: redirect
+        -k >>: append
     
     return: result of command
     """ 

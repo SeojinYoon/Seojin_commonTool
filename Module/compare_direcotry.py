@@ -163,8 +163,9 @@ def compare_file(i, file_paths1, file_paths2, file_comparisons, is_print_invalid
     """
     file_path1 = file_paths1[i]
     file_path2 = file_paths2[i]
-    
+
     comparison = sum(File_comparison.numbers(file_comparisons))
+    
     
     is_compare_file_name = (comparison & File_comparison.file_name.value) != 0
     is_compare_file_type = True
@@ -214,6 +215,11 @@ def compare_directory(dirA_path, dirB_path, file_comparisons, n_job = 1, is_repo
     
     return: result(list - invalid_type, file_pathA, file_pathB)
     """
+    if dirA_path[-1] != os.sep:
+        dirA_path += os.sep
+    if dirB_path[-1] != os.sep:
+        dirB_path += os.sep
+        
     dirA_name_generator = glob.iglob(dirA_path + "**/*", recursive=True)
     dirB_name_generator = glob.iglob(dirB_path + "**/*", recursive=True)
 
@@ -230,7 +236,7 @@ def compare_directory(dirA_path, dirB_path, file_comparisons, n_job = 1, is_repo
     n_dirB_files = len(dirB_file_paths)
 
     # Check whether #dirA_file and #dirB_file is same
-    assert len(dirA_file_paths) == len(dirB_file_paths), "n_files is not same between dirA and dirB"
+    assert len(dirA_file_paths) == len(dirB_file_paths), f"n_files is not same between {dirA_path} and {dirB_path}"
 
     # Check files
     with tqdm.tqdm(total=n_dirA_files) as pbar:
@@ -304,63 +310,64 @@ def find_indexes(list, find_value, method = "equal"):
                 indexes.append(i)
     return indexes
 
-# Constants
-comparison_types = np.array([
-    File_comparison.file_name.value,
-    File_comparison.file_type.value,
-    File_comparison.file_size.value,
-    File_comparison.file_checksum.value
-])
-
-# Input
-dirA_path = input("Input direcotry A path: ")
-dirB_path = input("Input direcotry B path: ")
-
-# Correct path
-if dirA_path[-1] != os.path.sep:
-    dirA_path += os.path.sep
-
-if dirB_path[-1] != os.path.sep:
-    dirB_path += os.path.sep
-
-print("Select comparison type")
-
-print(f"1. name: {File_comparison.name(comparison_types[0])}")
-print(f"2. file_type: {File_comparison.name(comparison_types[1])}")
-print(f"3. file_size: {File_comparison.name(comparison_types[2])}")
-print(f"4. file_checksum: {File_comparison.name(comparison_types[3])}")
-
-print("If you want stop selecting loop, please input s")
-
-targets = []
-while True:    
-    input_value = input("What do you want...? 1, 2, 3, 4, s: ")
+if __name__ == "__main__":
+    # Constants
+    comparison_types = np.array([
+        File_comparison.file_name.value,
+        File_comparison.file_type.value,
+        File_comparison.file_size.value,
+        File_comparison.file_checksum.value
+    ])
     
-    if input_value == "s":
-        break
-    else:
-        targets.append(input_value)
+    # Input
+    dirA_path = input("Input direcotry A path: ")
+    dirB_path = input("Input direcotry B path: ")
     
-
-# compare direcotry
-target_comparison_types = comparison_types[[int(target) -1 for target in targets]]
-target_comparison_types = [File_comparison.name(comparison_type) for comparison_type in target_comparison_types]
-
-results = compare_directory(dirA_path,
-                            dirB_path,
-                            target_comparison_types,
-                            n_job = 30)
-
-# Filter invalid result
-np_invalid_types = np.array(get_itemsFromAxis(0, results), dtype="object")
-invalid_results = filterUsingFlags(target_list = results,
-                                   flag_list = np_invalid_types != None,
-                                   flag_value = True)
-
-for invalid_result in invalid_results:
-    invalid_type = invalid_result[0]
-    invalid_pathA = invalid_result[1][0]
-    invalid_pathB = invalid_result[1][1]
-
-    print(f"invalid type: {invalid_type}, pathA: {invalid_pathA}, pathB: {invalid_pathB} \n")
+    # Correct path
+    if dirA_path[-1] != os.path.sep:
+        dirA_path += os.path.sep
+    
+    if dirB_path[-1] != os.path.sep:
+        dirB_path += os.path.sep
+    
+    print("Select comparison type")
+    
+    print(f"1. name: {File_comparison.name(comparison_types[0])}")
+    print(f"2. file_type: {File_comparison.name(comparison_types[1])}")
+    print(f"3. file_size: {File_comparison.name(comparison_types[2])}")
+    print(f"4. file_checksum: {File_comparison.name(comparison_types[3])}")
+    
+    print("If you want stop selecting loop, please input s")
+    
+    targets = []
+    while True:    
+        input_value = input("What do you want...? 1, 2, 3, 4, s: ")
+        
+        if input_value == "s":
+            break
+        else:
+            targets.append(input_value)
+        
+    
+    # compare direcotry
+    target_comparison_types = comparison_types[[int(target) -1 for target in targets]]
+    target_comparison_types = [File_comparison.name(comparison_type) for comparison_type in target_comparison_types]
+    
+    results = compare_directory(dirA_path,
+                                dirB_path,
+                                target_comparison_types,
+                                n_job = 30)
+    
+    # Filter invalid result
+    np_invalid_types = np.array(get_itemsFromAxis(0, results), dtype="object")
+    invalid_results = filterUsingFlags(target_list = results,
+                                       flag_list = np_invalid_types != None,
+                                       flag_value = True)
+    
+    for invalid_result in invalid_results:
+        invalid_type = invalid_result[0]
+        invalid_pathA = invalid_result[1][0]
+        invalid_pathB = invalid_result[1][1]
+    
+        print(f"invalid type: {invalid_type}, pathA: {invalid_pathA}, pathB: {invalid_pathB} \n")
 

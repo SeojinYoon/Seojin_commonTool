@@ -17,6 +17,7 @@ from pathlib import Path
 import h5py
 import re
 import filecmp
+from tqdm import tqdm
 
 # Custom Libraries
 from sj_linux import exec_command, exec_command_withSudo
@@ -212,8 +213,7 @@ def checksum(file_path):
     
     return checksum result(string)
     """
-    command = f"md5sum {file_path}"
-    
+    command = f"md5sum '{file_path}'"
     output = subprocess.check_output(command, shell=True).decode("utf-8").split(" ")[0]
     return output.strip()
 
@@ -506,6 +506,7 @@ def copy_file(src_path,
               dst_path, 
               password = None,
               log_file_path = None,
+              is_print = True,
              ):
     """
     copy file from src_path to dst_path
@@ -531,20 +532,26 @@ def copy_file(src_path,
     
     # exec_command_withSudo
     if type(password) == type(None):
-        exec_command(cmd, parameter_info = {
-            1 : src_path,
-            2 : dst_path,
-        })
+        exec_command(cmd, 
+                     parameter_info = {
+                         1 : f"'{src_path}'",
+                         2 : f"'{dst_path}'",
+                     },
+                     pipeline_info = {
+                                  ">>" : log_file_path,
+                     },
+                     is_print = is_print)
     else:
         exec_command_withSudo(cmd, 
                               password = password, 
                               parameter_info = {
-                                  1 : src_path,
-                                  2 : dst_path,
+                                  1 : f"'{src_path}'",
+                                  2 : f"'{dst_path}'",
                               },
                               pipeline_info = {
                                   ">>" : log_file_path,
-                              })
+                              },
+                              is_print = is_print)
 
     # Validation check
     if is_dir:
@@ -597,7 +604,50 @@ def copy_files(src_paths, save_dir_path, password = None):
             "result" : copy_state,
         }
     return result
+
+def copy_directory_carefully(src_dir_path, 
+                             dst_dir_path, 
+                             log_file_path, 
+                             is_print = True,
+                             password = None):
+    """
+    Copy directory from src_dir_path to dst_dir_path
+
+    :param src_dir_path(string): source direcotry path
+    :param dst_dir_path(string): destination directory path
+    :param log_file_path(string): log file path
+    :param is_print(boolean): flag for printing command
+    """
+    if os.path.exists(log_file_path):
+        os.remove(log_file_path)
     
+    log_df = pd.DataFrame(columns = ["src_path", "dst_path", "result"])
+    log_df.to_csv(log_file_path, index = False)
+    
+    src_file_path_generator = glob.iglob(src_dir_path + "/**/*", recursive=True)
+    src_file_paths = np.array(list(src_file_path_generator))
+    src_file_paths = src_file_paths[[os.path.isfile(path) for path in src_file_paths]]
+    for src_file_path in tqdm(src_file_paths):
+        src_parent_path = os.sep.join(src_file_path.split(os.sep)[:-1])
+        dst_parent_path = src_parent_path.replace(src_dir_path, dst_dir_path)
+
+        if not os.path.exists(dst_parent_path):
+            if type(password) != type(None):
+                exec_command_withSudo("mkdir", password = password, parameter_info = { 1 : "-p", 2 : f"'{dst_parent_path}'" }, is_print = is_print)
+            else:
+                exec_command("mkdir", parameter_info = { 1 : "-p", 2 : f"'{dst_parent_path}'" }, is_print = is_print)
+                
+        dst_file_path = src_file_path.replace(src_dir_path, dst_dir_path)
+        copy_state = copy_file(src_path = src_file_path, 
+                               dst_path = dst_file_path, 
+                               log_file_path = log_file_path,
+                               is_print = is_print,
+                               password = password)
+
+        with open(log_file_path, mode = "a", newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([src_file_path, dst_file_path, copy_state])
+            
 if __name__ == "__main__":
     """
     Example of CsvManager 
@@ -636,3 +686,9 @@ if __name__ == "__main__":
     get_hdf5_info(os.path.join(dir_path, file_name))
     
     is_jupyter()
+
+    result = copy_directory_carefully("/home/seojin/Seojin_commonTool", 
+                                      "/home/seojin/temp", 
+                                      is_print = True, 
+                                      log_file_path = "/home/seojin/temp/log.csv")
+    

@@ -6,7 +6,8 @@ import subprocess
 
 def exec_command(command, 
                  parameter_info = {}, 
-                 pipeline_info = {}):
+                 pipeline_info = {},
+                 is_print = True):
     """
     Execute command
     
@@ -15,11 +16,13 @@ def exec_command(command,
         -k [argument_name]: [argument_value]
         -k 1, [value]: if there is not arg name, set the name using number
     :param pipeline_info(dictionary): pipeline
+    :param is_print(boolean): flag for printing command
     
     return: result of command
     """ 
     commands = make_command(command, parameter_info, pipeline_info)
-    print(f"\033[1m" + commands + "\033[0m")
+    if is_print:
+        print(f"\033[1m" + commands + "\033[0m")
     
     result = os.system(commands)
     return result
@@ -28,7 +31,8 @@ def exec_command_inConda(command,
                          conda_env_name,
                          conda_env_path = "/home/seojin/anaconda3/condabin",
                          parameter_info = {}, 
-                         pipeline_info = {}):
+                         pipeline_info = {},
+                         is_print = True):
     """
     Execute command in conda environment
     
@@ -37,6 +41,7 @@ def exec_command_inConda(command,
         -k [argument_name]: [argument_value]
         -k 1, [value]: if there is not arg name, set the name using number
     :param pipeline_info(dictionary): pipeline
+    :param is_print(boolean): flag for printing command
     
     return: result of command
     """ 
@@ -46,7 +51,8 @@ def exec_command_inConda(command,
     origin_command = make_command(command, parameter_info, pipeline_info)
     
     commands = " ".join([active_conda_command, origin_command])
-    print(f"\033[1m" + commands + "\033[0m")
+    if is_print:
+        print(f"\033[1m" + commands + "\033[0m")
     
     result = os.system(commands)
     return result
@@ -54,7 +60,8 @@ def exec_command_inConda(command,
 def exec_command_withSudo(command, 
                           password, 
                           parameter_info = {}, 
-                          pipeline_info = {}):
+                          pipeline_info = {},
+                          is_print = True):
     """
     Execute command on sudo
     
@@ -66,12 +73,13 @@ def exec_command_withSudo(command,
     :param pipeline_info(dictionary): pipeline
         -k >: redirect
         -k >>: append
+    :param is_print(boolean): flag for printing command
     
     return: result of command
     """ 
     command = f"echo {password}" + " | " + "sudo -S " + make_command(command)
     
-    result = exec_command(command, parameter_info, pipeline_info)
+    result = exec_command(command, parameter_info, pipeline_info, is_print)
     return result
     
 def make_command(command, 

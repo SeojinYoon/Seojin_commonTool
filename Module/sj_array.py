@@ -2,6 +2,21 @@
 import numpy as np
 from scipy import ndimage
 
+dataset1 = np.array([
+    [
+        [1,0,4],
+        [1,0,3],
+        [0.5, 1, 1],
+        [1, 2, 0],
+    ],
+    [
+        [0.5, 0, 1],
+        [0.5, 0, 3],
+        [1, 0, 4],
+        [2, 0, 3],
+    ]
+])
+
 def dilation_3d(array):
     """
     :param array: 3d array

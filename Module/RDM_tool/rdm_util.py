@@ -111,17 +111,20 @@ class RDM_model:
     This class's purpose is managing RDM model
     """
     
-    def __init__(self, dissimilarities, model_name, conditions):
+    def __init__(self, 
+                 dissimilarities: np.array, 
+                 model_name: str, 
+                 conditions: list):
         """
-        :param dissimilarities(np.array): dissimilarity matrix (2d or 1d) 
-        :param model_name: model name(str)
-        :param conditions: conditions(list of string)
+        :param dissimilarities: dissimilarity matrix (2d or 1d) 
+        :param model_name: model name
+        :param conditions: conditions
         """
         n_shape = len(dissimilarities.shape)
         if n_shape == 2:
             rdm_2d = dissimilarities
         elif n_shape == 1:
-            rdm_2d = make_2dRDM_from_1dRDM(dissimilarities)
+            rdm_2d = make_2dRDM_from_1dRDM(dissimilarities, len(conditions))
 
         self.dissimilarities = rdm_2d
         self.name = model_name
@@ -148,8 +151,8 @@ class RDM_model:
                            style_info = style_info)
     
     @staticmethod
-    def draw_rdm(rdm, 
-                 conditions, 
+    def draw_rdm(rdm: np.array, 
+                 conditions: list, 
                  fig,
                  axis,
                  style_info = {}):

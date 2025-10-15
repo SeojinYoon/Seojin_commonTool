@@ -1,0 +1,250 @@
+<AFNI_attributes
+  self_idcode="AFN_V4mBhd33Djv0uiDbxyagZA"
+  NIfTI_nums="193,229,193,1,1,2"
+  ni_form="ni_group" >
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="DATASET_NAME" >
+ "none"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="TYPESTRING" >
+ "3DIM_HEAD_ANAT"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="IDCODE_STRING" >
+ "AFN_V4mBhd33Djv0uiDbxyagZA"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="IDCODE_DATE" >
+ "Thu Sep 21 21:50:21 2023"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="8"
+  atr_name="SCENE_DATA" >
+ 2
+ 11
+ 0
+ -999
+ -999
+ -999
+ -999
+ -999
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="LABEL_1" >
+ "zyxt"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="LABEL_2" >
+ "zyxt"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="3"
+  atr_name="ORIENT_SPECIFIC" >
+ 1
+ 2
+ 4
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="float"
+  ni_dimen="3"
+  atr_name="ORIGIN" >
+ 96
+ 132
+ -78
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="float"
+  ni_dimen="3"
+  atr_name="DELTA" >
+ -1
+ -1
+ 1
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="float"
+  ni_dimen="12"
+  atr_name="IJK_TO_DICOM" >
+ -1
+ 0
+ 0
+ 96
+ 0
+ -1
+ 0
+ 132
+ 0
+ 0
+ 1
+ -78
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="float"
+  ni_dimen="12"
+  atr_name="IJK_TO_DICOM_REAL" >
+ -1
+ 0
+ 0
+ 96
+ 0
+ -1
+ 0
+ 132
+ 0
+ 0
+ 1
+ -78
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="float"
+  ni_dimen="2"
+  atr_name="BRICK_STATS" >
+ 0
+ 139
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="8"
+  atr_name="DATASET_RANK" >
+ 3
+ 1
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="5"
+  atr_name="DATASET_DIMENSIONS" >
+ 193
+ 229
+ 193
+ 0
+ 0
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="1"
+  atr_name="BRICK_TYPES" >
+ 0
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="float"
+  ni_dimen="1"
+  atr_name="BRICK_FLOAT_FACS" >
+ 0
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="BRICK_LABS" >
+ "REGIONS"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="TEMPLATE_SPACE" >
+ "MNI_2009c_asym"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="1"
+  atr_name="INT_CMAP" >
+ 1
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="2"
+  atr_name="VALUE_LABEL_DTABLE" >
+ "&lt;VALUE_LABEL_DTABLE&#x0a;ni_type=&quot;2*String&quot;&#x0a;ni_dimen=&quot;78&quot;&#x0a;pbar_name=&quot;ROI_i256&quot;&gt;&#x0a;&quot;1&quot; &quot;ctx-lh-BA1_3&quot;&#x0a;&quot;2&quot; &quot;ctx-lh-BA2&quot;&#x0a;&quot;3&quot; &quot;ctx-lh-BA4&quot;&#x0a;&quot;4&quot; &quot;ctx-lh-BA5&quot;&#x0a;&quot;5&quot; &quot;ctx-lh-BA6&quot;&#x0a;&quot;6&quot; &quot;ctx-lh-BA7&quot;&#x0a;&quot;7&quot; &quot;ctx-lh-BA8&quot;&#x0a;&quot;8&quot; &quot;ctx-lh-BA9&quot;&#x0a;&quot;9&quot; &quot;ctx-lh-BA10&quot;&#x0a;&quot;10&quot; &quot;ctx-lh-BA11&quot;&#x0a;&quot;11&quot; &quot;ctx-lh-BA13&quot;&#x0a;&quot;12&quot; &quot;ctx-lh-BA16&quot;&#x0a;&quot;13&quot; &quot;ctx-lh-BA17&quot;&#x0a;&quot;14&quot; &quot;ctx-lh-BA18&quot;&#x0a;&quot;15&quot; &quot;ctx-lh-BA19&quot;&#x0a;&quot;16&quot; &quot;ctx-lh-BA20&quot;&#x0a;&quot;17&quot; &quot;ctx-lh-BA21&quot;&#x0a;&quot;18&quot; &quot;ctx-lh-BA22&quot;&#x0a;&quot;19&quot; &quot;ctx-lh-BA23&quot;&#x0a;&quot;20&quot; &quot;ctx-lh-BA24&quot;&#x0a;&quot;21&quot; &quot;ctx-lh-BA25&quot;&#x0a;&quot;22&quot; &quot;ctx-lh-BA26_29_30&quot;&#x0a;&quot;23&quot; &quot;ctx-lh-BA27&quot;&#x0a;&quot;24&quot; &quot;ctx-lh-BA28&quot;&#x0a;&quot;25&quot; &quot;ctx-lh-BA31&quot;&#x0a;&quot;26&quot; &quot;ctx-lh-BA32&quot;&#x0a;&quot;27&quot; &quot;ctx-lh-BA33&quot;&#x0a;&quot;28&quot; &quot;ctx-lh-BA34&quot;&#x0a;&quot;29&quot; &quot;ctx-lh-BA35_36&quot;&#x0a;&quot;30&quot; &quot;ctx-lh-BA37&quot;&#x0a;&quot;31&quot; &quot;ctx-lh-BA38&quot;&#x0a;&quot;32&quot; &quot;ctx-lh-BA39&quot;&#x0a;&quot;33&quot; &quot;ctx-lh-BA40&quot;&#x0a;&quot;34&quot; &quot;ctx-lh-BA41_42_52&quot;&#x0a;&quot;35&quot; &quot;ctx-lh-BA43&quot;&#x0a;&quot;36&quot; &quot;ctx-lh-BA44&quot;&#x0a;&quot;37&quot; &quot;ctx-lh-BA45&quot;&#x0a;&quot;38&quot; &quot;ctx-lh-BA46&quot;&#x0a;&quot;39&quot; &quot;ctx-lh-BA47&quot;&#x0a;&quot;101&quot; &quot;ctx-rh-BA1_3&quot;&#x0a;&quot;102&quot; &quot;ctx-rh-BA2&quot;&#x0a;&quot;103&quot; &quot;ctx-rh-BA4&quot;&#x0a;&quot;104&quot; &quot;ctx-rh-BA5&quot;&#x0a;&quot;105&quot; &quot;ctx-rh-BA6&quot;&#x0a;&quot;106&quot; &quot;ctx-rh-BA7&quot;&#x0a;&quot;107&quot; &quot;ctx-rh-BA8&quot;&#x0a;&quot;108&quot; &quot;ctx-rh-BA9&quot;&#x0a;&quot;109&quot; &quot;ctx-rh-BA10&quot;&#x0a;&quot;110&quot; &quot;ctx"
+ "-rh-BA11&quot;&#x0a;&quot;111&quot; &quot;ctx-rh-BA13&quot;&#x0a;&quot;112&quot; &quot;ctx-rh-BA16&quot;&#x0a;&quot;113&quot; &quot;ctx-rh-BA17&quot;&#x0a;&quot;114&quot; &quot;ctx-rh-BA18&quot;&#x0a;&quot;115&quot; &quot;ctx-rh-BA19&quot;&#x0a;&quot;116&quot; &quot;ctx-rh-BA20&quot;&#x0a;&quot;117&quot; &quot;ctx-rh-BA21&quot;&#x0a;&quot;118&quot; &quot;ctx-rh-BA22&quot;&#x0a;&quot;119&quot; &quot;ctx-rh-BA23&quot;&#x0a;&quot;120&quot; &quot;ctx-rh-BA24&quot;&#x0a;&quot;121&quot; &quot;ctx-rh-BA25&quot;&#x0a;&quot;122&quot; &quot;ctx-rh-BA26_29_30&quot;&#x0a;&quot;123&quot; &quot;ctx-rh-BA27&quot;&#x0a;&quot;124&quot; &quot;ctx-rh-BA28&quot;&#x0a;&quot;125&quot; &quot;ctx-rh-BA31&quot;&#x0a;&quot;126&quot; &quot;ctx-rh-BA32&quot;&#x0a;&quot;127&quot; &quot;ctx-rh-BA33&quot;&#x0a;&quot;128&quot; &quot;ctx-rh-BA34&quot;&#x0a;&quot;129&quot; &quot;ctx-rh-BA35_36&quot;&#x0a;&quot;130&quot; &quot;ctx-rh-BA37&quot;&#x0a;&quot;131&quot; &quot;ctx-rh-BA38&quot;&#x0a;&quot;132&quot; &quot;ctx-rh-BA39&quot;&#x0a;&quot;133&quot; &quot;ctx-rh-BA40&quot;&#x0a;&quot;134&quot; &quot;ctx-rh-BA41_42_52&quot;&#x0a;&quot;135&quot; &quot;ctx-rh-BA43&quot;&#x0a;&quot;136&quot; &quot;ctx-rh-BA44&quot;&#x0a;&quot;137&quot; &quot;ctx-rh-BA45&quot;&#x0a;&quot;138&quot; &quot;ctx-rh-BA46&quot;&#x0a;&quot;139&quot; &quot;ctx-rh-BA47&quot;&#x0a;&lt;/VALUE_LABEL_DTABLE&gt;&#x0a;"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="9"
+  atr_name="ATLAS_LABEL_TABLE" >
+ "&lt;atlas_point_list&#x0a; ni_form=&quot;ni_group&quot;&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA1_3&quot;&#x0a; VAL=&quot;1&quot;&#x0a; OKEY=&quot;1&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;41 19 51&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA2&quot;&#x0a; VAL=&quot;2&quot;&#x0a; OKEY=&quot;2&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;51 22 36&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA4&quot;&#x0a; VAL=&quot;3&quot;&#x0a; OKEY=&quot;3&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;27 15 59&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA5&quot;&#x0a; VAL=&quot;4&quot;&#x0a; OKEY=&quot;4&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;13 41 65&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA6&quot;&#x0a; VAL=&quot;5&quot;&#x0a; OKEY=&quot;5&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;34 -4 49&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA7&quot;&#x0a; VAL=&quot;6&quot;&#x0a; OKEY=&quot;6&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;20 63 55&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA8&quot;&#x0a; VAL=&quot;7&quot;&#x0a; OKEY=&quot;7&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;22 -24 50&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA9&quot;&#x0a; VAL=&quot;8&quot;&#x0a; OKEY=&quot;8&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;26 -42 31&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA10&quot;&#x0a; VAL=&quot;9&quot;&#x0a; OKEY=&quot;9&quot;&#x0a; GYoA"
+ "R=&quot;0&quot;&#x0a; COG=&quot;25 -60 0&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA11&quot;&#x0a; VAL=&quot;10&quot;&#x0a; OKEY=&quot;10&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;9 -36 -24&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA13&quot;&#x0a; VAL=&quot;11&quot;&#x0a; OKEY=&quot;11&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;38 -12 -5&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA16&quot;&#x0a; VAL=&quot;12&quot;&#x0a; OKEY=&quot;12&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;39 11 1&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA17&quot;&#x0a; VAL=&quot;13&quot;&#x0a; OKEY=&quot;13&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;8 93 1&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA18&quot;&#x0a; VAL=&quot;14&quot;&#x0a; OKEY=&quot;14&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;21 92 4&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA19&quot;&#x0a; VAL=&quot;15&quot;&#x0a; OKEY=&quot;15&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;27 81 14&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA20&quot;&#x0a; VAL=&quot;16&quot;&#x0a; OKEY=&quot;16&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;54 25 -28&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA21&quot;&#x0a; VAL=&quot;17&quot;&#x0a; OKEY=&quot;17&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;62 24 -14&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA22&quot;&#x0a; VAL=&quot;18&quot;&#x0a; OKEY=&quot;1"
+ "8&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;58 25 2&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA23&quot;&#x0a; VAL=&quot;19&quot;&#x0a; OKEY=&quot;19&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;4 47 24&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA24&quot;&#x0a; VAL=&quot;20&quot;&#x0a; OKEY=&quot;20&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;6 -21 19&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA25&quot;&#x0a; VAL=&quot;21&quot;&#x0a; OKEY=&quot;21&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;10 -12 -16&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA26_29_30&quot;&#x0a; VAL=&quot;22&quot;&#x0a; OKEY=&quot;22&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;7 45 12&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA27&quot;&#x0a; VAL=&quot;23&quot;&#x0a; OKEY=&quot;23&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;21 23 -17&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA28&quot;&#x0a; VAL=&quot;24&quot;&#x0a; OKEY=&quot;24&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;28 20 -22&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA31&quot;&#x0a; VAL=&quot;25&quot;&#x0a; OKEY=&quot;25&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;8 48 41&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA32&quot;&#x0a; VAL=&quot;26&quot;&#x0a; OKEY=&quot;26&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;9 -37 14&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA33&quot;&#x0a; VAL"
+ "=&quot;27&quot;&#x0a; OKEY=&quot;27&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;4 -34 4&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA34&quot;&#x0a; VAL=&quot;28&quot;&#x0a; OKEY=&quot;28&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;25 -2 -26&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA35_36&quot;&#x0a; VAL=&quot;29&quot;&#x0a; OKEY=&quot;29&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;32 23 -29&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA37&quot;&#x0a; VAL=&quot;30&quot;&#x0a; OKEY=&quot;30&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;45 59 -6&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA38&quot;&#x0a; VAL=&quot;31&quot;&#x0a; OKEY=&quot;31&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;42 -10 -33&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA39&quot;&#x0a; VAL=&quot;32&quot;&#x0a; OKEY=&quot;32&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;43 70 34&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA40&quot;&#x0a; VAL=&quot;33&quot;&#x0a; OKEY=&quot;33&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;55 41 35&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA41_42_52&quot;&#x0a; VAL=&quot;34&quot;&#x0a; OKEY=&quot;34&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;50 26 10&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA43&quot;&#x0a; VAL=&quot;35&quot;&#x0a; OKEY=&quot;35&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;43 13 15&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUC"
+ "T=&quot;ctx-lh-BA44&quot;&#x0a; VAL=&quot;36&quot;&#x0a; OKEY=&quot;36&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;48 -16 12&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA45&quot;&#x0a; VAL=&quot;37&quot;&#x0a; OKEY=&quot;37&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;44 -28 2&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA46&quot;&#x0a; VAL=&quot;38&quot;&#x0a; OKEY=&quot;38&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;45 -42 9&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-lh-BA47&quot;&#x0a; VAL=&quot;39&quot;&#x0a; OKEY=&quot;39&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;31 -31 -18&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA1_3&quot;&#x0a; VAL=&quot;101&quot;&#x0a; OKEY=&quot;101&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-42 16 47&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA2&quot;&#x0a; VAL=&quot;102&quot;&#x0a; OKEY=&quot;102&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-47 23 46&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA4&quot;&#x0a; VAL=&quot;103&quot;&#x0a; OKEY=&quot;103&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-26 15 61&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA5&quot;&#x0a; VAL=&quot;104&quot;&#x0a; OKEY=&quot;104&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-14 41 65&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA6&quot;&#x0a; VAL=&quot;105&quot;&#x0a; OKEY=&quot;105&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-29 -7 49&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_ty"
+ "pe=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA7&quot;&#x0a; VAL=&quot;106&quot;&#x0a; OKEY=&quot;106&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-22 62 54&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA8&quot;&#x0a; VAL=&quot;107&quot;&#x0a; OKEY=&quot;107&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-16 -35 46&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA9&quot;&#x0a; VAL=&quot;108&quot;&#x0a; OKEY=&quot;108&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-23 -44 30&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA10&quot;&#x0a; VAL=&quot;109&quot;&#x0a; OKEY=&quot;109&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-21 -61 1&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA11&quot;&#x0a; VAL=&quot;110&quot;&#x0a; OKEY=&quot;110&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-8 -33 -24&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA13&quot;&#x0a; VAL=&quot;111&quot;&#x0a; OKEY=&quot;111&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-40 -2 -3&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA16&quot;&#x0a; VAL=&quot;112&quot;&#x0a; OKEY=&quot;112&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-44 15 3&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA17&quot;&#x0a; VAL=&quot;113&quot;&#x0a; OKEY=&quot;113&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-13 87 5&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA18&quot;&#x0a; VAL=&quot;114&quot;&#x0a; OKEY=&quot;114&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-27"
+ " 85 7&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA19&quot;&#x0a; VAL=&quot;115&quot;&#x0a; OKEY=&quot;115&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-27 71 7&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA20&quot;&#x0a; VAL=&quot;116&quot;&#x0a; OKEY=&quot;116&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-51 18 -32&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA21&quot;&#x0a; VAL=&quot;117&quot;&#x0a; OKEY=&quot;117&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-60 25 -11&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA22&quot;&#x0a; VAL=&quot;118&quot;&#x0a; OKEY=&quot;118&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-58 20 2&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA23&quot;&#x0a; VAL=&quot;119&quot;&#x0a; OKEY=&quot;119&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-6 49 27&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA24&quot;&#x0a; VAL=&quot;120&quot;&#x0a; OKEY=&quot;120&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-5 -12 25&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA25&quot;&#x0a; VAL=&quot;121&quot;&#x0a; OKEY=&quot;121&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-5 -14 -13&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA26_29_30&quot;&#x0a; VAL=&quot;122&quot;&#x0a; OKEY=&quot;122&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-6 48 13&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA27&quot;&#x0a; VAL"
+ "=&quot;123&quot;&#x0a; OKEY=&quot;123&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-19 28 -13&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA28&quot;&#x0a; VAL=&quot;124&quot;&#x0a; OKEY=&quot;124&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-27 20 -21&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA31&quot;&#x0a; VAL=&quot;125&quot;&#x0a; OKEY=&quot;125&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-7 47 41&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA32&quot;&#x0a; VAL=&quot;126&quot;&#x0a; OKEY=&quot;126&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-5 -36 15&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA33&quot;&#x0a; VAL=&quot;127&quot;&#x0a; OKEY=&quot;127&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-6 -34 7&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA34&quot;&#x0a; VAL=&quot;128&quot;&#x0a; OKEY=&quot;128&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-25 -1 -25&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA35_36&quot;&#x0a; VAL=&quot;129&quot;&#x0a; OKEY=&quot;129&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-33 22 -31&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA37&quot;&#x0a; VAL=&quot;130&quot;&#x0a; OKEY=&quot;130&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-45 57 -9&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA38&quot;&#x0a; VAL=&quot;131&quot;&#x0a; OKEY=&quot;131&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-35 -13 -34&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_typ"
+ "e=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA39&quot;&#x0a; VAL=&quot;132&quot;&#x0a; OKEY=&quot;132&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-44 66 35&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA40&quot;&#x0a; VAL=&quot;133&quot;&#x0a; OKEY=&quot;133&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-55 33 37&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA41_42_52&quot;&#x0a; VAL=&quot;134&quot;&#x0a; OKEY=&quot;134&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-52 27 14&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA43&quot;&#x0a; VAL=&quot;135&quot;&#x0a; OKEY=&quot;135&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-44 10 15&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA44&quot;&#x0a; VAL=&quot;136&quot;&#x0a; OKEY=&quot;136&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-48 -19 13&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA45&quot;&#x0a; VAL=&quot;137&quot;&#x0a; OKEY=&quot;137&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-47 -29 6&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA46&quot;&#x0a; VAL=&quot;138&quot;&#x0a; OKEY=&quot;138&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-42 -45 12&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;ATLAS_POINT&#x0a; data_type=&quot;atlas_point&quot;&#x0a; STRUCT=&quot;ctx-rh-BA47&quot;&#x0a; VAL=&quot;139&quot;&#x0a; OKEY=&quot;139&quot;&#x0a; GYoAR=&quot;0&quot;&#x0a; COG=&quot;-31 -31 -16&quot;&#x0a;/&gt;&#x0a;&#x0a;&lt;/atlas_point_list&gt;"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="int"
+  ni_dimen="1"
+  atr_name="NOTES_COUNT" >
+ 2
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="NOTE_NUMBER_001" >
+ "ATLASVER:1.01"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="NOTE_DATE_001" >
+ "Tue Oct 10 12:00:04 2023"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="NOTE_NUMBER_002" >
+ "ATLASDESC:Brodmann_Pijnenburg MNI2009c_asym"
+</AFNI_atr>
+
+<AFNI_atr
+  ni_type="String"
+  ni_dimen="1"
+  atr_name="NOTE_DATE_002" >
+ "Tue Oct 10 12:00:05 2023"
+</AFNI_atr>
+
+</AFNI_attributes>

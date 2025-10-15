@@ -1,10 +1,11 @@
 
 # Common Libraries
-import pygraphviz as pgv
 import inspect
+import numpy as np
+import pygraphviz as pgv
 
 # Custom Libraries
-from sj_enum import ConnectionType
+from sj_enum import ConnectionType, GraphLayoutType
 from sj_linux import exec_command, make_command
 from sj_higher_function import flatten
 
@@ -385,7 +386,7 @@ class WorkingTree:
         return json_d, node_info
     
     def draw_graph(self, 
-                   prog = "dot",
+                   prog = GraphLayoutType.dot.value,
                    direction = "sub"):
         """
         Draw graph strcture
@@ -488,7 +489,7 @@ class WorkingForest:
         return merged_graph, merged_label
     
     def draw_graph(self, 
-                   prog = "dot"):
+                   prog = GraphLayoutType.dot.value):
         """
         Draw graph strcture
         """
@@ -623,7 +624,7 @@ class InstanceNode:
         
         return json_d, node_info
     
-    def draw_graph(self, G = None, prog = "twopi", type_ = "func"):
+    def draw_graph(self, G = None, prog = GraphLayoutType.twopi.value, type_ = "func"):
         graph_info, label_info = self.graph_json(type_ = type_)
 
         if type(G) == type(None):
@@ -699,7 +700,12 @@ class InstanceWorld():
         
         return self.instance_info[instance_ids[flags][0]]
     
-    def call(self, toIName, to_funcName, arg_info = {}, connection_type = ConnectionType.ret):
+    def call(self, 
+             toIName, 
+             to_funcName, 
+             arg_info = {}, 
+             connection_type = ConnectionType.ret,
+             label = ""):
         cf = inspect.currentframe()
         f_back = cf.f_back
         return self.call2(fromI_ = f_back.f_locals["self"], 
@@ -710,8 +716,20 @@ class InstanceWorld():
                           connection_type = connection_type)
         
     
-    def call2(self, fromI_, toI_, from_funcName, to_funcName, arg_info = {}, connection_type = ConnectionType.ret):
-        self.add_connection(fromI_, toI_, from_funcName, to_funcName, connection_type)
+    def call2(self, 
+              fromI_, 
+              toI_, 
+              from_funcName, 
+              to_funcName, 
+              arg_info = {}, 
+              connection_type = ConnectionType.ret,
+              label = ""):
+        self.add_connection(fromI_, 
+                            toI_, 
+                            from_funcName,
+                            to_funcName, 
+                            connection_type, 
+                            label)
         return self.instance_info[id(toI_)].call(to_funcName, arg_info)
         
     def graph_json(self):
@@ -753,7 +771,7 @@ class InstanceWorld():
             
         return merged_graph, merged_label
     
-    def draw_graph(self, prog = "twopi", is_interactionOnly = False):
+    def draw_graph(self, prog = GraphLayoutType.twopi.value, is_interactionOnly = False):
         G = pgv.AGraph(directed=True)
         
         # instance connection info
@@ -769,13 +787,19 @@ class InstanceWorld():
         # Add instance's node
         for name in label_info:
             if name in instance_names:
-                G.add_node(name, label = label_info[name], fillcolor = "black", style = "filled", fontcolor = "white")
+                G.add_node(name, 
+                           label = label_info[name], 
+                           fillcolor = "black", 
+                           style = "filled", 
+                           fontcolor = "white")
             else:
                 if is_interactionOnly:
                     if name in i_connection_nodeNames:
-                        G.add_node(name, label = label_info[name])
+                        G.add_node(name, 
+                                   label = label_info[name])
                 else:
-                    G.add_node(name, label = label_info[name])
+                    G.add_node(name, 
+                               label = label_info[name])
 
         # Add instance's link
         for link in graph_info["links"]:
@@ -792,19 +816,25 @@ class InstanceWorld():
         for e in self.instance_connections:
             connection_type = e.get("connection_type", ConnectionType.evoke)
             if connection_type == ConnectionType.ret:
-                G.add_edge(e["target"], e["source"], style = "dashed")
+                G.add_edge(e["target"], e["source"], style = "dashed", label = e["label"])
             else:
-                G.add_edge(e["source"], e["target"])
+                G.add_edge(e["source"], e["target"], label = e["label"])
                 
         G.layout(prog=prog)
         
         return G
     
-    def add_connection(self, fromI_, toI_, fromI_funcName, toI_funcName, connection_type):
+    def add_connection(self, fromI_, toI_, fromI_funcName, toI_funcName, connection_type, label = ""):
         fromfunc_ = self.instance_info[id(fromI_)].key_func(fromI_funcName)
         tofunc_ = self.instance_info[id(toI_)].key_func(toI_funcName)
         
-        self.instance_connections.append({"source" : fromfunc_, "target" : tofunc_, "connection_type" : connection_type})
+        self.instance_connections.append(
+            {
+                "source" : fromfunc_, 
+                "target" : tofunc_, 
+                "connection_type" : connection_type,
+                "label" : label,
+            })
         
 class KnowledgeNode:
     """
@@ -1001,7 +1031,7 @@ class KnowledgeNode:
         return json_d, node_info
     
     def draw_graph(self, 
-                   prog = "dot",
+                   prog = GraphLayoutType.dot.value,
                    direction = "sub"):
         """
         Draw graph strcture
@@ -1053,4 +1083,65 @@ if __name__=="__main__":
                            ]])
     a = Cursor(s[0])
     a.work_byDepth()
+
+    # InstanceWorld
+    class Adder:
+        def __init__(self, world):
+            self.world = world
+            
+        def add(self, a:int, b:int):
+            s = a + b
+            
+            # 다른 인스턴스도 부를 수 있음 (예: Logger.log)
+            count = self.world.call("logger", "log", {"msg": f"add({a},{b})={s}"})
+            return s, count
+    
+    class Logger:
+        def __init__(self, world):
+            self.world = world
+            self.count = 0
+        def log(self, msg:str):
+            self.count += 1
+            print(f"[LOG {self.count}] {msg}")
+            return self.count
+    
+    # 세계 생성/등록
+    world = InstanceWorld()
+    logger = Logger(world)
+    adder  = Adder(world)
+    world.add_instance(logger, "logger")
+    world.add_instance(adder,  "adder")
+    
+    adder.add(3, 4)
+    world.draw_graph(GraphLayoutType.circo.value)
+    
+    # RL
+    class Environment:
+        def __init__(self, world):
+            self.world = world
+    
+        def observe(self):
+            pass
+        
+        def step(self):
+            pass
+    
+    class Agent:
+        def __init__(self, world):
+            self.world = world
+    
+        def select_action():
+            pass
+    
+        def update():
+            pass
+            
+    world = InstanceWorld()
+    env = Environment(world)
+    world.add_instance(env, "Environment")
+    agent  = Agent(world)
+    world.add_instance(agent,  "Agent")
+    world.call2(fromI_ = agent, toI_ = env, from_funcName = "select_action", to_funcName = "observe", connection_type = ConnectionType.ret)
+    world.call2(fromI_ = agent, toI_ = env, from_funcName = "select_action", to_funcName = "step", connection_type = ConnectionType.evoke)
+    world.draw_graph(GraphLayoutType.circo.value)
     

@@ -71,4 +71,11 @@ class ConnectionType(Enum):
     evoke = 0 # State change
     ret = 1 # return 
 
+class GraphLayoutType(Enum):
+    dot = "dot"
+    neato = "neato"
+    fdp = "fdp"
+    sfdp = "sfdp"
+    circo = "circo"
+    twopi = "twopi"
     

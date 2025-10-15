@@ -527,7 +527,9 @@ def show_sulcus(surf_ax,
 
     return copy_ax
 
-def detect_sulcus(hemisphere, sampling_coverages, is_first_index = False):
+def detect_sulcus(hemisphere, 
+                  sampling_coverages, 
+                  is_first_index = False):
     """
     Detect sulcus based on surface map
     
@@ -621,23 +623,25 @@ def detect_roi_names(sampling_coverages, hemisphere = "L", atlas = "Brodmann"):
 
     return rois
 
-def show_both_hemi_sampling_coverage(l_sampling_coverage, 
-                                     r_sampling_coverage,
-                                     save_dir_path,
-                                     surf_resolution = 32,
-                                     left_bounding_box = None,
-                                     right_bounding_box = None,
-                                     dpi = 300,
-                                     is_sulcus_label = False):
+def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array, 
+                                     r_sampling_coverage: np.array,
+                                     save_dir_path: str,
+                                     surf_resolution: int = 32,
+                                     left_bounding_box: dict = None,
+                                     right_bounding_box: dict = None,
+                                     dpi: int = 300,
+                                     is_sulcus_label: bool = False):
     """
     Show sampling coverage on both hemispheres
 
-    :param l_sampling_coverage(np.array - shape: (#sampling, #vertex)): coverage per sampling for left hemi
-    :param r_sampling_coverage(np.array - shape: (#sampling, #vertex)): coverage per sampling for right hemi
-    :param save_dir_path(string): directory path for saving images
-    :param surf_resolution(int): surface resolution
-    :param left_bounding_box(dictionary): data for drawing bounding box of left hemi
-    :param right_bounding_box(dictionary): data for drawing bounding box of right hemi
+    :param l_sampling_coverage(shape: (#sampling, #vertex)): coverage per sampling for left hemi
+    :param r_sampling_coverage(shape: (#sampling, #vertex)): coverage per sampling for right hemi
+    :param save_dir_path: directory path for saving images
+    :param surf_resolution: surface resolution
+    :param left_bounding_box: data for drawing bounding box of left hemi
+    :param right_bounding_box: data for drawing bounding box of right hemi
+    :param dpi: dpi for saving image
+    :param is_sulcus_label: flag for representing sulcus label
     """
     # Left
     plt.clf()
@@ -942,30 +946,35 @@ def sulcus_abbreviation_name(sulcus_name):
     elif sulcus_name == "Cingulate sulcus":
         return "Cing"
     
-def draw_cross_section_1dPlot(ax, 
-                              sampling_datas, 
-                              sulcus_names, 
-                              roi_names,
-                              p_threshold = 0.05,
-                              y_range = None,
-                              tick_size = 18,
-                              sulcus_text_size = 10,
-                              y_tick_round = 4,
-                              n_middle_yTick = 1,
-                              cmap = "tab10",
-                              xlabel = "Brodmann area",
-                              ylabel = "Distance (a.u.)"):
+def draw_cross_section_1dPlot(ax: plt.Axes, 
+                              sampling_datas: np.array, 
+                              sulcus_names: np.array, 
+                              roi_names: np.array,
+                              p_threshold: float = 0.05,
+                              y_range: tuple = None,
+                              tick_size: float = 18,
+                              sulcus_text_size: int = 10,
+                              y_tick_round: int = 4,
+                              n_middle_yTick: int = 1,
+                              cmap: str = "tab10",
+                              xlabel: str = "Brodmann area",
+                              ylabel: str = "Distance (a.u.)"):
     """
     Draw 1d plot for cross-section coverage analysis
     
-    :param ax(plt.Axes): Matplotlib Axes object where the plot will be drawn
-    :param sampling_datas(np.array): 3D array of shape (n_condition, n_sampling_coverage, n_data) with data to be plotted
-    :param sulcus_names(np.array): 1D array containing sulcus names for each condition (can be empty strings or None)
-    :param roi_names(np.array): 1D array containing ROI (Region of Interest) names for each condition
-    :param p_threshold(float): P-value threshold for marking significant areas (default is 0.05)
-    :param y_range(tuple): specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
-    :param y_tick_round(int): tick round location
-    :param n_middle_yTick(int): the number of y-tick without y_min and y_max
+    :param ax: Matplotlib Axes object where the plot will be drawn
+    :param sampling_datas(shape - (n_condition, n_sampling_coverage, n_data)): 3D array of shape  with data to be plotted
+    :param sulcus_names: 1D array containing sulcus names for each condition (can be empty strings or None)
+    :param roi_names: 1D array containing ROI (Region of Interest) names for each condition
+    :param p_threshold: P-value threshold for marking significant areas (default is 0.05)
+    :param y_range: specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
+    :param tick_size: size of x and y axis' tick
+    :param sulcus_text_size: text size of sulcus
+    :param y_tick_round: tick round location
+    :param n_middle_yTick: the number of y-tick without y_min and y_max
+    :param cmap: colormap ex) "tab10"
+    :param xlabel: text for x-axis label
+    :param ylabel: text for y-axis label
     """
 
     n_cond, n_coverage, n_samples = sampling_datas.shape

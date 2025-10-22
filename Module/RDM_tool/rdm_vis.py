@@ -1,4 +1,13 @@
 
+import os
+import sys
+import numpy as np
+import matplotlib.pylab as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from sj_sequence import slice_list_usingDiff
+
 class RDM_model:
     """
     This class's purpose is managing RDM model
@@ -140,7 +149,7 @@ class RDM_model:
     
         # Title
         axis.set_title(title, weight = title_wight, size = title_size)
-    return fig, axis
+        return fig, axis
 
 if __name__ == "__main__":
     rdm_model = RDM_model(a, 

@@ -33,6 +33,7 @@ from brain_coord import reference2imageCoord
 def surf_paths(surf_hemisphere, 
                surf_dir_path = "/mnt/sda2/Common_dir/Atlas/Surface", 
                surf_resolution = 32,
+               sulcus_dummy_name = "sulcus",
                atlas = "Brodmann"):
     surf_dir_path = os.path.join(surf_dir_path, f"fs_LR_{surf_resolution}")
     
@@ -44,7 +45,7 @@ def surf_paths(surf_hemisphere,
     shape_gii_path = os.path.join(surf_dir_path, f"fs_LR.32k.{surf_hemisphere}.shape.gii")
     
     # Sulcus
-    sulcus_path = os.path.join(surf_dir_path, "borders", f"{surf_hemisphere}_sulcus.json")
+    sulcus_path = os.path.join(surf_dir_path, "borders", f"{surf_hemisphere}_{sulcus_dummy_name}.json")
     
     # ROI
     roi_label_path = os.path.join(surf_dir_path, atlas, f"{surf_hemisphere}_rois.npy")
@@ -529,15 +530,17 @@ def show_sulcus(surf_ax,
 
 def detect_sulcus(hemisphere, 
                   sampling_coverages, 
-                  is_first_index = False):
+                  is_first_index = False,
+                  sulcus_dummy_name = "sulcus"):
     """
     Detect sulcus based on surface map
     
     :param hemisphere(string): "L" or "R"
     :param sampling_coverages(np.array - shape: (#vertex)): cross-section area coverages
     :param is_first_index: select sulcus name if the sulcus name appears firstly when same sulcus name appears sequentially
+    :param sulcus_dummy_name: sulcus dummy file name ex) "sulcus", "sulcus_sensorimotor"
     """
-    surf_info = surf_paths(hemisphere)
+    surf_info = surf_paths(hemisphere, sulcus_dummy_name = sulcus_dummy_name)
     
     # Sulcus marking data
     sulcus_path = surf_info[f"{hemisphere}_sulcus_path"]
@@ -594,7 +597,8 @@ def detect_roi_names(sampling_coverages, hemisphere = "L", atlas = "Brodmann"):
     """
     # ROIs
     n_sampling = sampling_coverages.shape[0]
-    roi_labels = np.load(surf_paths(surf_hemisphere = hemisphere, atlas = atlas)[f"{hemisphere}_roi_label_path"])
+    roi_labels = np.load(surf_paths(surf_hemisphere = hemisphere, 
+                                    atlas = atlas)[f"{hemisphere}_roi_label_path"])
 
     # Calculate ROI probs
     sampling_coverage_roi_probs = []

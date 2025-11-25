@@ -1,17 +1,29 @@
 
 # Common Libraries
+import os
+import sys
+import json
 import numpy as np
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import nibabel as nb
+import matplotlib.pylab as plt
 import matplotlib.image as mpimg
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from nilearn.plotting import plot_surf_roi
+from SUITPy.flatmap import _map_color
+import plotly.graph_objects as go
+from IPython.display import HTML
 
 # Custom Libraries
+from surface_data import surf_paths, map_2d_to3d
+from surface_roi import show_sulcus
+from surface_util import mean_datas_withSmoothing
+
 sys.path.append("/home/seojin")
 import surfAnalysisPy as surf # Dierdrichsen lab's library
-from surface_roi import show_sulcus
 
 sys.path.append("/home/seojin/Seojin_commonTool/Module")
 from sj_matplotlib import make_colorbar
+from brain_coord import image2referenceCoord
 
 # Functions
 def draw_surf_roi(roi_value_array, roi_info, surf_hemisphere, resolution = 32, alpha = 0.3):
@@ -380,6 +392,330 @@ def plot_virtualStrip_on3D_surf(virtual_stip_mask,
     
     return fig
 
+def show_interactive_brain(volume_data_data_paths: list,
+                           threshold: float,
+                           cscale: tuple,
+                           cmap: str = None,
+                           underscale: list = [-1.5, 1],
+                           alpha: float = 1.0,
+                           depths: list = [0,0.2,0.4,0.6,0.8,1.0],
+                           query_port: int = 5000,
+                           surf_dir_path: str = "/mnt/sda2/Common_dir/Atlas/Surface"):
+    """
+    Show interactive brain
+
+    References
+    - https://github.com/DiedrichsenLab/surfAnalysisPy
+    - https://www.humanconnectome.org/software/workbench-command/-volume-to-surface-mapping
+    
+    :param volume_data_data_paths: nifti file paths
+    :param threshold: threshold to cut overlay 
+    :param cmap: overlay color map
+    :param cscale: overlay color scale
+    :param underscale: underlay  color scale
+    :param alpha: alpha value to overlay
+    :param depths: depths of points along line at which to map (0=white/gray, 1=pial)
+    :param query_port: server port for calling whereami
+    :param surf_dir_path: directory containing surface-related data
+    """
+    # Paths
+    l_path_info = surf_paths(surf_hemisphere = "L", surf_dir_path = surf_dir_path)
+    r_path_info = surf_paths(surf_hemisphere = "R", surf_dir_path = surf_dir_path)
+    l_flat_surf_path = l_path_info["L_template_surface_path"]
+    l_underlay_path = l_path_info["L_shape_gii_path"]
+    l_pial_surf_path = l_path_info["L_pial_surf_path"]
+    l_white_surf_path = l_path_info["L_white_surf_path"]
+    l_sulcus_path = l_path_info["L_sulcus_path"]
+    
+    r_flat_surf_path = r_path_info["R_template_surface_path"]
+    r_underlay_path = r_path_info["R_shape_gii_path"]
+    r_pial_surf_path = r_path_info["R_pial_surf_path"]
+    r_white_surf_path = r_path_info["R_white_surf_path"]
+    r_sulcus_path = r_path_info["R_sulcus_path"]
+
+    # Load basic coordinate informations
+    reference_nii_path = volume_data_data_paths[0]
+    l_flat_surf = nb.load(l_flat_surf_path)
+    r_flat_surf = nb.load(r_flat_surf_path)
+    
+    affine = nb.load(reference_nii_path).affine
+
+    # Load data
+    l_surf_data = mean_datas_withSmoothing(volume_data_data_paths, hemisphere = "L")
+    r_surf_data = mean_datas_withSmoothing(volume_data_data_paths, hemisphere = "R")
+
+    # Map 2D coord to 3D MNI coord
+    l_img_coords = map_2d_to3d(reference_nii_path,
+                               pial_surf_path = l_pial_surf_path,
+                               white_surf_path = l_white_surf_path,
+                               depths = depths)
+    r_img_coords = map_2d_to3d(reference_nii_path,
+                               pial_surf_path = r_pial_surf_path,
+                               white_surf_path = r_white_surf_path,
+                               depths = depths)
+    l_aggregated_img_coords = np.mean(l_img_coords, axis = 0).astype(np.int32)
+    r_aggregated_img_coords = np.mean(r_img_coords, axis = 0).astype(np.int32)
+
+    l_mni_coords = np.array([image2referenceCoord(ijk, affine) for ijk in l_aggregated_img_coords])
+    r_mni_coords = np.array([image2referenceCoord(ijk, affine) for ijk in r_aggregated_img_coords])
+
+    # Build vertices
+    l_vertices = l_flat_surf.darrays[0].data
+    r_vertices = r_flat_surf.darrays[0].data
+    
+    x_addition_4_rHemi = 550
+    y_addition_4_rHemi = 20
+    r_vertices[:, 0] = r_vertices[:, 0] + x_addition_4_rHemi # Adjust x position of right hemisphere for plotting both hemi
+    r_vertices[:, 1] = r_vertices[:, 1] + y_addition_4_rHemi # Adjust x position of right hemisphere for plotting both hemi
+
+    # Build faces
+    l_faces = l_flat_surf.darrays[1].data
+    r_faces = r_flat_surf.darrays[1].data
+
+
+    # Build overlay colors
+    l_overlay_color, l_cmap, l_cscale = _map_color(data = l_surf_data,
+                                                   faces = l_faces, 
+                                                   cscale = cscale,
+                                                   cmap = cmap, 
+                                                   threshold = threshold)
+    
+    r_overlay_color, r_cmap, r_cscale = _map_color(data = r_surf_data,
+                                                   faces = r_faces, 
+                                                   cscale = cscale,
+                                                   cmap = cmap, 
+                                                   threshold = threshold)
+
+    # Build underlay colors
+    l_flat_underlay = nb.load(l_underlay_path).darrays[0].data
+    r_flat_underlay = nb.load(r_underlay_path).darrays[0].data
+    
+    l_underlay_color, _, _ = _map_color(data = l_flat_underlay,
+                                        faces = l_faces, 
+                                        cscale = underscale,
+                                        cmap = "gray")
+    
+    r_underlay_color, _, _ = _map_color(data = r_flat_underlay,
+                                        faces = r_faces, 
+                                        cscale = underscale,
+                                        cmap = "gray")
+
+    # Combine overlay color and underlay color
+    l_color = l_underlay_color * (1-alpha) + l_overlay_color * alpha
+    l_isnan_i = np.isnan(l_color.sum(axis=1))
+    l_color[l_isnan_i,:] = l_underlay_color[l_isnan_i,:]
+    l_color[l_isnan_i,3] = 1.0
+    
+    r_color = r_underlay_color * (1-alpha) + r_overlay_color * alpha
+    r_isnan_i = np.isnan(r_color.sum(axis=1))
+    r_color[r_isnan_i,:] = r_underlay_color[r_isnan_i,:]
+    r_color[r_isnan_i,3] = 1.0
+
+    # load marked sulcus info
+    with open(l_sulcus_path, "r") as file:
+        l_sulcus_info = json.load(file)
+    
+    with open(r_sulcus_path, "r") as file:
+        r_sulcus_info = json.load(file)
+    
+    """
+    Rendering
+    """
+    traces = []
+    
+    # render both sided hemishpere
+    traces.append(go.Mesh3d(x = l_vertices[:, 0], y = l_vertices[:, 1], z = l_vertices[:, 2],
+                            i = l_faces[:, 0], j = l_faces[:, 1], k = l_faces[:, 2],
+                            facecolor = l_color,
+                            vertexcolor = None,
+                            lightposition = dict(x=0, y=0, z=2.5),
+                            hoverinfo = "skip"))
+    traces.append(go.Mesh3d(x = r_vertices[:, 0], y = r_vertices[:, 1], z = r_vertices[:, 2],
+                            i = r_faces[:, 0], j = r_faces[:, 1], k = r_faces[:, 2],
+                            facecolor = r_color,
+                            vertexcolor = None,
+                            lightposition = dict(x=0, y=0, z=2.5),
+                            hoverinfo = "skip"))
+    
+    # load both sided vertices
+    traces.append(go.Scatter3d(x=l_vertices[:, 0],
+                               y=l_vertices[:, 1],
+                               z=l_vertices[:, 2],
+                               mode="markers",
+                               marker=dict(size=1, color="black", opacity=0.0),
+                               hoverinfo="text",
+                               text=[f"L({x:.2f}, {y:.2f})" for x, y, z in l_vertices]))
+    
+    traces.append(go.Scatter3d(x=r_vertices[:, 0],
+                               y=r_vertices[:, 1],
+                               z=r_vertices[:, 2],
+                               mode="markers",
+                               marker=dict(size=1, color="black", opacity=0.0),
+                               hoverinfo="text",
+                               text=[f"R({(x - x_addition_4_rHemi):.2f}, {(y - y_addition_4_rHemi):.2f})" for x, y, z in r_vertices]))
+
+    # Sulcus
+    for sulcus_name in l_sulcus_info:
+        pts = np.array(l_sulcus_info[sulcus_name])
+        n_point = len(pts)
+    
+        traces.append(go.Scatter3d(
+            x = pts[:,0],
+            y = pts[:,1],
+            z = np.zeros(n_point),
+            mode = "lines",
+            line=dict(color="white", width=4, dash="dot"),
+            hoverinfo = "skip",
+        ))
+    
+    for sulcus_name in r_sulcus_info:
+        pts = np.array(r_sulcus_info[sulcus_name])
+        n_point = len(pts)
+    
+        traces.append(go.Scatter3d(
+            x = pts[:,0] + x_addition_4_rHemi,
+            y = pts[:,1] + y_addition_4_rHemi,
+            z = np.zeros(n_point),
+            mode = "lines",
+            line = dict(color="white", width=4, dash="dot"),
+            hoverinfo = "skip",
+        ))
+
+    # Camera
+    camera = dict(up=dict(x=0, y=1, z=0),
+                  center=dict(x=0, y=0, z=0),
+                  eye=dict(x=0, y=0, z=1.1))
+    xaxis_dict= dict(visible=False, 
+                     showbackground=False,
+                     showline=False,
+                     showgrid=False,
+                     showspikes=False,
+                     showticklabels=False,
+                     title=None)
+    yaxis_dict= xaxis_dict.copy()
+    zaxis_dict= xaxis_dict.copy()
+    scene = dict(xaxis=xaxis_dict,
+                yaxis=yaxis_dict,
+                zaxis=zaxis_dict,
+                aspectmode= 'manual')
+                # aspectratio=dict(x=1, y=1, z=0.1))
+
+    # Make figure
+    fig = go.Figure(data = traces)
+    fig.update_layout(scene_camera = camera,
+                      dragmode = False,
+                      margin = dict(r=0, l=0, b=0, t=0),
+                      scene = scene,
+                      width = 700,
+                      height = 500,
+                      paper_bgcolor = "#ffffff",
+                      showlegend=False)
+    
+    # Make javascript codes for interaction process
+    div_id = "brain-surface-plot"
+    
+    l_mni_coords_js = json.dumps(l_mni_coords.tolist())
+    r_mni_coords_js = json.dumps(r_mni_coords.tolist())
+
+    post_script = f"""
+    var myPlot = document.getElementById('{div_id}');
+    var infoDiv = document.getElementById('click-info');
+    
+    myPlot.on('plotly_click', function(data) {{
+        var pt = data.points[0];
+        var l_mni_coords = {l_mni_coords_js};
+        var r_mni_coords = {r_mni_coords_js};
+    
+        const serverPort = {query_port};
+        const serverURL = `http://${{window.location.hostname}}:${{serverPort}}/click`;
+        
+        // // Skip events that are not scatter3d; mesh clicks should be ignored
+        if (pt.data.type !== 'scatter3d') {{
+            return;
+        }}
+    
+        var hemi = (pt.curveNumber === 1) ? 'L' :
+                   (pt.curveNumber === 3) ? 'R' : 'unknown';
+    
+        var adjX = pt.x;
+        var adjY = pt.y;
+    
+        // Restore the right hemisphere to its original coordinates
+        if (hemi === 'R') {{
+            adjX = pt.x - 550;   // x_addition_4_rHemi
+            adjY = pt.y - 20;    // y_addition_4_rHemi
+            var mni_coord = r_mni_coords[pt.pointNumber];
+        }} else {{
+            var mni_coord = l_mni_coords[pt.pointNumber];
+        }}
+    
+        // 🔥 Send a POST request to the Python server here
+        fetch(serverURL, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+                hemi: hemi,
+                idx: pt.pointNumber,
+                mni: mni_coord
+            }})
+        }})
+        .then(response => response.json())
+        .then(result => {{
+            const atlas_data = result.atlas_data;
+            console.log("Server response:", atlas_data);
+    
+            if (infoDiv) {{
+                const lines = atlas_data.map(d =>
+                    `${{d.atlas}} | ${{d.info}} | ${{d.name}}`
+                );
+    
+                infoDiv.innerHTML =
+                    '<b>Clicked vertex</b><br>' +
+                    'Hemisphere: ' + hemi + '<br>' +
+                    'Index: ' + pt.pointNumber + '<br>' +
+                    'vertex (x, y): (' + adjX.toFixed(2) + ', ' + adjY.toFixed(2) + ')<br>' + 
+                    'MNI (x,y,z): ' + mni_coord + '<br>' +
+                    lines.join('<br>');
+            }}
+        }})
+        .catch(error => {{
+            console.error("Error calling Python server:", error);
+        }});
+    }});
+    """
+
+    # Convert fig into html
+    fig_html = fig.to_html(
+        include_plotlyjs="cdn",
+        full_html=False,
+        div_id=div_id,
+        post_script=post_script
+    )
+    
+    # Add layout - textbox
+    html = f"""
+    <div style="display:flex; align-items:flex-start;">
+        <div>
+            {fig_html}
+        </div>
+        <div id="click-info"
+             style="
+                margin-left:20px;
+                min-width:220px;
+                font-family:monospace;
+                font-size:13px;
+                border:1px solid #ccc;
+                padding:8px;
+                border-radius:4px;
+                background-color:#f9f9f9;
+                color:black;
+             ">
+            vertex information will represent here
+        </div>
+    </div>
+    """
+    return HTML(html)
+    
 # Examples
 if __name__ == "__main__":
     hemisphere = "L"
@@ -389,3 +725,7 @@ if __name__ == "__main__":
     draw_surf_roi(roi_values, loaded_info, "L")
     
 
+    volume_data_dir_path = "/mnt/ext1/seojin/HR/exp_blueprint_0324v4/fMRI_data/output/Group/rsa/rdm/set/WholeSet/Searchlight/base_seq_move_rest_separetely/None/react_mean_dissim_withBaseline"
+    volume_data_data_paths = sorted(glob(volume_data_dir_path + "/??.nii.gz"))
+    show_interactive_brain(volume_data_data_paths, 0.001, cscale = (0.001, 0.005))
+    

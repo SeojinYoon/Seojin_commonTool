@@ -1,8 +1,10 @@
 
 # Common Libraries
+import os
 import warnings
 import numpy as np
 import nitools as nt
+import nibabel as nb
 
 # Functions
 def surf_paths(surf_hemisphere: str, 
@@ -145,11 +147,13 @@ def vol_to_surf(volume_data_path,
         
     return mapped_data
 
-def load_surfData_fromVolume(volume_data_paths, hemisphere, depths = [0,0.2,0.4,0.6,0.8,1.0]):
+def load_surfData_fromVolume(volume_data_paths: list, 
+                             hemisphere: str, 
+                             depths: list = [0,0.2,0.4,0.6,0.8,1.0]):
     """
     Load surface data from volume data
 
-    :param volume_data_paths(list - string): volume data path(.nii)
+    :param volume_data_paths: volume data path(.nii)
     :param hemisphere(string): "L" or "R"
     :param depths(list): Depths of points along line at which to map (0=white/gray, 1=pial). ex) [0.0,0.2,0.4,0.6,0.8,1.0]
     """
@@ -165,10 +169,64 @@ def load_surfData_fromVolume(volume_data_paths, hemisphere, depths = [0,0.2,0.4,
     surface_datas = np.array(surface_datas).T
 
     return surface_datas
+
+def map_2d_to3d(volume_data_path: str,
+                pial_surf_path: str,
+                white_surf_path: str,
+                depths: list = [0,0.2,0.4,0.6,0.8,1.0]) -> np.ndarray:
+    """
+    Map from 2D coord into 3D coords
+    
+    :param volume_data_path: nii file path
+    :param pial_surf_path: gii file path of storing pial info
+    :param white_surf_path: gii file path of storing white matter info
+    :param depths: depths of points along line at which to map (0=white/gray, 1=pial).
+
+    return 3d voxel indices per 2D coordinate
+    """
+    volume_img = nb.load(volume_data_path)
+    whiteSurfGiftiImage = nb.load(white_surf_path)
+    pialSurfGiftiImage = nb.load(pial_surf_path)
+    
+    # Stack datas
+    depths = np.array(depths)
+    
+    # Load datas
+    volume_img = nb.load(volume_data_path)
+    whiteSurfGiftiImage = nb.load(white_surf_path)
+    pialSurfGiftiImage = nb.load(pial_surf_path)
+    
+    whiteSurf_vertices = whiteSurfGiftiImage.darrays[0].data
+    pialSurf_vertices = pialSurfGiftiImage.darrays[0].data
+    
+    assert whiteSurf_vertices.shape[0] == pialSurf_vertices.shape[0], "White and pial surfaces should have same number of vertices"
+    
+    # Informations
+    n_vertex = whiteSurf_vertices.shape[0]
+    n_point = len(depths)
+    
+    # 2D vertex location -> 3D voxel index with considering depth of graymatter
+    voxel_indices = np.zeros((n_point, n_vertex, 3), dtype=int)
+    for i in range(n_point):
+        coeff_whiteMatter = 1 - depths[i]
+        coeff_grayMatter = depths[i]
+    
+        weight_sum_vertex_2d = coeff_whiteMatter * whiteSurf_vertices.T + coeff_grayMatter * pialSurf_vertices.T
+        voxel_indices[i] = nt.coords_to_voxelidxs(weight_sum_vertex_2d, volume_img).T
+    return voxel_indices
     
 if __name__ == "__main__":
     surf_paths("L")
 
-    vol_to_surf(volume_data_path = "/mnt/ext1/seojin/temp/stat.nii",
-                pial_surf_path = "/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.pial.surf.gii",
-                white_surf_path = "/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.white.surf.gii")
+    nii_path = "/mnt/ext1/seojin/temp/stat.nii"
+    l_pial_surf_path = "/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.pial.surf.gii"
+    l_white_surf_path = "/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.white.surf.gii"
+    vol_to_surf(volume_data_path = nii_path,
+                pial_surf_path = l_pial_surf_path,
+                white_surf_path = l_white_surf_path)
+
+    l_img_coords = map_2d_to3d(volume_data_path = nii_path,
+                               pial_surf_path = l_pial_surf_path,
+                               white_surf_path = l_white_surf_path,
+                               depths = [0,0.2,0.4,0.6,0.8,1.0])
+    

@@ -1,6 +1,9 @@
 
 # Common Libraries
+import json
 import numpy as np
+import nibabel as nb
+from copy import copy
 from collections import Counter
 from cv2 import minAreaRect, boxPoints, pointPolygonTest
 
@@ -179,6 +182,30 @@ def show_sulcus(surf_ax,
 
     return copy_ax
 
+def sulcus_abbreviation_name(sulcus_name):
+    if sulcus_name == "Precentral sulcus":
+        return "prCS"
+    elif sulcus_name == "Central sulcus":
+        return "CS"
+    elif sulcus_name == "Post central sulcus":
+        return "poCS"
+    elif sulcus_name == "Intra parietal sulcus":
+        return "IPS"
+    elif sulcus_name == "Parieto occipital sulcus":
+        return "POS"
+    elif sulcus_name == "Superior frontal sulcus":
+        return "SFS"
+    elif sulcus_name == "Inferior frontal sulcus":
+        return "IFS"
+    elif sulcus_name == "Superior temporal sulcus":
+        return "STS"
+    elif sulcus_name == "Middle temporal sulcus":
+        return "MTS"
+    elif sulcus_name == "Collateral sulcus":
+        return "CLS"
+    elif sulcus_name == "Cingulate sulcus":
+        return "Cing"
+    
 # Examples
 if __name__ == "__main__":
     roi_values = np.load(f"/mnt/ext1/seojin/dierdrichsen_surface_mask/Brodmann/{hemisphere}_roi_values.npy")

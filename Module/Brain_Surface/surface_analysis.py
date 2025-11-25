@@ -230,7 +230,7 @@ def vol_to_surf(volume_data_path,
     n_point = len(depths)
     
     # 2D vertex location -> 3D voxel index with considering depth of graymatter
-    voxel_indices = np.zeros((n_point, n_vertex, 3),dtype=int)
+    voxel_indices = np.zeros((n_point, n_vertex, 3), dtype=int)
     for i in range(n_point):
         coeff_whiteMatter = 1 - depths[i]
         coeff_grayMatter = depths[i]
@@ -294,12 +294,13 @@ def draw_surf_selectedROI(surf_roi_labels, roi_name, surf_hemisphere, resolution
                            alpha = alpha)
     return (ax.get_figure(), ax) 
 
-def load_surfData_fromVolume(volume_data_paths, hemisphere):
+def load_surfData_fromVolume(volume_data_paths, hemisphere, depths = [0,0.2,0.4,0.6,0.8,1.0]):
     """
     Load surface data from volume data
 
     :param volume_data_paths(list - string): volume data path(.nii)
     :param hemisphere(string): "L" or "R"
+    :param depths(list): Depths of points along line at which to map (0=white/gray, 1=pial). ex) [0.0,0.2,0.4,0.6,0.8,1.0]
     """
     surf_info = surf_paths(hemisphere)
     
@@ -307,7 +308,8 @@ def load_surfData_fromVolume(volume_data_paths, hemisphere):
     for path in volume_data_paths:
         surface_data = vol_to_surf(volume_data_path = path,
                                    pial_surf_path = surf_info[f"{hemisphere}_pial_surf_path"],
-                                   white_surf_path = surf_info[f"{hemisphere}_white_surf_path"])
+                                   white_surf_path = surf_info[f"{hemisphere}_white_surf_path"],
+                                   depths = depths)
         surface_datas.append(surface_data)
     surface_datas = np.array(surface_datas).T
 
@@ -334,11 +336,11 @@ def gaussian_weighted_smoothing(coords, values, sigma=1.0):
     return smoothed_values
 
 def surface_profile_nifti(volume_data_paths, 
-                                surf_hemisphere, 
-                                from_point, 
-                                to_point, 
-                                width,
-                                n_sampling = None):
+                          surf_hemisphere, 
+                          from_point, 
+                          to_point, 
+                          width,
+                          n_sampling = None):
     """
     Do profile analysis based on virtual strip axis
 
@@ -495,7 +497,8 @@ def show_sulcus(surf_ax,
                 hemisphere, 
                 color = "white", 
                 linestyle = "dashed",
-                isLabel = False):
+                isLabel = False,
+                sulcus_dummy_name = "sulcus"):
     """
     Show sulcus base on surf axis
 
@@ -504,7 +507,8 @@ def show_sulcus(surf_ax,
 
     return axis
     """
-    sulcus_path = surf_paths(hemisphere)[f"{hemisphere}_sulcus_path"]
+    
+    sulcus_path = surf_paths(hemisphere, sulcus_dummy_name = sulcus_dummy_name)[f"{hemisphere}_sulcus_path"]
     with open(sulcus_path, "r") as file:
         marking_data_info = json.load(file)
     
@@ -634,7 +638,8 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array,
                                      left_bounding_box: dict = None,
                                      right_bounding_box: dict = None,
                                      dpi: int = 300,
-                                     is_sulcus_label: bool = False):
+                                     is_sulcus_label: bool = False,
+                                     sulcus_dummy_name: str = "sulcus"):
     """
     Show sampling coverage on both hemispheres
 
@@ -646,6 +651,7 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array,
     :param right_bounding_box: data for drawing bounding box of right hemi
     :param dpi: dpi for saving image
     :param is_sulcus_label: flag for representing sulcus label
+    :param sulcus_dummy_name: sulcus dummy file name ex) "sulcus", "sulcus_sensorimotor"
     """
     # Left
     plt.clf()
@@ -658,8 +664,9 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array,
                                       alpha = 0.5)
     show_sulcus(surf_ax = l_coverage_ax, 
                 hemisphere = "L", 
-                isLabel = is_sulcus_label)
-
+                isLabel = is_sulcus_label,
+                sulcus_dummy_name = sulcus_dummy_name)
+    
     if type(left_bounding_box) != type(None):
         rect = Rectangle(xy = left_bounding_box["left_bottom"], 
                          width = left_bounding_box["width"], 
@@ -684,7 +691,8 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array,
                                       alpha = 0.5)
     show_sulcus(surf_ax = r_coverage_ax, 
                 hemisphere = "R",
-                isLabel = is_sulcus_label)
+                isLabel = is_sulcus_label,
+                sulcus_dummy_name = sulcus_dummy_name)
 
     if type(right_bounding_box) != type(None):
         rect = Rectangle(xy = right_bounding_box["left_bottom"], 
@@ -763,10 +771,11 @@ def show_both_hemi_stats(l_stat,
                          right_bounding_box = None,
                          is_focusing_bounding_box = False,
                          zoom = 0.2,
-                         colorbar_decimal = 4,
                          dpi = 300,
                          is_sulcus_label = False,
-                         ):
+                         sulcus_dummy_name: str = "sulcus",
+                         colorbar_decimal = 4,
+                         is_show_colorbar = True):
     """
     Show stats on both surf hemispheres
 
@@ -783,6 +792,7 @@ def show_both_hemi_stats(l_stat,
     :param colorbar_decimal(int): decimal value of colorbar
     :param dpi(int): dpi for saving image
     :param is_sulcus_label(boolean): is showing sulcus label on the flatmap
+    :param sulcus_dummy_name: sulcus dummy file name ex) "sulcus", "sulcus_sensorimotor"
     
     return fig, axis
     """
@@ -799,7 +809,8 @@ def show_both_hemi_stats(l_stat,
                            cscale = cscale)
     show_sulcus(surf_ax = l_ax, 
                 hemisphere = "L",
-                isLabel = is_sulcus_label)
+                isLabel = is_sulcus_label,
+                sulcus_dummy_name = sulcus_dummy_name)
     
     if is_focusing_bounding_box:
         if type(left_bounding_box) != type(None):
@@ -830,7 +841,8 @@ def show_both_hemi_stats(l_stat,
                            cscale = cscale)
     show_sulcus(surf_ax = r_ax, 
                 hemisphere = "R",
-                isLabel = is_sulcus_label)
+                isLabel = is_sulcus_label,
+                sulcus_dummy_name = sulcus_dummy_name)
 
     if is_focusing_bounding_box:
         if type(right_bounding_box) != type(None):
@@ -853,18 +865,19 @@ def show_both_hemi_stats(l_stat,
     print(f"save: {r_surf_img_path}")
 
     # Colorbar
-    plt.clf()
-    colorbar_path = os.path.join(save_dir_path, "colorbar.png")
-    
-    figsize = (10, 1)
-    fig, axis, ticks = make_colorbar(cscale[0], 
-                                     cscale[1], 
-                                     figsize = figsize, 
-                                     n_middle_tick = n_middle_tick, 
-                                     orientation = "horizontal",
-                                     tick_decimal = colorbar_decimal)
-    fig.savefig(colorbar_path, dpi = dpi, transparent = True, bbox_inches = "tight")
-    print(f"save: {colorbar_path}")
+    if is_show_colorbar:
+        plt.clf()
+        colorbar_path = os.path.join(save_dir_path, "colorbar.png")
+        
+        figsize = (10, 1)
+        fig, axis, ticks = make_colorbar(cscale[0], 
+                                         cscale[1], 
+                                         figsize = figsize, 
+                                         n_middle_tick = n_middle_tick, 
+                                         orientation = "horizontal",
+                                         tick_decimal = colorbar_decimal)
+        fig.savefig(colorbar_path, dpi = dpi, transparent = True, bbox_inches = "tight")
+        print(f"save: {colorbar_path}")
     
     # Both
     plt.clf()
@@ -872,7 +885,7 @@ def show_both_hemi_stats(l_stat,
     fig, ax = show_both_hemi_images(l_surf_img_path, 
                                     r_surf_img_path, 
                                     both_surf_img_path,
-                                    colorbar_path,
+                                    colorbar_path if is_show_colorbar else None,
                                     zoom)
     return fig, ax
 
@@ -955,6 +968,7 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
                               sulcus_names: np.array, 
                               roi_names: np.array,
                               p_threshold: float = 0.05,
+                              n_MCT: int = 1,
                               y_range: tuple = None,
                               tick_size: float = 18,
                               sulcus_text_size: int = 10,
@@ -970,6 +984,7 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
     :param sampling_datas(shape - (n_condition, n_sampling_coverage, n_data)): 3D array of shape  with data to be plotted
     :param sulcus_names: 1D array containing sulcus names for each condition (can be empty strings or None)
     :param roi_names: 1D array containing ROI (Region of Interest) names for each condition
+    :param n_MCT: the number of multiple comparison for correcting p-value using Bonferroni
     :param p_threshold: P-value threshold for marking significant areas (default is 0.05)
     :param y_range: specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
     :param tick_size: size of x and y axis' tick
@@ -1086,7 +1101,7 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
         color = cmap_colors[cond_i]
         
         stat_result = ttest_1samp(sampling_data, popmean = 0, axis = 1)
-        significant_indexes = np.where(stat_result.pvalue < p_threshold)[0]
+        significant_indexes = np.where(stat_result.pvalue * n_MCT < p_threshold)[0]
         
         cond_number = cond_i + 1
         y = y_min_ - y_min_padding + max_height_forSig - (rect_height * cond_number)

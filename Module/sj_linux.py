@@ -5,9 +5,11 @@ import glob
 import subprocess
 
 def exec_command(command, 
+                 arg_symbol = "-",
                  parameter_info = {}, 
                  pipeline_info = {},
-                 is_print = True):
+                 is_print = True,
+                 capture_output = False):
     """
     Execute command
     
@@ -17,22 +19,28 @@ def exec_command(command,
         -k 1, [value]: if there is not arg name, set the name using number
     :param pipeline_info(dictionary): pipeline
     :param is_print(boolean): flag for printing command
+    :param capture_output(boolean): flag for getting output
     
     return: result of command
     """ 
-    commands = make_command(command, parameter_info, pipeline_info)
+    commands = make_command(command = command, 
+                            arg_symbol = arg_symbol, 
+                            parameter_info = parameter_info, 
+                            pipeline_info = pipeline_info)
     if is_print:
         print(f"\033[1m" + commands + "\033[0m")
-    
+
     result = os.system(commands)
     return result
 
 def exec_command_inConda(command, 
                          conda_env_name,
+                         arg_symbol = "-",
                          conda_env_path = "/home/seojin/anaconda3/condabin",
                          parameter_info = {}, 
                          pipeline_info = {},
-                         is_print = True):
+                         is_print = True,
+                         capture_output = False):
     """
     Execute command in conda environment
     
@@ -42,13 +50,17 @@ def exec_command_inConda(command,
         -k 1, [value]: if there is not arg name, set the name using number
     :param pipeline_info(dictionary): pipeline
     :param is_print(boolean): flag for printing command
+    :param capture_output(boolean): flag for getting output
     
     return: result of command
     """ 
     os.environ["PATH"] += f":{conda_env_path}"
     
-    active_conda_command = f"conda run -n {conda_env_name}"
-    origin_command = make_command(command, parameter_info, pipeline_info)
+    active_conda_command = f"conda run -n {conda_env_name} --no-capture-output "
+    origin_command = make_command(command = command, 
+                                  arg_symbol = arg_symbol, 
+                                  parameter_info = parameter_info, 
+                                  pipeline_info = pipeline_info)
     
     commands = " ".join([active_conda_command, origin_command])
     if is_print:
@@ -59,6 +71,7 @@ def exec_command_inConda(command,
 
 def exec_command_withSudo(command, 
                           password, 
+                          arg_symbol = "-",
                           parameter_info = {}, 
                           pipeline_info = {},
                           is_print = True):
@@ -77,12 +90,17 @@ def exec_command_withSudo(command,
     
     return: result of command
     """ 
-    command = f"echo {password}" + " | " + "sudo -S " + make_command(command)
+    command = f"echo {password}" + " | " + "sudo -S " + make_command(command = command, 
+                                                                     arg_symbol = arg_symbol)
     
-    result = exec_command(command, parameter_info, pipeline_info, is_print)
+    result = exec_command(command = command, 
+                          parameter_info = parameter_info, 
+                          pipeline_info = pipeline_info, 
+                          is_print = is_print)
     return result
     
 def make_command(command, 
+                 arg_symbol = "-",
                  parameter_info = {}, 
                  pipeline_info = {}):
     """
@@ -93,7 +111,10 @@ def make_command(command,
         -k [argument_name]: [argument_value]
         -k 1, [value]: if there is not arg name, then set the name using number
     :param pipeline_info(dictionary): pipeline
-    """    
+    """
+    parameter_info = {} if parameter_info is None else parameter_info
+    pipeline_info = {} if pipeline_info is None else pipeline_info
+    
     arg_str = ""
     for argument in parameter_info:
         arg_type = type(argument)
@@ -117,12 +138,12 @@ def make_command(command,
         # Make arg str
         if arg_type == str:
             if value_str == "":
-                arg_str += " -" + argument
+                arg_str += f" {arg_symbol}" + argument
             else:
-                arg_str += " -" + argument + " " + value_str
+                arg_str += f" {arg_symbol}" + argument + " " + value_str
         elif arg_type == tuple:
             for a, v in zip(argument, value):
-                arg_str += " -" + a + " " + v
+                arg_str += f" {arg_symbol}" + a + " " + v
         else:
             arg_str += " " + value_str
         
@@ -148,7 +169,7 @@ def rename(target_dir_path, from_, to_, max_depth = 1, file_type = "f"):
                               2 : f"-maxdepth {max_depth}",
                               "type" : file_type,
                               "execdir" : f"rename 's/{from_}/{to_}/'",
-                              3 : "{} \;",
+                              3 : "{} \\;",
                           })
     return output
 

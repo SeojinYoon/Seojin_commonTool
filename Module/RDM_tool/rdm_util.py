@@ -1,8 +1,12 @@
 
+import os
+import sys
+import cupy as cp
 import numpy as np
 import matplotlib.pylab as plt
-from itertools import product
-from itertools import permutations
+from rsatoolbox.rdm import concat, RDMs
+from rsatoolbox.data.noise import prec_from_residuals
+from itertools import product, combinations, permutations
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def slice_list_usingDiff(data):
@@ -149,6 +153,7 @@ class RDM_model:
                            fig = fig,
                            axis = axis,
                            style_info = style_info)
+        return fig, axis
     
     @staticmethod
     def draw_rdm(rdm: np.array, 
@@ -255,6 +260,7 @@ class RDM_model:
     
         # Title
         axis.set_title(title, weight = title_wight, size = title_size)
+        return fig, axis
 
 def selection_RDM(conditions, selection_func):
     """
@@ -333,6 +339,264 @@ def make_RDM(conditions, dissim_mapping_func):
         rdm[row_conditions.index(r_cond), column_conditions.index(c_cond)] = dissim_mapping_func(r_cond, c_cond)
     rdm_model = RDM_model(dissimilarities = rdm, model_name = "temp", conditions = conditions)
     return rdm_model
+
+def upper_tri_index_pairs(dim: int, k: int = 1):
+    """
+    Get index mapping for upper-triangular pairs of a square matrix.
+
+    This function returns a dictionary mapping each (row, column) pair
+    in the upper triangle (above the main diagonal, determined by k)
+    to a unique sequential index (0, 1, 2, ...).
+
+    Parameters
+    ----------
+    :param dim: The dimension of the square matrix (e.g., 4 for a 4x4 matrix).
+    :param k: optional
+        Diagonal offset:
+        - k = 0 → include the main diagonal and above
+        - k = 1 → exclude the main diagonal (use only above-diagonal elements)
+        - k > 1 → start further above the diagonal
+        (Default: 1)
+
+    Example
+    -------
+    For dim = 4, k = 1:
+        (0,1), (0,2), (0,3)  -> 0, 1, 2
+        (1,2), (1,3)         -> 3, 4
+        (2,3)                -> 5
+
+    return: Mapping from (row, column) pair to its sequential index.
+    """
+    r, c = np.triu_indices(dim, k=k)
+    pair_to_idx = {(ri, ci): i for i, (ri, ci) in enumerate(zip(r, c))}
+    return pair_to_idx
+
+def make_RDM_brain(brain_shape, RDMs, conditions, is_return_1d=False):
+    """
+    Make RDM brain (nx, ny, nz, n_condition x n_condition)
+    
+    :param brain_shape: x,y,z(tuple)
+    :param RDMs: rsatoolbox.rdm.RDMs
+    :param conditions: unique conditions
+    
+    return 5d array(x, y, z, condition, condition)
+    """
+    assert type(RDMs[0]) == rsatoolbox.rdm.RDMs, "Please input rsatoolbox RDMs"
+    
+    condition_length = len(conditions)
+    
+    x, y, z = brain_shape
+    brain_1d = list(np.zeros([x * y * z]))
+    brain_1d_RDM = list(map(lambda _: np.repeat(0, condition_length * condition_length).reshape(condition_length, 
+                                                                                                condition_length).tolist(), 
+                        brain_1d))
+    
+    for RDM in RDMs:
+        voxel_index = RDM.rdm_descriptors["voxel_index"]
+        rdm_mat = RDM.get_matrices()
+    
+        assert len(voxel_index) == 1 and len(rdm_mat) == 1, "multi voxel index is occured"
+        
+        voxel_index = voxel_index[0]
+        rdm_mat = rdm_mat[0]
+        
+        brain_1d_RDM[voxel_index] = rdm_mat.tolist()
+    
+    if is_return_1d:
+        return brain_1d_RDM
+    else:
+        return np.array(brain_1d_RDM).reshape([x, y, z, condition_length, condition_length])
+    
+    return brain_1d_RDM
+
+def make_rdm_withPairs(conditions, pair_values):
+    """
+    Make rdm using dataframe
+    
+    :param conditions: conditions(list)
+    :param pair_values: (cond1, cond2, value)
+    
+    return dataframe
+    """
+    rdm = pd.DataFrame(index = conditions,
+                       columns = conditions)
+    
+    for cond1, cond2, value in pair_values:
+        rdm[cond1][cond2] = value
+        rdm[cond2][cond1] = value
+    
+    for cond in conditions:
+        rdm[cond][cond] = 0
+        
+    return rdm
+
+def masked_rdm_brain(rdm_brain, nifti_mask, debug=None):
+    """
+    Apply mask to RDM brain
+    
+    :param rdm_brain: 5d array(array)
+    :param nifti_mask: nifti
+    
+    return masked_data_only
+    """
+    rdm_shape = rdm_brain.shape
+    rdm_brain_1d = rdm_brain.reshape(-1, rdm_shape[3], rdm_shape[4])
+    mask_data_1d = nifti_mask.get_fdata().reshape(-1)
+    
+    if debug != None:
+        # rdm_brain과 nifti mask를 1차원으로 축약해서 mask를 씌워도
+        # 같다는 공간이라는 것을 보이기 위함
+        test = np.sum(np.sum(rdm_brain_1d, axis=1), axis = 1)
+        
+        for i in range(0, len(mask_data_1d)):
+            if mask_data_1d[i] == True:
+                test[i] = np.sum(test[i])
+            else:
+                test[i] = 0
+        return test
+    
+    masked_data_only = rdm_brain_1d[mask_data_1d > 0, :, :]
+    
+    return masked_data_only
+
+def apply_func_rdmBrain(rdm_brain, func):
+    """
+    Apply function to rdm brain
+    
+    :param rdm_brain: rdm_brain(list) - shape (nx, ny, nz, n_cond, n_cond)
+    :param func: function to apply rdm
+    
+    return list(matched with brain shape)
+    """
+    nx, ny, nz = rdm_brain.shape[0], rdm_brain.shape[1], rdm_brain.shape[2]
+
+    result = np.zeros([nx,ny,nz]).tolist()
+    for i in range(nx):
+        for j in range(ny):
+            for z in range(nz):
+                result[i][j][z] = func({"rdm" : rdm_brain[i][j][z]})
+                
+    return result
+
+def calc_rdm_crossnobis_subSession(betas: np.ndarray, 
+                                   residuals: np.ndarray, 
+                                   residual_types: np.ndarray,
+                                   conditions: np.ndarray, 
+                                   sessions: np.ndarray, 
+                                   subSessions: np.ndarray, 
+                                   masks: np.ndarray,
+                                   shrinkage_method) -> RDMs:
+    """
+    Calculate rdm crossnobis manually
+
+    :param betas(shape: (#cond, #whole_brain_channel)): beta values
+    :param residuals(shape: (#source, #time, #whole_brain_channel)): beta values
+    :param residual_types(shape: #source): source information per residual
+    :param conditions(shape: #cond): corresponding condition per beta
+    :param sessions(shape: #cond): session per cond
+    :param subSessions(shape: #cond): sub session per cond
+    :param masks(shape: (#mask, #whole_brain_channel)): masks
+    :param shrinkage_method: shrinkage method to calculate covariance
+    
+    return: RDMs
+    """
+    uq_conditions = np.array(list(dict.fromkeys(conditions)))
+    uq_sessions = np.array(list(dict.fromkeys(sessions)))
+    uq_subSessions = np.array(list(dict.fromkeys(subSessions)))
+
+    rdm_crossnobis_manually = []
+    for i, mask in enumerate(masks):
+        # Masking
+        masked_betas = betas[:, mask]
+        n_cond, n_mask_channel = masked_betas.shape
+        masked_residuals = residuals[:, :, mask]
+    
+        # Precision matrix
+        noise_precision_mats = np.array(prec_from_residuals(masked_residuals, method = shrinkage_method))
+        noise_precision_mats = cp.array(noise_precision_mats)
+    
+        # Sqrt - precision matrix
+        prec_mat_sqrts = []
+        for prec_mat in noise_precision_mats:
+            w, Q = cp.linalg.eigh(prec_mat)
+            w_sqrt = cp.sqrt(cp.clip(w, 0, None))
+            prec_mat_sqrt = (Q * w_sqrt) @ Q.T
+            prec_mat_sqrts.append(prec_mat_sqrt)
+        prec_mat_sqrts = np.array([mat.get() for mat in prec_mat_sqrts])
+        
+        # Denoising
+        denoised_masked_betas = []
+        denoised_masked_conditions = []
+        denoised_masked_sessions = []
+        for session, subSession in product(uq_sessions, uq_subSessions):
+            is_session = (sessions == session)
+            is_subSession = (subSessions == subSession)
+            is_target = np.logical_and(is_session, is_subSession)
+        
+            target_betas = masked_betas[is_target]
+            target_conditions = conditions[is_target]
+            
+            source = f"{session}-{subSession}"
+            source_precision = prec_mat_sqrts[residual_types == source][0]
+            
+            denoised_masked_beta = (target_betas @ source_precision)
+            denoised_masked_betas.append(denoised_masked_beta)
+            denoised_masked_conditions.append(target_conditions)
+            denoised_masked_sessions.append(sessions[is_target]) 
+        denoised_masked_betas = np.concatenate(denoised_masked_betas, axis = 0)
+        denoised_masked_conditions = np.concatenate(denoised_masked_conditions)
+        denoised_masked_sessions = np.concatenate(denoised_masked_sessions)
+    
+        # b_{i} - b{j}
+        n_session = len(uq_sessions)
+        n_dissim = len(list(combinations(uq_conditions, 2)))
+        
+        diff_betas = np.zeros((n_session, n_dissim, n_mask_channel))
+        diff_conds = np.zeros((n_session, n_dissim)).astype(np.str_)
+        for session_i, session in enumerate(uq_sessions):
+            dissim_i = 0
+            for cond1, cond2 in combinations(uq_conditions, 2):
+                is_session = (denoised_masked_sessions == session)
+                is_condition1 = (denoised_masked_conditions == cond1)
+                is_condition2 = (denoised_masked_conditions == cond2)
+        
+                cond1_beta = np.mean(denoised_masked_betas[np.logical_and(is_session, is_condition1)], axis = 0)
+                cond2_beta = np.mean(denoised_masked_betas[np.logical_and(is_session, is_condition2)], axis = 0)
+                diff_beta = (cond1_beta - cond2_beta)
+                
+                diff_betas[session_i, dissim_i] = diff_beta
+                diff_conds[session_i, dissim_i] = f"{cond1}&{cond2}"
+                dissim_i += 1
+    
+        # cross-validation
+        n_cv = len(list(combinations(range(len(uq_sessions)), 2)))
+        cv_distance = np.zeros((n_cv, n_dissim))
+        cv_conds = np.zeros((n_cv, n_dissim)).astype(np.str_)
+        
+        cv_i = 0
+        for session1_i, session2_i in combinations(range(len(uq_sessions)), 2):
+            dissim_i = 0
+            for cond1, cond2 in combinations(uq_conditions, 2):
+                diff_beta1 = diff_betas[session1_i][diff_conds[session1_i] == f"{cond1}&{cond2}"]
+                diff_beta2 = diff_betas[session2_i][diff_conds[session2_i] == f"{cond1}&{cond2}"]
+        
+                assert len(diff_beta1), "Check"
+                distance = diff_beta1[0] @ diff_beta2[0].T
+        
+                cv_distance[cv_i][dissim_i] = distance
+                cv_conds[cv_i][dissim_i] = f"{cond1}&{cond2}"
+                dissim_i += 1
+            cv_i += 1
+        cv_distance = cv_distance / n_mask_channel
+    
+        # crossnobis
+        crossnobis_distance = np.mean(cv_distance, axis = 0)
+        rdm = RDMs(crossnobis_distance, 
+                   rdm_descriptors = { "index" : [i] },
+                   pattern_descriptors = { "index" : np.arange(len(uq_conditions)), "cond" : uq_conditions })
+        rdm_crossnobis_manually.append(rdm)
+    rdm_crossnobis_manually = concat(rdm_crossnobis_manually)
+    return rdm_crossnobis_manually
     
 if __name__ == "__main__":
     rdm_model = RDM_model(a, 
@@ -351,4 +615,13 @@ if __name__ == "__main__":
     sort_rdm(rdm, ["A", "B", "C"], ["B", "A", "C"])
     filter_rdm(rdm = rdm, cond_origin = ["A","B","C"], cond_target = ["A","B"])
     make_RDM([1,2,3], lambda x, y: 1 if x == 1 else 0).draw()
+
+    upper_tri_index_pairs(8)
+
+    # make_RDM_brain
+    make_RDM_brain(brain_shape, rdm)
+
+    # make_rdm
+    make_rdm_withPairs(conditions = ["a", "b", "c", "d"],
+                       pair_values = [(trial_cond1, trial_cond2, 1) for trial_cond1, trial_cond2 in list(itertools.combinations(["a","b","c","d"], 2))])
     

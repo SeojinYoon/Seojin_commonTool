@@ -1,11 +1,12 @@
 
 # Common Libraries
 import os
+import copy
+import nltools
+import datetime
 import numpy as np
 import pandas as pd
-import copy
-import datetime
-import nltools
+from enum import IntEnum
 import matplotlib.patches as patches
 
 # Preprocessing
@@ -60,7 +61,18 @@ class Shrinkage_type:
             return Shrinkage_type.eye
         elif shrinkage_type != Shrinkage_type.diag:
             return Shrinkage_type.diag
-        
+
+
+
+class NiftiXForm(IntEnum):
+    # Reference: https://aistudio.google.com/prompts/new_chat
+    UNKNOWN = 0  # Arbitrary coordinates
+    SCANNER_ANAT = 1  # Scanner-based anatomical coordinates
+    ALIGNED_ANAT = 2  # Coordinates aligned to another file’s or anatomical “truth”
+    TALAIRACH = 3  # Talairach-Tournoux Atlas coordinates
+    MNI_152 = 4  # MNI 152 normalized coordinates
+    TEMPLATE_OTHER = 5  # Other normalized template space (added March 8, 2019)
+    
 class Similarity_type:
     # https://rsatoolbox.readthedocs.io/en/latest/_modules/rsatoolbox/rdm/calc.html#calc_rdm_mahalanobis
     
@@ -658,44 +670,6 @@ def make_3darray_from_Indexes(data, voxel_indexes, shape_3d):
 
     return array_3d
 
-def make_RDM_brain(brain_shape, RDMs, conditions, is_return_1d=False):
-    """
-    Make RDM brain (nx, ny, nz, n_condition x n_condition)
-    
-    :param brain_shape: x,y,z(tuple)
-    :param RDMs: rsatoolbox.rdm.RDMs
-    :param conditions: unique conditions
-    
-    return 5d array(x, y, z, condition, condition)
-    """
-    assert type(RDMs[0]) == rsatoolbox.rdm.RDMs, "Please input rsatoolbox RDMs"
-    
-    condition_length = len(conditions)
-    
-    x, y, z = brain_shape
-    brain_1d = list(np.zeros([x * y * z]))
-    brain_1d_RDM = list(map(lambda _: np.repeat(0, condition_length * condition_length).reshape(condition_length, 
-                                                                                                condition_length).tolist(), 
-                        brain_1d))
-    
-    for RDM in RDMs:
-        voxel_index = RDM.rdm_descriptors["voxel_index"]
-        rdm_mat = RDM.get_matrices()
-    
-        assert len(voxel_index) == 1 and len(rdm_mat) == 1, "multi voxel index is occured"
-        
-        voxel_index = voxel_index[0]
-        rdm_mat = rdm_mat[0]
-        
-        brain_1d_RDM[voxel_index] = rdm_mat.tolist()
-    
-    if is_return_1d:
-        return brain_1d_RDM
-    else:
-        return np.array(brain_1d_RDM).reshape([x, y, z, condition_length, condition_length])
-    
-    return brain_1d_RDM
-
 def brain_total_dissimilarity(rdm_brain):
     """
     Get total dissimilarity from rdm_brain
@@ -712,56 +686,6 @@ def brain_total_dissimilarity(rdm_brain):
             for z in range(nz):
                 result[i][j][z] = pattern_separation(rdm_brain[i][j][z])
     return result
-
-def masked_rdm_brain(rdm_brain, nifti_mask, debug=None):
-    """
-    Apply mask to RDM brain
-    
-    :param rdm_brain: 5d array(array)
-    :param nifti_mask: nifti
-    
-    return masked_data_only
-    """
-    rdm_shape = rdm_brain.shape
-    rdm_brain_1d = rdm_brain.reshape(-1, rdm_shape[3], rdm_shape[4])
-    mask_data_1d = nifti_mask.get_fdata().reshape(-1)
-    
-    if debug != None:
-        # rdm_brain과 nifti mask를 1차원으로 축약해서 mask를 씌워도
-        # 같다는 공간이라는 것을 보이기 위함
-        test = np.sum(np.sum(rdm_brain_1d, axis=1), axis = 1)
-        
-        for i in range(0, len(mask_data_1d)):
-            if mask_data_1d[i] == True:
-                test[i] = np.sum(test[i])
-            else:
-                test[i] = 0
-        return test
-    
-    masked_data_only = rdm_brain_1d[mask_data_1d > 0, :, :]
-    
-    return masked_data_only
-
-def make_rdm(conditions, pair_values):
-    """
-    Make rdm using dataframe
-    
-    :param conditions: conditions(list)
-    :param pair_values: (cond1, cond2, value)
-    
-    return dataframe
-    """
-    rdm = pd.DataFrame(index = conditions,
-                       columns = conditions)
-    
-    for cond1, cond2, value in pair_values:
-        rdm[cond1][cond2] = value
-        rdm[cond2][cond1] = value
-    
-    for cond in conditions:
-        rdm[cond][cond] = 0
-        
-    return rdm
 
 def construct_contrast(design_matrix_columns, contrast_info):
     """
@@ -1025,25 +949,6 @@ def searchlight_with_beta(Xs,
     print(start, end)
     
     return searchlight
-
-def apply_func_rdmBrain(rdm_brain, func):
-    """
-    Apply function to rdm brain
-    
-    :param rdm_brain: rdm_brain(list) - shape (nx, ny, nz, n_cond, n_cond)
-    :param func: function to apply rdm
-    
-    return list(matched with brain shape)
-    """
-    nx, ny, nz = rdm_brain.shape[0], rdm_brain.shape[1], rdm_brain.shape[2]
-
-    result = np.zeros([nx,ny,nz]).tolist()
-    for i in range(nx):
-        for j in range(ny):
-            for z in range(nz):
-                result[i][j][z] = func({"rdm" : rdm_brain[i][j][z]})
-                
-    return result
 
 def get_uniquePattern(conds):
     """
@@ -1528,6 +1433,20 @@ def make_1d_voxel_indexes(index_3ds, shape_3d):
     index_1d = np.ravel_multi_index(index_3ds, mask.shape)
     return index_1d
 
+def change_coord_space2MNI(img):
+    """
+    Change nifti coordinate space into nifti
+
+    :param img(nb.Nifti1Image): image
+
+    return img(nb.Nifti1Image)
+    """
+    affine = img.affine
+    img.set_sform(affine, code = NiftiXForm.MNI_152)
+    img.set_qform(affine, code = NiftiXForm.MNI_152)
+
+    return img
+    
 if __name__ == "__main__":
     # highlight_stat
     result = sj_brain.highlight_stat(roi_array=motor_left_mask.get_data(),
@@ -1563,14 +1482,6 @@ if __name__ == "__main__":
                      save_corr_brain_path=os.path.join(output_dir_path, "corr_brain"),
                      n_jobs=3
                     )
-    
-    # make_RDM_brain
-    make_RDM_brain(brain_shape, rdm)
-    
-    
-    # make_rdm
-    make_rdm(conditions = ["a", "b", "c", "d"],
-             pair_values = [(trial_cond1, trial_cond2, 1) for trial_cond1, trial_cond2 in list(itertools.combinations(["a","b","c","d"], 2))])
     
     # check_condition_withinRun
     check_condition_withinRun(["a", "b"], alphabet)

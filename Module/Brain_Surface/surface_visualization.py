@@ -16,7 +16,7 @@ from IPython.display import HTML
 # Custom Libraries
 from surface_data import surf_paths, map_2d_to3d
 from surface_roi import show_sulcus
-from surface_util import mean_datas_withSmoothing
+from surface_util import mean_datas
 
 sys.path.append("/home/seojin")
 import surfAnalysisPy as surf # Dierdrichsen lab's library
@@ -120,8 +120,8 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array,
                 hemisphere = "L", 
                 isLabel = is_sulcus_label,
                 sulcus_dummy_name = sulcus_dummy_name)
-    
-    if type(left_bounding_box) != type(None):
+
+    if left_bounding_box is not None:
         rect = Rectangle(xy = left_bounding_box["left_bottom"], 
                          width = left_bounding_box["width"], 
                          height = left_bounding_box["height"], 
@@ -148,7 +148,7 @@ def show_both_hemi_sampling_coverage(l_sampling_coverage: np.array,
                 isLabel = is_sulcus_label,
                 sulcus_dummy_name = sulcus_dummy_name)
 
-    if type(right_bounding_box) != type(None):
+    if right_bounding_box is not None:
         rect = Rectangle(xy = right_bounding_box["left_bottom"], 
                          width = right_bounding_box["width"], 
                          height = right_bounding_box["height"], 
@@ -218,7 +218,7 @@ def show_both_hemi_stats(l_stat,
                          threshold,
                          cscale,
                          save_dir_path,
-                         n_middle_tick = 3,
+                         n_inner_ticks = 3,
                          surf_resolution = 32,
                          left_bounding_box = None,
                          right_bounding_box = None,
@@ -236,7 +236,7 @@ def show_both_hemi_stats(l_stat,
     :param r_stat(np.array - #vertex): right hemisphere stat
     :param threshold(int): threshold
     :param cscale(tuple - (vmin, vmax)): color bar scale
-    :param n_middle_tick(int): the number of colorbar ticks without min and max value
+    :param n_inner_ticks(int): the number of colorbar ticks without min and max value
     :param save_dir_path(string): directory path for saving images
     :param surf_resolution(int): surface resolution
     :param left_bounding_box(dictionary): bounding box for left hemi
@@ -266,13 +266,13 @@ def show_both_hemi_stats(l_stat,
                 sulcus_dummy_name = sulcus_dummy_name)
     
     if is_focusing_bounding_box:
-        if type(left_bounding_box) != type(None):
+        if left_bounding_box is not None:
             min_x, min_y = left_bounding_box["left_bottom"]
             max_x, max_y = min_x + left_bounding_box["width"], min_y + left_bounding_box["height"]
             l_ax.set_xlim(min_x, max_x)
             l_ax.set_ylim(min_y, max_y)
     else:
-        if type(left_bounding_box) != type(None):
+        if left_bounding_box is not None:
             l_rect = Rectangle(xy = left_bounding_box["left_bottom"], 
                                width = left_bounding_box["width"], 
                                height = left_bounding_box["height"], 
@@ -298,13 +298,13 @@ def show_both_hemi_stats(l_stat,
                 sulcus_dummy_name = sulcus_dummy_name)
 
     if is_focusing_bounding_box:
-        if type(right_bounding_box) != type(None):
+        if right_bounding_box is not None:
             min_x, min_y = right_bounding_box["left_bottom"]
             max_x, max_y = min_x + right_bounding_box["width"], min_y + right_bounding_box["height"]
             r_ax.set_xlim(min_x, max_x)
             r_ax.set_ylim(min_y, max_y)
     else:
-        if type(right_bounding_box) != type(None):
+        if right_bounding_box is not None:
             r_rect = Rectangle(xy = right_bounding_box["left_bottom"], 
                                width = right_bounding_box["width"], 
                                height = right_bounding_box["height"], 
@@ -326,20 +326,20 @@ def show_both_hemi_stats(l_stat,
         fig, axis, ticks = make_colorbar(cscale[0], 
                                          cscale[1], 
                                          figsize = figsize, 
-                                         n_middle_tick = n_middle_tick, 
+                                         n_inner_ticks = n_inner_ticks, 
                                          orientation = "horizontal",
-                                         tick_decimal = colorbar_decimal)
+                                         tick_precision = colorbar_decimal)
         fig.savefig(colorbar_path, dpi = dpi, transparent = True, bbox_inches = "tight")
         print(f"save: {colorbar_path}")
     
     # Both
     plt.clf()
     both_surf_img_path = os.path.join(save_dir_path, f"Both_hemi_stat")
-    fig, ax = show_both_hemi_images(l_surf_img_path, 
-                                    r_surf_img_path, 
-                                    both_surf_img_path,
-                                    colorbar_path if is_show_colorbar else None,
-                                    zoom)
+    fig, ax = show_both_hemi_images(l_surf_img_path = l_surf_img_path, 
+                                    r_surf_img_path = r_surf_img_path, 
+                                    both_surf_img_path = both_surf_img_path,
+                                    colorbar_path = colorbar_path if is_show_colorbar else None,
+                                    zoom = zoom)
     return fig, ax
 
 def plot_virtualStrip_on3D_surf(virtual_stip_mask, 
@@ -392,23 +392,33 @@ def plot_virtualStrip_on3D_surf(virtual_stip_mask,
     
     return fig
 
-def show_interactive_brain(volume_data_data_paths: list,
+def show_interactive_brain(data_info: dict,
+                           reference_data_path: str,
                            threshold: float,
                            cscale: tuple,
-                           cmap: str = None,
+                           cmap: str = "jet",
+                           is_do_smoothing = False,
                            underscale: list = [-1.5, 1],
                            alpha: float = 1.0,
                            depths: list = [0,0.2,0.4,0.6,0.8,1.0],
                            query_port: int = 5000,
-                           surf_dir_path: str = "/mnt/sda2/Common_dir/Atlas/Surface"):
+                           surf_dir_path: str = "/mnt/sda2/Common_dir/Atlas/Surface",
+                           color_bar_info = {
+                               "n_inner_ticks" : 3,
+                               "tick_precision" : 4,
+                           }):
     """
     Show interactive brain
 
     References
     - https://github.com/DiedrichsenLab/surfAnalysisPy
     - https://www.humanconnectome.org/software/workbench-command/-volume-to-surface-mapping
-    
-    :param volume_data_data_paths: nifti file paths
+
+    :param data_info: input data info
+        -k volume_data_paths(list): nifti file paths
+        -k l_surf_data(np.array - shape: (#vertices))
+        -k r_surf_data(np.array - shape: (#vertices))
+    :param reference_data_path: reference nifti brain
     :param threshold: threshold to cut overlay 
     :param cmap: overlay color map
     :param cscale: overlay color scale
@@ -434,22 +444,26 @@ def show_interactive_brain(volume_data_data_paths: list,
     r_sulcus_path = r_path_info["R_sulcus_path"]
 
     # Load basic coordinate informations
-    reference_nii_path = volume_data_data_paths[0]
     l_flat_surf = nb.load(l_flat_surf_path)
     r_flat_surf = nb.load(r_flat_surf_path)
-    
-    affine = nb.load(reference_nii_path).affine
+
+    affine = nb.load(reference_data_path).affine
 
     # Load data
-    l_surf_data = mean_datas_withSmoothing(volume_data_data_paths, hemisphere = "L")
-    r_surf_data = mean_datas_withSmoothing(volume_data_data_paths, hemisphere = "R")
+    volume_data_paths = data_info.get("volume_data_paths", [])
+    l_surf_data = data_info.get("l_surf_data", None)
+    r_surf_data = data_info.get("r_surf_data", None)
+    if l_surf_data is None:
+        l_surf_data = mean_datas(volume_data_paths, hemisphere = "L", is_do_smoothing = is_do_smoothing)
+    if r_surf_data is None:
+        r_surf_data = mean_datas(volume_data_paths, hemisphere = "R", is_do_smoothing = is_do_smoothing)
 
     # Map 2D coord to 3D MNI coord
-    l_img_coords = map_2d_to3d(reference_nii_path,
+    l_img_coords = map_2d_to3d(reference_data_path,
                                pial_surf_path = l_pial_surf_path,
                                white_surf_path = l_white_surf_path,
                                depths = depths)
-    r_img_coords = map_2d_to3d(reference_nii_path,
+    r_img_coords = map_2d_to3d(reference_data_path,
                                pial_surf_path = r_pial_surf_path,
                                white_surf_path = r_white_surf_path,
                                depths = depths)
@@ -528,43 +542,46 @@ def show_interactive_brain(volume_data_data_paths: list,
                             i = l_faces[:, 0], j = l_faces[:, 1], k = l_faces[:, 2],
                             facecolor = l_color,
                             vertexcolor = None,
-                            lightposition = dict(x=0, y=0, z=2.5),
+                            lightposition = dict(x = 0, y = 0, z = 2.5),
                             hoverinfo = "skip"))
     traces.append(go.Mesh3d(x = r_vertices[:, 0], y = r_vertices[:, 1], z = r_vertices[:, 2],
                             i = r_faces[:, 0], j = r_faces[:, 1], k = r_faces[:, 2],
                             facecolor = r_color,
                             vertexcolor = None,
-                            lightposition = dict(x=0, y=0, z=2.5),
+                            lightposition = dict(x = 0, y = 0, z = 2.5),
                             hoverinfo = "skip"))
     
     # load both sided vertices
-    traces.append(go.Scatter3d(x=l_vertices[:, 0],
-                               y=l_vertices[:, 1],
-                               z=l_vertices[:, 2],
-                               mode="markers",
-                               marker=dict(size=1, color="black", opacity=0.0),
-                               hoverinfo="text",
-                               text=[f"L({x:.2f}, {y:.2f})" for x, y, z in l_vertices]))
+    traces.append(go.Scatter3d(x = l_vertices[:, 0],
+                               y = l_vertices[:, 1],
+                               z = l_vertices[:, 2],
+                               mode = "markers",
+                               marker = dict(size = 1, color = "black", opacity = 0.0),
+                               hoverinfo = "text",
+                               text = [f"L({x:.2f}, {y:.2f})" for x, y, z in l_vertices],
+                               name = "L_nodes"))
     
-    traces.append(go.Scatter3d(x=r_vertices[:, 0],
-                               y=r_vertices[:, 1],
-                               z=r_vertices[:, 2],
-                               mode="markers",
-                               marker=dict(size=1, color="black", opacity=0.0),
-                               hoverinfo="text",
-                               text=[f"R({(x - x_addition_4_rHemi):.2f}, {(y - y_addition_4_rHemi):.2f})" for x, y, z in r_vertices]))
+    traces.append(go.Scatter3d(x = r_vertices[:, 0],
+                               y = r_vertices[:, 1],
+                               z = r_vertices[:, 2],
+                               mode = "markers",
+                               marker = dict(size = 1, color = "black", opacity = 0.0),
+                               hoverinfo = "text",
+                               text = [f"R({(x - x_addition_4_rHemi):.2f}, {(y - y_addition_4_rHemi):.2f})" for x, y, z in r_vertices],
+                               name = "R_nodes"))
 
     # Sulcus
     for sulcus_name in l_sulcus_info:
         pts = np.array(l_sulcus_info[sulcus_name])
         n_point = len(pts)
-    
+        z_lift = 1.0
+        
         traces.append(go.Scatter3d(
             x = pts[:,0],
             y = pts[:,1],
-            z = np.zeros(n_point),
+            z = np.zeros(n_point) + z_lift,
             mode = "lines",
-            line=dict(color="white", width=4, dash="dot"),
+            line=dict(color = "white", width = 3, dash = "dash"),
             hoverinfo = "skip",
         ))
     
@@ -575,41 +592,73 @@ def show_interactive_brain(volume_data_data_paths: list,
         traces.append(go.Scatter3d(
             x = pts[:,0] + x_addition_4_rHemi,
             y = pts[:,1] + y_addition_4_rHemi,
-            z = np.zeros(n_point),
+            z = np.zeros(n_point) + z_lift,
             mode = "lines",
-            line = dict(color="white", width=4, dash="dot"),
+            line = dict(color = "white", width = 3, dash = "dash"),
             hoverinfo = "skip",
         ))
 
-    # Camera
-    camera = dict(up=dict(x=0, y=1, z=0),
-                  center=dict(x=0, y=0, z=0),
-                  eye=dict(x=0, y=0, z=1.1))
-    xaxis_dict= dict(visible=False, 
-                     showbackground=False,
-                     showline=False,
-                     showgrid=False,
-                     showspikes=False,
-                     showticklabels=False,
-                     title=None)
-    yaxis_dict= xaxis_dict.copy()
-    zaxis_dict= xaxis_dict.copy()
-    scene = dict(xaxis=xaxis_dict,
-                yaxis=yaxis_dict,
-                zaxis=zaxis_dict,
-                aspectmode= 'manual')
-                # aspectratio=dict(x=1, y=1, z=0.1))
+    # Color bar
+    tick_vals = np.linspace(cscale[0], cscale[1], n_inner_ticks + 2)
+    tick_text = [f"{v:.{tick_precision}f}" for v in tick_vals]
 
+    dummy_colorbar_trace = go.Scatter3d(
+        x = [0], y = [0], z = [0],
+        mode = "markers",
+        marker = dict(
+            size = 0,
+            opacity = 0,
+            cmin = cscale[0],
+            cmax = cscale[1],
+            colorscale = cmap.capitalize(), # cmap 변수가 'jet'이라면 Plotly에서는 'Jet' (대소문자 주의)
+            showscale = True,
+            colorbar = dict(
+                orientation = "h",
+                thickness = 20,
+                len = 0.6,
+                x = 0.5,
+                y = 0.8,
+                tickmode = "array",
+                tickvals = tick_vals,
+                ticktext = tick_text,
+                tickfont = dict(size = 12, color = "black"),
+                outlinewidth = 0
+            )
+        ),
+        hoverinfo = "skip",
+        name = "Colorbar_Dummy",
+    )
+    traces.append(dummy_colorbar_trace)
+    
+    # Camera
+    camera = dict(up = dict(x = 0, y = 1, z = 0),
+              center = dict(x = 0, y = 0, z = 0),
+              eye = dict(x = 0, y = 0, z = 11.5))
+    
+    xaxis_dict= dict(visible = False, 
+                     showbackground = False,
+                     showline = False,
+                     showgrid = False,
+                     showspikes = False,
+                     showticklabels = False,
+                     title = None)
+    yaxis_dict = xaxis_dict.copy()
+    zaxis_dict = xaxis_dict.copy()
+    scene = dict(xaxis = xaxis_dict,
+                 yaxis = yaxis_dict,
+                 zaxis = zaxis_dict,
+                 aspectmode = 'data')
+    
     # Make figure
     fig = go.Figure(data = traces)
     fig.update_layout(scene_camera = camera,
                       dragmode = False,
-                      margin = dict(r=0, l=0, b=0, t=0),
+                      margin = dict(r = 0, l = 0, b = 0, t = 0),
                       scene = scene,
                       width = 700,
                       height = 500,
                       paper_bgcolor = "#ffffff",
-                      showlegend=False)
+                      showlegend = False)
     
     # Make javascript codes for interaction process
     div_id = "brain-surface-plot"
@@ -633,9 +682,9 @@ def show_interactive_brain(volume_data_data_paths: list,
         if (pt.data.type !== 'scatter3d') {{
             return;
         }}
-    
-        var hemi = (pt.curveNumber === 1) ? 'L' :
-                   (pt.curveNumber === 3) ? 'R' : 'unknown';
+
+        var hemi = (pt.data.name === 'L_nodes') ? 'L' : 
+                   (pt.data.name === 'R_nodes') ? 'R' : 'unknown';
     
         var adjX = pt.x;
         var adjY = pt.y;

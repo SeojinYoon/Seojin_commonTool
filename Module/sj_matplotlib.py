@@ -528,9 +528,9 @@ def plot_histogram_and_cdf(data,
 def make_colorbar(vmin, 
                   vmax, 
                   figsize = (2, 6), 
-                  n_middle_tick = 3, 
+                  n_inner_ticks = 3, 
                   cmap = "jet", 
-                  tick_decimal = 4, 
+                  tick_precision = 4, 
                   orientation = "horizontal",
                   fontsize = 12):
     """
@@ -542,12 +542,12 @@ def make_colorbar(vmin,
     :param figsize (tuple): The size of the figure (width, height). Defaults to (2, 6).
     :param n_div (int): Number of divisions (ticks) on the colorbar. Defaults to 4.
     :param cmap (str): Colormap to use for the colorbar. Defaults to "jet".
-    :param tick_decimal (int): Number of decimal places to display on the tick labels. Defaults to 4.
+    :param tick_precision (int): Number of decimal places to display on the tick labels. Defaults to 4.
     :param orientation (str): Orientation of the colorbar, either "horizontal" or "vertical". Defaults to "horizontal".
 
     return (tuple): A tuple containing the matplotlib figure and axis objects.
     """
-    n_div = n_middle_tick + 1
+    n_div = n_inner_ticks + 1
     
     interval = (vmax - vmin) / n_div
     ticks = np.linspace(vmin, vmax, n_div + 1)
@@ -568,11 +568,11 @@ def make_colorbar(vmin,
     # Set the ticks and labels
     if orientation == "vertical":
         axis.set_yticks(ticks)
-        axis.set_yticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = fontsize)
+        axis.set_yticklabels([f"{tick:.{tick_precision}f}" for tick in ticks], fontsize = fontsize)
         axis.get_xaxis().set_visible(False)
     else:
         axis.set_xticks(ticks)
-        axis.set_xticklabels([f"{tick:.{tick_decimal}f}" for tick in ticks], fontsize = fontsize)
+        axis.set_xticklabels([f"{tick:.{tick_precision}f}" for tick in ticks], fontsize = fontsize)
         axis.get_yaxis().set_visible(False)
     
     return fig, axis, ticks
@@ -624,7 +624,7 @@ if __name__=="__main__":
     plot_histogram_and_cdf(random_data, axis=axes[0])
 
     # Color bar
-    fig, axis = make_colorbar(0.0007, 0.0014, figsize = (2, 4), n_middle_tick = 4, orientation = "vertical")
+    fig, axis = make_colorbar(0.0007, 0.0014, figsize = (2, 4), n_inner_ticks = 4, orientation = "vertical")
     plt.show()
 
     color = get_color("jet", 0, 1, 0.5)

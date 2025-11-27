@@ -55,15 +55,17 @@ def get_bounding_box(hemisphere, virtual_strip_mask):
         "height" : height,
     }
 
-def mean_datas_withSmoothing(volume_data_paths: list, 
-                             hemisphere: str, 
-                             sigma: float = 2.0, 
-                             depths: list = [0,0.2,0.4,0.6,0.8,1.0]):
+def mean_datas(volume_data_paths: list, 
+               hemisphere: str, 
+               is_do_smoothing: bool = False,
+               sigma: float = 2.0, 
+               depths: list = [0,0.2,0.4,0.6,0.8,1.0]):
     """
     average all datas on surface data & do smoothing
 
     :param volume_data_paths: volume data path(.nii)
     :param hemisphere(string): "L" or "R"
+    :param is_do_smoothing: Flag to do smoothing after mean process
     :param sigma: standard deviation for Gaussian weighting
     :param depths(list): Depths of points along line at which to map (0=white/gray, 1=pial). ex) [0.0,0.2,0.4,0.6,0.8,1.0]
     """
@@ -74,11 +76,13 @@ def mean_datas_withSmoothing(volume_data_paths: list,
     vertex_locs = temploate_surface_data.darrays[0].data[:, :2]
 
     mean_data = np.mean(surf_data, axis = 1)
-    smoothed_data = gaussian_weighted_smoothing(coords = vertex_locs, 
-                                                values = mean_data, 
-                                                sigma = sigma)
-
-    return smoothed_data
+    if is_do_smoothing:
+        return_data = gaussian_weighted_smoothing(coords = vertex_locs, 
+                                                  values = mean_data, 
+                                                  sigma = sigma)
+    else:
+        return_data = mean_data
+    return return_data
 
 if __name__ == "__main__":
     template_path = '/mnt/sda2/Common_dir/Atlas/Surface/fs_LR_32/fs_LR.32k.L.flat.surf.gii'

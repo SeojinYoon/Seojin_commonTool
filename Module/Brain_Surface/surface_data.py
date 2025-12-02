@@ -8,7 +8,7 @@ import nibabel as nb
 
 # Functions
 def surf_paths(surf_hemisphere: str, 
-               surf_dir_path: str = "/mnt/sda2/Common_dir/Atlas/Surface", 
+               surf_dir_path: str = "/home/seojin/Seojin_commonTool/Module/Brain_Surface/Datas", 
                surf_resolution: int = 32,
                sulcus_dummy_name: str = "sulcus",
                atlas: str = "Brodmann"):
@@ -21,20 +21,19 @@ def surf_paths(surf_hemisphere: str,
     :param sulcus_dummy_name: sulcus data name
     :param atlas: atlas name
     """
-    surf_dir_path = os.path.join(surf_dir_path, f"fs_LR_{surf_resolution}")
     
     # Template
-    pial_surf_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.pial.surf.gii")
-    white_surf_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.white.surf.gii")
-    template_surface_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.flat.surf.gii")
-    inflated_brain_path = os.path.join(surf_dir_path, f"fs_LR.{surf_resolution}k.{surf_hemisphere}.inflated.surf.gii")
-    shape_gii_path = os.path.join(surf_dir_path, f"fs_LR.32k.{surf_hemisphere}.shape.gii")
+    pial_surf_path = os.path.join(surf_dir_path, "Template", f"fs_LR.{surf_resolution}k.{surf_hemisphere}.pial.surf.gii")
+    white_surf_path = os.path.join(surf_dir_path, "Template", f"fs_LR.{surf_resolution}k.{surf_hemisphere}.white.surf.gii")
+    template_surface_path = os.path.join(surf_dir_path, "Template", f"fs_LR.{surf_resolution}k.{surf_hemisphere}.flat.surf.gii")
+    inflated_brain_path = os.path.join(surf_dir_path, "Template", f"fs_LR.{surf_resolution}k.{surf_hemisphere}.inflated.surf.gii")
+    shape_gii_path = os.path.join(surf_dir_path, "Template", f"fs_LR.32k.{surf_hemisphere}.shape.gii")
     
     # Sulcus
-    sulcus_path = os.path.join(surf_dir_path, "borders", f"{surf_hemisphere}_{sulcus_dummy_name}.json")
+    sulcus_path = os.path.join(surf_dir_path, "Sulcus", f"{surf_hemisphere}_{sulcus_dummy_name}.json")
     
     # ROI
-    roi_label_path = os.path.join(surf_dir_path, atlas, f"{surf_hemisphere}_rois.npy")
+    roi_label_path = os.path.join(surf_dir_path, "ROI", atlas, f"{surf_hemisphere}_rois.npy")
 
     return {
         f"{surf_hemisphere}_pial_surf_path" : pial_surf_path,

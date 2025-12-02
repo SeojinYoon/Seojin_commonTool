@@ -9,6 +9,7 @@ from copy import copy
 from matplotlib.patches import Rectangle
 from scipy.stats import sem
 from scipy.stats import ttest_1samp
+from matplotlib.lines import Line2D
 
 # Custom Libraries
 from surface_data import surf_paths, load_surfData_fromVolume
@@ -258,8 +259,8 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
                               y_range: tuple = None,
                               tick_size: float = 18,
                               sulcus_text_size: int = 10,
-                              y_tick_round: int = 4,
-                              n_middle_yTick: int = 1,
+                              y_tick_precision: int = 4,
+                              n_inner_yTick: int = 1,
                               cmap: str = "tab10",
                               xlabel: str = "Brodmann area",
                               ylabel: str = "Distance (a.u.)"):
@@ -275,8 +276,8 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
     :param y_range: specifying y-axis limits (e.g., (y_min, y_max)). If None, limits are calculated automatically
     :param tick_size: size of x and y axis' tick
     :param sulcus_text_size: text size of sulcus
-    :param y_tick_round: tick round location
-    :param n_middle_yTick: the number of y-tick without y_min and y_max
+    :param y_tick_precision: Number of decimal places to display on y-axis ticks
+    :param n_inner_yTick: the number of y-tick without y_min and y_max
     :param cmap: colormap ex) "tab10"
     :param xlabel: text for x-axis label
     :param ylabel: text for y-axis label
@@ -289,38 +290,43 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
 
     cmap = plt.get_cmap(cmap)
     cmap_colors = cmap.colors
-    
+
+    # Lists to store calculated stats for later range calculation
+    all_means = []
+    all_errors = []
+
     # Plot
-    is_set_minMax = False
-    if type(y_range) != type(None):
-        y_min_, y_max_ = y_range
-        is_set_minMax = True
-    else:
-        y_min_ = None
-        y_max_ = None
-    
     for cond_i, sampling_data in enumerate(sampling_datas):
         color = cmap_colors[cond_i]
         
         xs = np.arange(sampling_data.shape[0]).astype(str)
         mean_values = np.mean(sampling_data, axis = 1)
         errors = sem(sampling_data, axis = 1)
+        
         ax.plot(xs, mean_values, color = color)
         ax.fill_between(xs,
                         mean_values - errors, mean_values + errors, 
                         alpha = 0.2,
                         color = color)
 
-        if is_set_minMax == False:
-            if y_min_ == None:
-                y_min_ = np.min(mean_values - errors)
-            if y_max_ == None:
-                y_max_ = np.max(mean_values + errors)
+        # Store for range calculation
+        all_means.append(mean_values)
+        all_errors.append(errors)
+    all_means = np.array(all_means)
+    all_errors = np.array(all_errors)
     
+    # Determine y-Axis limits
+    if y_range is not None:
+        y_min, y_max = y_range
+    else:
+        # Calculate global min/max based on all plotted data
+        y_min = np.min(all_means - all_errors)
+        y_max = np.max(all_means + all_errors)
+        
     # Set ticks
-    n_div = n_middle_yTick + 2
-    interval = (y_max_ - y_min_) / n_div
-    y_data = np.linspace(y_min_, y_max_, n_div)
+    n_div = n_inner_yTick + 2
+    interval = (y_max - y_min) / n_div
+    y_data = np.linspace(y_min, y_max, n_div)
     
     unique_rois = np.unique(roi_names)
     roi_names = copy(roi_names)
@@ -337,7 +343,7 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
     tick_info["y_tick_size"] = tick_size
     draw_ticks(ax, tick_info)
     
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.{y_tick_round}f}"))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.{y_tick_precision}f}"))
     
     # Draw spines
     draw_spine(ax)
@@ -362,7 +368,7 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
             sulcus_name = sulcus_abbreviation_name(sulcus_name)
             
             ax.text(x = sulcus_i, 
-                    y = y_max_ + (y_max_padding * 1.5), 
+                    y = y_max + (y_max_padding * 1.5), 
                     s = sulcus_name,  
                     va = "center", 
                     ha = "center",
@@ -370,7 +376,7 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
                     rotation = 30)
             
             ax.text(x = sulcus_i, 
-                    y = y_max_ + (y_max_padding / 2), 
+                    y = y_max + (y_max_padding / 2), 
                     s = "▼",  
                     va = "center", 
                     ha = "center",
@@ -385,13 +391,17 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
 
     for cond_i, sampling_data in enumerate(sampling_datas):
         color = cmap_colors[cond_i]
-        
+
+        # t-test
         stat_result = ttest_1samp(sampling_data, popmean = 0, axis = 1)
+
+        # bonferroni correction
         significant_indexes = np.where(stat_result.pvalue * n_MCT < p_threshold)[0]
         
         cond_number = cond_i + 1
-        y = y_min_ - y_min_padding + max_height_forSig - (rect_height * cond_number)
+        y = y_min - y_min_padding + max_height_forSig - (rect_height * cond_number)
 
+        # draw significant area
         for sig_i in significant_indexes:
             ax.add_patch(Rectangle(xy = (sig_i - 0.5, y), 
                                    width = 1, 
@@ -405,16 +415,85 @@ def draw_cross_section_1dPlot(ax: plt.Axes,
                    linestyle = "dashed", 
                    alpha = 0.3,
                    ymin = 0,
-                   ymax = (y_max_ - y_min_ + y_min_padding) / (y_max_ - y_min_ + y_min_padding + y_max_padding))
+                   ymax = (y_max - y_min + y_min_padding) / (y_max - y_min + y_min_padding + y_max_padding))
 
     ax.set_xlim(0, n_coverage - 1)
 
     if y_range != None:
-        # ax.set_ylim(y_range[0], y_range[1])
-        ax.set_ylim(min(y_range[0], y_min_ - y_min_padding), max(y_range[1], y_max_ - y_max_padding))
+        ax.set_ylim(min(y_range[0], y_min - y_min_padding), max(y_range[1], y_max - y_max_padding))
     else:
-        ax.set_ylim(y_min_ - y_min_padding, y_max_ + y_max_padding)
+        ax.set_ylim(y_min - y_min_padding, y_max + y_max_padding)
 
+def draw_both_hemi_cross_section_1dPlot(y_range: tuple, 
+                                        l_sampling_datas: np.ndarray,
+                                        l_sulcus_names: np.ndarray,
+                                        l_roi_names: np.ndarray,
+                                        r_sampling_datas: np.ndarray,
+                                        r_sulcus_names: np.ndarray,
+                                        r_roi_names: np.ndarray,
+                                        y_tick_precision: int = 4,
+                                        n_inner_yTick = 1,
+                                        p_threshold = 0.05,
+                                        n_MCT = 1,
+                                        cmap = "tab10"):
+    """
+    Draw side-by-side 1d cross-section plots for both Left and Right hemispheres.
+
+    :param y_range: tuple specifying global y-axis limits (y_min, y_max) applied to both plots.
+    :param l_sampling_datas(shape: [#cond, #roi, #data]): data array for Left Hemisphere .
+    :param l_sulcus_names(shape: #roi): array of sulcus names for Left Hemisphere.
+    :param l_roi_names(shape: #roi): array of ROI names for Left Hemisphere.
+    :param r_sampling_datas(shape: [#cond, #roi, #data]): data array for Right Hemisphere.
+    :param r_sulcus_names(shape: #roi): array of sulcus names for Right Hemisphere.
+    :param r_roi_names(shape: #roi): array of ROI names for Right Hemisphere.
+    :param y_tick_precision: number of decimal places to display on y-axis ticks (Precision).
+    :param n_inner_yTick: number of intermediate y-ticks between y_min and y_max.
+    :param p_threshold: p-value threshold for statistical significance (default: 0.05).
+    :param n_MCT: number of multiple comparisons for Bonferroni correction.
+    :param cmap: matplotlib colormap name (e.g., "tab10").
+    
+    :return: (fig, axes) - The created Matplotlib Figure and Axes objects.
+    """
+
+    # Draw cross-section data of left hemisphere
+    fig, axes = plt.subplots(1, 2, sharey=True)
+    fig.set_figwidth(15)
+    draw_cross_section_1dPlot(ax = axes[0], 
+                              sampling_datas = l_sampling_datas, 
+                              sulcus_names = l_sulcus_names, 
+                              roi_names = l_roi_names,
+                              p_threshold = p_threshold,
+                              n_MCT = n_MCT,
+                              y_range = y_range,
+                              tick_size = 24,
+                              sulcus_text_size = 16,
+                              y_tick_precision = y_tick_precision,
+                              n_inner_yTick = n_inner_yTick,
+                              cmap = cmap)
+
+    # Draw cross-section data of right hemisphere
+    draw_cross_section_1dPlot(ax = axes[1], 
+                              sampling_datas = r_sampling_datas, 
+                              sulcus_names = r_sulcus_names, 
+                              roi_names = r_roi_names,
+                              p_threshold = p_threshold,
+                              n_MCT = n_MCT,
+                              y_range = y_range,
+                              tick_size = 24,
+                              sulcus_text_size = 16,
+                              y_tick_precision = y_tick_precision,
+                              n_inner_yTick = n_inner_yTick,
+                              cmap = cmap)
+
+    # others
+    axes[0].set_xlabel("")
+    axes[1].set_xlabel("")
+    axes[0].set_ylabel("")
+    axes[1].set_ylabel("")
+    axes[1].get_yaxis().set_visible(False)
+    axes[1].spines['left'].set_visible(False)
+
+    return fig, axes
     
 if __name__ == "__main__":
     template_surface_path = '/home/seojin/single-finger-planning/data/surf/fs_LR.164k.L.flat.surf.gii'

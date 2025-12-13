@@ -12,8 +12,7 @@ from watchdog.events import RegexMatchingEventHandler
 
 # Custom Libraries
 
-# Sources
-
+# Classes
 class CreateFileWatcher:
     def __init__(self, src_path, patterns, listen_file_names=[]):
         self._src_path = src_path
@@ -68,7 +67,7 @@ class CreateFileWatcher:
                 self._event_observer.stop() # stop event observer if all file concerned my interest is created
                 break
 
-
+# Examples
 if __name__ == "__main__":
     # use this module like this
     watcher = CreateFileWatcher(src_path="/directory_path",

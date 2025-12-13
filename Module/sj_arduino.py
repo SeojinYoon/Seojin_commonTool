@@ -1,11 +1,10 @@
-import prj_info
-import sys
-sys.path.append(prj_info.module_path)
-from sj_file_system import str_join
 
+# Common Libraries
+import sys
 import serial
 import serial.tools.list_ports
 
+# Functions
 def connected_ports():
     myports = [tuple(p) for p in list(serial.tools.list_ports.comports())]
     return myports
@@ -15,12 +14,13 @@ def find_arduino_automatically():
     port_list = connected_ports()
 
     for port in port_list:
-        if "Arduino" in str_join(port):
+        if "Arduino" in "_".join(port):
             print("find!")
             return port
     
     return None
 
+# Classes
 class Comm_arduino:
     comm_arduino = None
 

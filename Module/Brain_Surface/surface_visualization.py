@@ -334,7 +334,7 @@ def show_both_hemi_stats(l_stat,
     
     # Both
     plt.clf()
-    both_surf_img_path = os.path.join(save_dir_path, f"Both_hemi_stat")
+    both_surf_img_path = os.path.join(save_dir_path, f"both_hemi_stat")
     fig, ax = show_both_hemi_images(l_surf_img_path = l_surf_img_path, 
                                     r_surf_img_path = r_surf_img_path, 
                                     both_surf_img_path = both_surf_img_path,
@@ -402,7 +402,7 @@ def show_interactive_brain(data_info: dict,
                            alpha: float = 1.0,
                            depths: list = [0,0.2,0.4,0.6,0.8,1.0],
                            query_port: int = 5000,
-                           surf_dir_path: str = "/mnt/sda2/Common_dir/Atlas/Surface",
+                           surf_dir_path: str = "/home/seojin/Seojin_commonTool/Module/Brain_Surface/Datas",
                            color_bar_info = {
                                "n_inner_ticks" : 3,
                                "tick_precision" : 4,

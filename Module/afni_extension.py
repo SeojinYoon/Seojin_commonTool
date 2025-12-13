@@ -1,6 +1,5 @@
 
 # Common Libraries
-from re import I
 import subprocess
 import pandas as pd
 import numpy as np
@@ -9,9 +8,9 @@ from functools import reduce
 import nibabel as nb
 
 # Custom Libraries
-from sj_string import search_stringAcrossTarget, str_join
-from stat_module import t_critical_value
+from sj_string import search_stringAcrossTarget
 
+# Functions
 def set_afni_abin(abin_path):
     """
     set abin path
@@ -67,7 +66,7 @@ def clusterize(file_path,
         test_str = f"-2sided {l_threshold} {u_threshold}"
         
     # command
-    command = str_join(strs = [
+    command = " "(strs = [
         "3dClusterize",
         f"-inset {file_path}",
         f"-idat {stat_index}",

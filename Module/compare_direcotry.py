@@ -1,20 +1,16 @@
 
 # Common Libraries
-import sys
-import numpy as np
 import os
-from collections import Counter
-from enum import Enum
+import sys
 import glob
-from operator import itemgetter
-import glob
-import tqdm
-from multiprocessing import Pool
-import subprocess
 import numpy as np
+from enum import Enum
+from tqdm import tqdm
+from operator import itemgetter
+from multiprocessing import Pool
+from subprocess import check_output
 
 # Functions
-
 class File_comparison(Enum):
     file_name = 1 << 0
     file_type = 1 << 1
@@ -63,7 +59,7 @@ def checksum(file_path):
     """
     command = f"md5sum {file_path}"
     
-    output = subprocess.check_output(command, shell=True).decode("utf-8").split(" ")[0]
+    output = check_output(command, shell=True).decode("utf-8").split(" ")[0]
     return output.strip()
 
 def get_file_count(dir_path):
@@ -76,7 +72,7 @@ def get_file_count(dir_path):
     """
     command = f"find {dir_path} -type f | wc -l"
     
-    output = subprocess.check_output(f"find {dir_path} -type f | wc -l", shell=True).decode("utf-8")
+    output = check_output(f"find {dir_path} -type f | wc -l", shell=True).decode("utf-8")
     return output.strip()
 
 def is_same_file_count(dirA_path, dirB_path):
@@ -239,7 +235,7 @@ def compare_directory(dirA_path, dirB_path, file_comparisons, n_job = 1, is_repo
     assert len(dirA_file_paths) == len(dirB_file_paths), f"n_files is not same between {dirA_path} and {dirB_path}"
 
     # Check files
-    with tqdm.tqdm(total=n_dirA_files) as pbar:
+    with tqdm(total=n_dirA_files) as pbar:
         with Pool(processes=n_job) as pool:
             def callback(*args):
                 # callback

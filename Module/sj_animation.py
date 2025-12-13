@@ -1,11 +1,13 @@
 
+# Common Libraries
 import numpy as np
+import xarray as xr
 from matplotlib import cm
 from matplotlib import colors
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-import xarray as xr
 
+# Functions
 def animate_markers(markerDataSet,
                     line_label_pairs = [],
                     marker_colorMap = "tab20c",

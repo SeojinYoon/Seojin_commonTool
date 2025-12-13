@@ -1,6 +1,8 @@
 
+# Common Libraries
 import numpy as np
 
+# Functions
 def image2referenceCoord(ijk, affine):
     """
     change image coordinate to reference coordinate
@@ -109,6 +111,7 @@ def image1d_to_3d(index, shape_3d):
     
     return i, j, k
 
+# Examples
 if __name__ == "__main__":
     # image2referenceCoord
     image2referenceCoord([0,0,0], full_mask.affine)

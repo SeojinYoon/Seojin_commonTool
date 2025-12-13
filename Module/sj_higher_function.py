@@ -14,8 +14,7 @@ from collections.abc import Iterable
         
 # Custom Libaries
 
-# Sources
-
+# Functions
 def count_nest(x):
     """
     Count nested structure

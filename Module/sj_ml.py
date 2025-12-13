@@ -6,21 +6,19 @@ Created on Wed Jul  8 11:04:18 2020
 """
 
 # Common Libraries
-import numpy as np
+import os
 import time
+import torch
+import numpy as np
+import pandas as pd
 from tensorboardX import SummaryWriter
 from sklearn.utils import shuffle
-import torch
-import pandas as pd
-import os
 
 # Custom Libraries
-import sj_higher_function
-import sj_file_system
-from sj_file_system import str_join
+from sj_higher_function import apply_function
+from sj_file_system import save
 
-# Sources
-
+# Functions
 def numerical_gradient(f, x):
     """
     find numerical gradient about f at x
@@ -36,10 +34,10 @@ def numerical_gradient(f, x):
     for idx in range(x.size):
         tmp_val = x[idx]
         x[idx] = tmp_val + h
-        fxh1 = sj_higher_function.apply_function(f, x)
+        fxh1 = apply_function(f, x)
 
         x[idx] = tmp_val - h
-        fxh2 = sj_higher_function.apply_function(f, x)
+        fxh2 = apply_function(f, x)
         
         grad[idx] = (fxh1 - fxh2) / (2*h)
         x[idx] = tmp_val
@@ -160,7 +158,7 @@ class ExecModel:
         self.log_dir_path = log_dir_path
         self.logger = SummaryWriter(log_dir=log_dir_path)
         self.prefix = prefix
-        self.log_group = str_join([self.prefix, name])
+        self.log_group = "_".join([self.prefix, name])
     
         self.train_evals = {}
         self.train_evals["ep_train_eval"] = []
@@ -170,7 +168,7 @@ class ExecModel:
         self.test_evals["ep_test_eval"] = []
         self.test_evals["batch_test_eval"] = []
         
-        self.save_file_name = str_join([self.prefix, name])
+        self.save_file_name = "_".join([self.prefix, name])
         
         self.auxiliary_criterions = []
         
@@ -185,8 +183,8 @@ class ExecModel:
         """
         self.auxiliary_criterions += [(criterion_name, criterion)]
         
-        self.train_evals[str_join(["ep", "train", criterion_name])] = []
-        self.test_evals[str_join(["ep", "test", criterion_name])] = []
+        self.train_evals["_".join(["ep", "train", criterion_name])] = []
+        self.test_evals["_".join(["ep", "test", criterion_name])] = []
     
     def set_pf_params(self, epoch, batch_size):
         if self.model.is_partial_fit:
@@ -265,24 +263,12 @@ class ExecModel:
                     batch_X = X_train[i : i+self.batch_size]
                     batch_Y = y_train[i : i+self.batch_size]
                     self.model.partial_fit(batch_X, batch_Y)
-                    """
-                    if is_logging:
-                        self.logger.add_scalars(str_join([self.log_group, str_join(["batch", "eval"])], "/"), 
-                                               {
-                                                   "train" : self.train_eval(),
-                                                   "test" : self.test_eval(),
-                                               },
-                                               ep * self.batch_size + i)
-                        self.train_evals["batch_train_eval"] = self.train_evals["batch_train_eval"] + [self.train_eval()]
-                        self.test_evals["batch_test_eval"] = self.test_evals["batch_test_eval"] + [self.test_eval()]
-                        
-                        # print("batch acc: ", sum(self.model.predict(self.X_train) == self.y_train) / len(self.y_train))
-                    """
                     
                 # https://tensorboard-pytorch.readthedocs.io/en/latest/tensorboard.html#tensorboardX.SummaryWriter.add_scalars
                 if ep != 1:
                     if is_logging:
-                        self.logger.add_scalars(str_join([self.log_group, str_join(["epoch", "eval"])], "/"), 
+                        
+                        self.logger.add_scalars("/".join([self.log_group, "_".join(["epoch", "eval"])]), 
                                                {
                                                    "train" : self.train_eval(),
                                                    "test" : self.test_eval(),
@@ -294,12 +280,12 @@ class ExecModel:
                         if len(self.auxiliary_criterions) > 0:
                             for ax_criterion_name, ax_criterion_func in self.auxiliary_criterions:
                                 ax_train_eval = ax_criterion_func(self.predict(self.X_train), self.y_train)
-                                self.train_evals[str_join(["ep", "train", ax_criterion_name])] = self.train_evals[str_join(["ep", "train", ax_criterion_name])] + [ax_train_eval]
+                                self.train_evals["_".join(["ep", "train", ax_criterion_name])] = self.train_evals["_".join(["ep", "train", ax_criterion_name])] + [ax_train_eval]
                                 
                                 ax_test_eval = ax_criterion_func(self.predict(self.X_test), self.y_test)
-                                self.test_evals[str_join(["ep", "test", ax_criterion_name])] = self.test_evals[str_join(["ep", "test", ax_criterion_name])] + [ax_test_eval]
+                                self.test_evals["_".join(["ep", "test", ax_criterion_name])] = self.test_evals["_".join(["ep", "test", ax_criterion_name])] + [ax_test_eval]
                                 
-                                self.logger.add_scalars(str_join([self.log_group, str_join([ax_criterion_name, "epoch", "eval"])], "/"), 
+                                self.logger.add_scalars("/".join([self.log_group, "_".join([ax_criterion_name, "epoch", "eval"])]), 
                                                {
                                                    "train" : ax_train_eval,
                                                    "test" : ax_test_eval,
@@ -318,11 +304,11 @@ class ExecModel:
             self.model.fit(X_train, y_train)
             
             if is_logging:
-                self.logger.add_scalar(str_join([self.log_group, str_join(["train", "eval"])], "/"),
+                self.logger.add_scalar("/".join([self.log_group, "_".join(["train", "eval"])]),
                                        self.train_eval(),
                                        1)
 
-                self.logger.add_scalar(str_join([self.log_group, str_join(["test", "eval"])], "/"),
+                self.logger.add_scalar("/".join([self.log_group, "_".join(["test", "eval"])]),
                                        self.test_eval(),
                                        1)
                 
@@ -353,7 +339,7 @@ class ExecModel:
         params["log group"] = self.log_group
                    
         save_m = SaveModel(model=self.model, name=self.name, params=params)
-        sj_file_system.save(save_m, os.path.join(save_dir_path, str_join(self.save_file_name, post_fix)))
+        save(save_m, os.path.join(save_dir_path, f"{post_fix}".join(self.save_file_name)))
     
     def evaluate_mode(self):
         try:
@@ -368,7 +354,7 @@ class ExecModel:
         self.X_test = self.X_test.to("cpu")
         self.model = self.model.to("cpu")
         
-        torch.save(self, os.path.join(save_dir_path, str_join([self.save_file_name])))
+        torch.save(self, os.path.join(save_dir_path, "_".join([self.save_file_name])))
             
 def df_to_tensor(df):
     return torch.tensor(df.values).float()

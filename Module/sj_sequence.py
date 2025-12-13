@@ -11,7 +11,6 @@ import math
 from sj_higher_function import recursive_map, flatten
 
 # Sources
-
 sample_array = np.array([
     [[-1, -1, -1],[-1, -1, -1]],
     [[1, 2, 3],[4, 5, 6]],
@@ -88,15 +87,6 @@ def is_same(array1, array2):
     comparison = array1 == array2
     equal_arrays = comparison.all()
     return equal_arrays
-
-def get_multiple_elements_in_list(in_list, in_indices):
-    """
-    Get multiple element using indexes
-    
-    :param in_list: data(list)
-    :param in_indices: indexes to be extracted from in_list
-    """
-    return [in_list[i] for i in in_indices]
 
 def find_indexes(list, find_value, method = "equal"):
     """
@@ -329,7 +319,9 @@ def filterUsingFlags(target_list, flag_list, flag_value):
     
     return target_list
     """
-    return get_multiple_elements_in_list(target_list, find_indexes(flag_list, flag_value))
+    indices = find_indexes(flag_list, flag_value)
+
+    return np.array(target_list)[indices]
 
 def filterUsingExclude(target_list, exclude_list):
     """
@@ -372,7 +364,7 @@ def interleave_array(array1, array2, interleave_count):
             
     return temp
 
-def slice_list_usingDiff(data):
+def find_consecutive_ranges(data):
     """
     Slice list when a different value happens
     
@@ -380,50 +372,19 @@ def slice_list_usingDiff(data):
     
     return [(start index, stop index)]
     """
-    if len(data) == 0:
+    if not data:
         return []
-    elif len(data) == 1:
-        return [(data[0],1)]
-    
-    check_elements = []
-    lengths = []
-    
-    length = 1
-    for i, element in enumerate(data):
-        if len(check_elements) == 0:
-            length = 1
-            check_elements.append(element)
-        elif i == len(data) - 1:
-            if element == check_elements[-1]:
-                length += 1
-                lengths.append(length)
-            else:
-                lengths.append(length)
-                
-                check_elements.append(element)
-                length = 1
-                lengths.append(length)
-            
-        elif element != check_elements[-1]:
-            lengths.append(length)
 
-            length = 1
-            check_elements.append(element)
-        else:
-            length += 1
-        
-    start_indexes = []
-    stop_indexes = []
-    
-    start_index = 0
-    for element, length in list(zip(check_elements, lengths)):
-        start_indexes.append(start_index)
-        
-        stop_index = start_index + length - 1
-        stop_indexes.append(stop_index)
-        
-        start_index = stop_index + 1
-    return list(zip(start_indexes, stop_indexes))
+    result = []
+    start = 0
+
+    for i in range(1, len(data)):
+        if data[i] != data[i - 1]:
+            result.append((start, i - 1))
+            start = i
+
+    result.append((start, len(data) - 1))
+    return result
 
 def replace_element(data, from_, to_):
     """
@@ -460,7 +421,7 @@ def remove_duplicate_series(data, return_type = "check_result"):
     return (list)
     """
     
-    slicing_data_byDup = slice_list_usingDiff(data)
+    slicing_data_byDup = find_consecutive_ranges(data)
     
     start_indexes = np.array([e[0] for e in slicing_data_byDup])
     stop_indexes = np.array([e[1] for e in slicing_data_byDup])
@@ -655,6 +616,7 @@ def sort_2d_array(corr, orig_order, new_order):
         matrix[r_i, c_i] = e
     matrix = matrix + matrix.T
     np.fill_diagonal(matrix, 1)
+    
     # Sort
     mapping = {new_order[i]: orig_order[i] for i in range(len(orig_order))}
     mapping_keys = sorted(mapping.keys())
@@ -686,7 +648,7 @@ if __name__=="__main__":
     
     interleave_array([1,2,3], [4,5,6], 1)
     
-    slice_list_usingDiff([1,1,1,2])
+    find_consecutive_ranges([1,1,1,2])
     
     replace_element([1,2,3], [1], [4])
     

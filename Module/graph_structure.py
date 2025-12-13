@@ -9,6 +9,7 @@ from sj_enum import ConnectionType, GraphLayoutType
 from sj_linux import exec_command, make_command
 from sj_higher_function import flatten
 
+# Classes
 class WorkingTreeCursor:
     """
     Tree execution manager
@@ -1061,7 +1062,7 @@ class KnowledgeNode:
         G.layout(prog=prog)
         return G
 
-# Test  #############################################################################################
+# Examples
 if __name__=="__main__":
     # Working tree
     def clean(a):

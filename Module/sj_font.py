@@ -5,8 +5,7 @@ from matplotlib import font_manager
 
 # Custom Libraries
 
-# Sources
-
+# Functions
 def get_font_paths(font_dir_path, font_name):
     """
     get font path form font_dir_path

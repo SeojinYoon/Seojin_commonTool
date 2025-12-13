@@ -20,6 +20,8 @@ from collections import Counter
 import math
 from ipywidgets.widgets import Button, IntSlider, interact, HBox, VBox
 from collections.abc import Iterable
+from scipy.stats import sem, ttest_1samp
+from matplotlib.patches import Rectangle
 
 # Custom Libraries
 from sj_string import str_join
@@ -967,6 +969,74 @@ def draw_errorlines(mean_df,
     
     return fig, axes
 
+def draw_profile_datas(ax,
+                       sample_datas: np.ndarray, 
+                       cmap: str = "tab10",
+                       cond_spread_width: float = 0.4,
+                       p_threshold: float = 0.05,
+                       y_minmax: tuple = None,
+                       n_MCT: int = 1):
+    """
+    Draw profile roi results
+    
+    :param ax: matplotlib axis
+    :param sample_data(shape - (#cond, #roi, #subj)): data arrays
+    :param cmap: color map (ex: "tab10", "viridis")
+    :param cond_spread_width: total width of data across conditions per tick 
+    :param p_threshold: p-value for thresholding significance representation
+    :param y_minmax: y-axis range
+    :param n_MCT: the number of multiple comparison for bonferroni correction
+    """
+    n_cond, n_roi, n_subj = sample_datas.shape
+
+    if n_cond > 1:
+        cond_x_spacing = cond_spread_width / (n_cond-1)
+    else:
+        cond_x_spacing = 0
+        
+    x = np.arange(n_roi)
+    
+    # Draw datas
+    cmap = plt.cm.get_cmap(cmap)
+    for cond_i, sample_data in enumerate(sample_datas):
+        cond_x = (x - (cond_spread_width/2)) + (cond_i * cond_x_spacing)
+        mean = np.mean(sample_data, axis = 1)
+        error = sem(sample_data, axis = 1)
+
+        scatter_xs = np.repeat(cond_x, n_subj)
+        
+        cond_color = cmap(cond_i)
+        ax.scatter(scatter_xs, sample_data.flatten(), s = 10, alpha = 0.2, color = cond_color)
+        ax.plot(cond_x, mean, color = cond_color)
+        ax.fill_between(cond_x, mean - error, mean + error, alpha = 0.2, color = cond_color)
+
+    # Show significant areas
+    significant_index_info = {}
+    if type(y_minmax) != type(None):
+        y_min_, y_max_ = y_minmax[0], y_minmax[1]
+        
+        y_height = (y_max_ - y_min_)
+        rect_height = y_height / 30
+        
+        max_height_forSig = n_cond * rect_height
+        for cond_i, sampling_data in enumerate(sample_datas):
+            cond_color = cmap(cond_i)
+            
+            stat_result = ttest_1samp(sampling_data, popmean = 0, axis = 1)
+            significant_indexes = np.where(stat_result.pvalue * n_MCT < p_threshold)[0]
+            significant_index_info[cond_i] = significant_indexes
+            
+            cond_number = cond_i + 1
+            y = y_min_ + max_height_forSig - (rect_height * cond_number)
+            
+            for sig_i in significant_indexes:
+                ax.add_patch(Rectangle(xy = (sig_i - 0.5, y), 
+                                       width = 1, 
+                                       height = rect_height, 
+                                       color = cond_color))
+    
+    return x
+    
 if __name__=="__main__":
     import F_Visualize
     test = pd.DataFrame([

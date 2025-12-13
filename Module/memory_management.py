@@ -1,4 +1,5 @@
 
+# Functions
 def convert_byte(byte, unit = "kB"):
     div = 1024
     if unit == "B":

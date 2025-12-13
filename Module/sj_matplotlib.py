@@ -8,7 +8,7 @@ from scipy.stats import cumfreq
 from matplotlib.lines import Line2D
 
 from sj_sequence import slice_list_usingDiff
-from sj_string import search_stringAcrossTarget, str_join
+from sj_string import search_stringAcrossTarget
 
 def multi_font_strings(texts, sep = " ", info = {}):    
     """
@@ -40,8 +40,8 @@ def multi_font_strings(texts, sep = " ", info = {}):
             s = f"$\\regular_" + "{" + text + "}" + "$"
         
         comp_texts.append(s)
-        
-    comp_text = str_join(comp_texts, sep)
+
+    comp_text = sep.join(comp_texts)
         
     return comp_text
 

@@ -8,8 +8,7 @@ Created on Wed Nov  6 20:23:39 2019
 # Common Libraries
 import pandas as pd
 
-# Sources
-
+# Functions
 def top_ranking_df(df, column_name, rank_range):
     sorted_df = df.sort_values(by=column_name, ascending = False)
     
@@ -21,6 +20,7 @@ def top_ranking_df(df, column_name, rank_range):
     
     return sorted_df.loc[r_i]
 
+# Examples
 if __name__=="__main__":
     import ranking
     df1 = pd.DataFrame(

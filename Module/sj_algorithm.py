@@ -11,7 +11,7 @@ import numpy as np
 
 # Custom Libraries
 
-# Sources
+# Functions
 
 class DF_Helper:
     # 매개변수에 dictionary 형식으로 제한조건을 넣어주면 해당 조건에 맞는 row를 리턴해줌

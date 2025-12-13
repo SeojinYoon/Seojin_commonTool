@@ -1,9 +1,11 @@
 
+# Common Libraries
 import os
-from pathlib import Path
 import glob 
 import subprocess
+from pathlib import Path
 
+# Functions
 def exec_command(command, 
                  arg_symbol = "-",
                  parameter_info = {}, 

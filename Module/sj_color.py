@@ -1,9 +1,11 @@
 
+# Common Libraries
 import matplotlib
 import matplotlib.pylab as plt
 import numpy as np
 from PIL import ImageColor
 
+# Functions
 def rgb_to_hex(rgb):
     return "#" + '%02x%02x%02x' % rgb
 
@@ -56,6 +58,7 @@ def l_cmap(cmap_style, names, add_number = 0.5, axis = None):
 
     return cmap, palette
 
+# Examples
 if __name__ == "__main__":
     rgb_to_hex((255, 255, 195))
     

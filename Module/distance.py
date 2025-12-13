@@ -9,8 +9,7 @@ import scipy
 
 # Custom Libraries
 
-# Sources
-
+# Functions
 def mahalanobis(x=None, data=None, cov=None):
     """
     Compute the Mahalanobis Distance between each row of x and the data
@@ -49,7 +48,7 @@ def minkowski_distance(x, y, lam):
     return (r)**(1.0/lam)
     
     
-####### Examples #######
+# Examples
 if __name__ == "__main__":
     filepath = 'https://raw.githubusercontent.com/selva86/datasets/master/diamonds.csv'
     df = pd.read_csv(filepath).iloc[:, [0,4,6]]

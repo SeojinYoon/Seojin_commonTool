@@ -1,15 +1,12 @@
 
 # Common Libraries
-import numpy as np
 import re
-from functools import reduce
+import numpy as np
 
 # Custom Libraries
-from sj_sequence import get_multiple_elements_in_list
 from sj_enum import File_validation
 
-# Sources
-
+# Functions
 def str_join(strs, delimiter = "_"):
     """
     join string
@@ -97,41 +94,32 @@ def search_stringAcrossTarget(targets,
                                     exclude_keys = exclude_keys) for target in targets]
     search_flags = np.array(search_results)
     indexes = np.where(search_flags == True)[0]
-    result = get_multiple_elements_in_list(targets, indexes)
+    result = list(np.array(targets)[indexes])
     
     # search validation
-    if validation_type == None:
-        pass
-    else:
-        if validation_type.value & File_validation.exist.value != 0:
-            # Check the search result existed
+    if validation_type is not None:
+        if validation_type.value & File_validation.exist.value != 0: # check existence
             assert len(result) != 0, "Please check to exist file"
-        if validation_type.value & File_validation.only.value != 0:
+        if validation_type.value & File_validation.only.value != 0: # check the number of files
             if len(result) > 1:
-                print(result)
                 raise Exception("Multiple similar files")
     
     # return
-    def return_func():
-        if return_type == "index":
-            return indexes
-        elif return_type == "flag":
-            return search_flags
-        else:
-            return result
-        
-    if validation_type == None:
-        return return_func()
-    else:        
-        if validation_type.value & File_validation.only.value != 0:
-            if return_type == "index":
-                return indexes[0]
-            elif return_type == "flag":
-                return search_flags
-            else:
-                return result[0]
-        else:
-            return return_func()
+    if return_type == "index":
+        out = indexes
+    elif return_type == "flag":
+        out = search_flags
+    else:
+        out = results
+
+    # only 옵션이면 scalar로 축약
+    if (validation_type is not None
+        and (validation_type.value & File_validation.only.value)
+        and return_type != "flag"
+    ):
+        return out[0]
+
+    return out
 
 def replace_all(text, dic):
     for old, new in dic.items():
@@ -141,9 +129,7 @@ def replace_all(text, dic):
 def make_pad_fromInt(integer, n_digit):
     return str(integer).zfill(n_digit)
 
-
-    
-                      
+# Examples                      
 if __name__ == "__main__":
     a_string = "A string is more than its parts!"
     matches = ["more", "d"]

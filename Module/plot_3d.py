@@ -1,8 +1,11 @@
+
+# Common Libraries
 import numpy as np
 import matplotlib.pylab as plt
 import plotly.graph_objects as go
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+# Functions
 def draw_uv_map(axis, 
                 uv_coordinates, 
                 faces,
@@ -231,3 +234,4 @@ def show_mesh(vertices,
     if is_hide_axis:
         ax.axis("off")
     return fig, ax
+    

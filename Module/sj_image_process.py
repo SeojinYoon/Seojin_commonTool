@@ -6,10 +6,11 @@ Created on Wed Jul  8 10:39:39 2020
 """
 
 # Common Libraries
+import os
 import cv2
+import sys
 import numpy as np
 import matplotlib.pylab as plt
-import sys
 from skimage import measure
 from matplotlib.cm import get_cmap
 from matplotlib.colors import rgb2hex

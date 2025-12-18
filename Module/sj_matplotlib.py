@@ -2,14 +2,18 @@
 """
 This file contains the basic source code to visualize graph using matplotlib
 """
+# Common Libraries
 import numpy as np
 import matplotlib.pylab as plt
 from scipy.stats import cumfreq
 from matplotlib.lines import Line2D
+from matplotlib.ticker import FuncFormatter
 
-from sj_sequence import slice_list_usingDiff
+# Custom Libraries
+from sj_sequence import find_consecutive_ranges
 from sj_string import search_stringAcrossTarget
 
+# Functions
 def multi_font_strings(texts, sep = " ", info = {}):    
     """
     Get multi font string
@@ -223,7 +227,7 @@ def draw_ticks(axis, tick_info = {}):
         
         -k, y_data(list): y tick positions ex) [1,2,3]
         -k, y_names(list): y tick text ex) ["a", "b", "c"] 
-        -k, y_tick_round(int): round method to show y-tick appropriately
+        -k, y_tick_precision(float): Number of decimal places to display on y-axis ticks
         -k, y_tick_weight(string): y tick weight
         -k, y_tick_size(float): y tick size
         -k, y_tick_rotation(int): y tick rotation
@@ -244,15 +248,15 @@ def draw_ticks(axis, tick_info = {}):
     y_tick_weight = tick_info.get("y_tick_weight", "normal")
     y_tick_size = tick_info.get("y_tick_size", 14)
     y_tick_rotation = tick_info.get("y_tick_rotation", 0)
-    y_tick_round = tick_info.get("y_tick_round", None)
+    y_tick_precision = tick_info.get("y_tick_precision", None)
     
     # X
     x_data = np.array(x_data)
     x_names = np.array(x_names)
     
     if x_tick_viewType == "remove_duplication":
-        x_tick_duplication = np.array([int((start + end) / 2) for start, end in slice_list_usingDiff(x_names)], dtype = int)
-        x_tick_data = np.array([(x_data[start] + x_data[end]) / 2 for start, end in slice_list_usingDiff(x_names)])
+        x_tick_duplication = np.array([int((start + end) / 2) for start, end in find_consecutive_ranges(x_names)], dtype = int)
+        x_tick_data = np.array([(x_data[start] + x_data[end]) / 2 for start, end in find_consecutive_ranges(x_names)])
         
         if len(x_tick_duplication) > 0:
             x_names = x_names[x_tick_duplication]
@@ -269,7 +273,10 @@ def draw_ticks(axis, tick_info = {}):
                     y_names,
                     rotation = y_tick_rotation,
                     weight = y_tick_weight,
-                    size = y_tick_size)    
+                    size = y_tick_size)
+    if y_tick_precision is not None:
+        axis.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:.{precision}f}"))
+
 def draw_spine(axis, spine_info = {}):
     """
     Draw spine in the axis
@@ -610,7 +617,8 @@ def make_line_legend(labels,
     for i, label in enumerate(labels):
         custom_lines.append(Line2D([0], [0], color = cmap.colors[i], lw = lw, label = label))
     return custom_lines
-    
+
+# Examples
 if __name__=="__main__":
     multi_font_strings(["a", "b"])
     

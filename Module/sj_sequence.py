@@ -372,6 +372,9 @@ def find_consecutive_ranges(data):
     
     return [(start index, stop index)]
     """
+    if not isinstance(data, list):
+        data = list(data)
+        
     if not data:
         return []
 

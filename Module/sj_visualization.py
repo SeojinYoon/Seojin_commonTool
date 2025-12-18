@@ -974,8 +974,7 @@ def draw_profile_datas(ax,
                        cmap: str = "tab10",
                        cond_spread_width: float = 0.4,
                        p_threshold: float = 0.05,
-                       y_minmax: tuple = None,
-                       n_MCT: int = 1):
+                       y_minmax: tuple = None):
     """
     Draw profile roi results
     
@@ -985,7 +984,6 @@ def draw_profile_datas(ax,
     :param cond_spread_width: total width of data across conditions per tick 
     :param p_threshold: p-value for thresholding significance representation
     :param y_minmax: y-axis range
-    :param n_MCT: the number of multiple comparison for bonferroni correction
     """
     n_cond, n_roi, n_subj = sample_datas.shape
 
@@ -1023,7 +1021,7 @@ def draw_profile_datas(ax,
             cond_color = cmap(cond_i)
             
             stat_result = ttest_1samp(sampling_data, popmean = 0, axis = 1)
-            significant_indexes = np.where(stat_result.pvalue * n_MCT < p_threshold)[0]
+            significant_indexes = np.where(stat_result.pvalue < p_threshold)[0]
             significant_index_info[cond_i] = significant_indexes
             
             cond_number = cond_i + 1

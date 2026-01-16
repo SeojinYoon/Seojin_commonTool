@@ -60,12 +60,6 @@ class WorkingTreeCursor:
         for tree in work_tree.subtree:
             self.work_all(tree)
             
-            """
-            print(tree)
-            if tree.result == None:
-                self.work_all(tree)
-            """
-            
 class WorkingTree:
     """
     This class make tree structure including function to work.
@@ -124,7 +118,9 @@ class WorkingTree:
             if self.arg_info == {}:
                 result = os.system(self.func)
             else:
-                result = exec_command(self.func, self.arg_info, self.pipeline_info)
+                result = exec_command(command = self.func, 
+                                      parameter_info = self.arg_info, 
+                                      pipeline_info = self.pipeline_info)
         else:
             result = self.func(**self.arg_info)
         

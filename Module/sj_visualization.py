@@ -158,12 +158,6 @@ def draw_line_graph(axis, data_df, conds,
 
     draw_legend(axis, cp_legend_info)
     
-# stack graph를 그림
-# data_sets: data_set을 요소로 갖는 리스트, 
-# legends: 범례로 들어갈 리스트
-# x_marks: x축 눈금에 들어갈 이름
-# x_label: x축 이름
-# y_label: y축 이름
 def draw_stack_graph(data_sets, 
                      legends = None,
                      title = None,

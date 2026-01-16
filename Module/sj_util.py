@@ -220,6 +220,21 @@ def sample_lever(min_v,
     
     return sample
 
+def is_notebook():
+    try:
+        shell = get_ipython().__class__.__name__
+        
+        if shell == 'ZMQInteractiveShell':
+            return True
+        elif shell == 'google.colab._shell.Shell':
+            return True
+        elif shell == 'TerminalInteractiveShell':
+            return False
+        else:
+            return False
+    except NameError:
+        return False
+        
 if __name__ == "__main__":
     z = split_value(split_value = 10,
                     split_count = 5,
@@ -235,5 +250,5 @@ if __name__ == "__main__":
                                 size = 100, 
                                 round_digit = 1)
     raw_samples = np.array(raw_samples)
-
+    is_notebook()
 

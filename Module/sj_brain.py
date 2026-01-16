@@ -40,7 +40,7 @@ from tqdm.contrib.concurrent import process_map
 
 # Custom Libraries
 from sj_visualization import plot_timeseries
-from sj_sequence import get_multiple_elements_in_list, slice_list_usingDiff, check_duplication
+from sj_sequence import check_duplication
 from sj_file_system import load, save
 from sj_higher_function import recursive_mapWithDepth
 from sj_preprocessing import change_df
@@ -215,13 +215,11 @@ def split_data_pairs(datas, behaviors, train_indexes, test_indexes):
     return train_datas, train_behavior, test_datas(4d numpy array), test_behavior
     """
     train_datas = concat_fMRI_datas(train_indexes, datas)
-    train_behavior = get_multiple_elements_in_list(in_list=behaviors,
-                                                           in_indices=train_indexes)
+    train_behavior = [behaviors[i] for i in train_indexes]
     train_behavior = concat_pandas_datas(train_behavior)
 
     test_datas = concat_fMRI_datas(test_indexes, datas)
-    test_behavior = get_multiple_elements_in_list(in_list=behaviors,
-                                                          in_indices=test_indexes)
+    test_behavior = [behaviors[i] for i in test_indexes]
     test_behavior = concat_pandas_datas(test_behavior)
 
     return train_datas, train_behavior, test_datas, test_behavior

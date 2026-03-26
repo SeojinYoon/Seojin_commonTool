@@ -1,14 +1,14 @@
 
 # Common Libraries
 import os
+import nltools
+import nilearn
 import numpy as np
 import pandas as pd
 import nibabel as nb
-import nltools
-import nilearn
-from nilearn.image import resample_to_img, math_img, mean_img
-from nilearn.plotting import plot_roi
 from nltools.data import Brain_Data
+from nilearn.plotting import plot_roi
+from nilearn.image import resample_to_img, math_img, mean_img
 
 # Custom Libraries
 from sj_dictionary import search_dict

@@ -1,23 +1,24 @@
 
 # Cummon Libraries
-import time
-from ast import literal_eval
-from os import stat, path
 import os
+import re
 import csv
-import pandas as pd
-import pickle 
+import yaml
+import time
 import glob
 import tqdm
-from multiprocessing import Pool
+import h5py
+import pickle
+import pathlib
+import filecmp
 import subprocess
 import numpy as np
-import pathlib
-from pathlib import Path
-import h5py
-import re
-import filecmp
+import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
+from ast import literal_eval
+from os import stat, path
+from multiprocessing import Pool
 
 # Custom Libraries
 from sj_linux import exec_command, exec_command_withSudo
@@ -647,7 +648,15 @@ def copy_directory_carefully(src_dir_path,
         with open(log_file_path, mode = "a", newline='') as file:
             writer = csv.writer(file)
             writer.writerow([src_file_path, dst_file_path, copy_state])
-            
+
+def load_yaml(path):
+    with open(path, 'r') as stream:
+        try:
+            data = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+    return data
+    
 if __name__ == "__main__":
     """
     Example of CsvManager 
@@ -691,4 +700,5 @@ if __name__ == "__main__":
                                       "/home/seojin/temp", 
                                       is_print = True, 
                                       log_file_path = "/home/seojin/temp/log.csv")
+    load_yaml("/mnt/sdb2/DeepProprioception/DLC_project/DP01_emg-sj-2026-03-07/config.yaml")
     

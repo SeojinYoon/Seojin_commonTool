@@ -1,16 +1,16 @@
 
 # Common Libraries
-from pathlib import Path
-import xml.etree.ElementTree as ET
-import xml.dom.minidom as md
 import os
 import sys
 import numpy as np
 import pandas as pd
+from pathlib import Path
+import xml.dom.minidom as md
+import xml.etree.ElementTree as ET
 
 # Custom Libraries
-from XML.xml_util import search_tags_in_xml
 from sj_docker import run_command_onDocker
+from XML.xml_util import search_tags_in_xml
 
 x_index = 0
 y_index = 1
@@ -20,9 +20,8 @@ z_index = 2
 def make_scale_setup(setup_template_path,
                      setup_file_path, 
                      template_model_path, 
-                     static_pose_trc_path, 
-                     dynamic_trial_trc_path,
-                     dynamic_trial_time_range,
+                     pose_trc_path, 
+                     time_range,
                      model_output_path):
     """
     Make scale setup file
@@ -30,8 +29,7 @@ def make_scale_setup(setup_template_path,
     :param setup_template_path(string): scaling setup scaling template path
     :param setup_file_path(string): xml file path to save scaling setup file
     :param template_model_path(string): template opensim musculoskeletal model path
-    :param static_pose_trc_path(string): static pose path (.trc)
-    :param dynamic_trial_trc_path(string): dynamic trial trc path
+    :param pose_trc_path(string): static pose path (.trc)
     :param dynamic_trial_time_range(tuple - int): time range of dynmaic scaling
     :param model_output_path(string): output model path
     """
@@ -53,19 +51,23 @@ def make_scale_setup(setup_template_path,
     assert len(additional_marker_element) == 1, "Error - marker_set_file"
     additional_marker_element[0].text = "Unassigned"
     
-    # Scale factor - dynamic scaling 
-    dynamic_scaling_markers_element = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "marker_file"])
-    assert len(dynamic_scaling_markers_element) == 1, "Error - marker_file"
-    dynamic_scaling_markers_element[0].text = dynamic_trial_trc_path
+    # Scale factor
+    scaling_markers_element = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "marker_file"])
+    assert len(scaling_markers_element) == 1, "Error - marker_file"
+    scaling_markers_element[0].text = pose_trc_path
     
-    dynamic_scaling_markers_timeRange = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "time_range"])
-    assert len(dynamic_scaling_markers_timeRange) == 1, "Error - marker_file time range"
-    dynamic_scaling_markers_timeRange[0].text = f"{dynamic_trial_time_range[0]} {dynamic_trial_time_range[1]}"
+    scaling_markers_timeRange = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "time_range"])
+    assert len(scaling_markers_timeRange) == 1, "Error - marker_file time range"
+    scaling_markers_timeRange[0].text = f"{time_range[0]} {time_range[1]}"
     
     # Marker place
     marker_pos_element = search_tags_in_xml(root, ["ScaleTool", "MarkerPlacer", "marker_file"])
     assert len(marker_pos_element) == 1, "Error - marker_file"
-    marker_pos_element[0].text = static_pose_trc_path
+    marker_pos_element[0].text = pose_trc_path
+
+    marker_pos_time_range = search_tags_in_xml(root, ["ScaleTool", "MarkerPlacer", "time_range"])
+    assert len(marker_pos_time_range) == 1, "Error - marker_file time range"
+    marker_pos_time_range[0].text = f"{time_range[0]} {time_range[1]}"
     
     # Output - scaled model
     output_model_scaler_element = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "output_model_file"])
@@ -300,15 +302,15 @@ def make_cmc_setup(setup_file_path,
 
 # Run opensim-cmd
 def run_opensim_cmd(setup_file_path,
-                    docker_name = "seojin_opensim2"):
+                    container_ID = "seojin_opensim2"):
     """
     Run opensim-cmd
     
     :param setup_file_path(string): xml file path to save scaling setup file
-    :param docker_name(string): the name of docker
+    :param container_ID(string): the ID of docker container
     """
     command = f"opensim-cmd run-tool {setup_file_path}"
-    output = run_command_onDocker(command, docker_name = docker_name)
+    output = run_command_onDocker(command, container_ID = container_ID)
     
     return output
 
@@ -569,8 +571,18 @@ def mm_to_m(vector):
     
     return vector which has m unit
     """
-    return vector * 1000
+    return vector / 1000
 
+def m_to_mm(vector):
+    """
+    Convert m to mm
+    
+    :param vector(np.array): 
+    
+    return vector which has m unit
+    """
+    return vector * 1000
+    
 def find_data_start(file_path, indicator='Frame#'):
     """
     Scan the .trc file to find where the data section starts.

@@ -339,7 +339,7 @@ def make_3d_dataset(data,
     """
     Make 3D dataset from 3D numpy array
     
-    :param data(numpy array - shape(3d)): numpy data
+    :param data(numpy array - shape(3d)): numpy data ex) (#time, #marker, #coord)
     :param wrapping_dataset_name(string): Wrapping name of total dataset
     :param element_dataset_names(list - string): dataset name list of each dataset within total dataset
     :param dataset1_dim_names(list - string): dimension name list of dataset1
@@ -404,3 +404,15 @@ if __name__=="__main__":
                          datset1_dim_names = companies,
                          datset2_dim_names = dates,
                          datset3_dim_names = prices)
+
+    n_t = 10
+    n_marker = 3
+    n_coord = 3
+    dummy_marker_pos = np.random.random((n_t, n_marker, n_coord))
+    estim_3D_dataSet = make_3d_dataset(data = dummy_marker_pos,
+                                       wrapping_dataset_name = "3D",
+                                       element_dataset_names = ["Times", "Labels", "Coords"],
+                                       dataset1_dim_names = np.arange(n_t),
+                                       dataset2_dim_names = [marker_i for marker_i in range(n_marker)],
+                                       dataset3_dim_names = ["X", "Y", "Z"])
+    

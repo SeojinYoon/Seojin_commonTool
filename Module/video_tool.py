@@ -3,10 +3,12 @@
 import os
 import cv2
 import numpy as np
+import xarray as xr
 from tqdm import tqdm
-from moviepy.editor import VideoFileClip, VideoClip, concatenate_videoclips
+import matplotlib.pylab as plt
 from multiprocessing import Pool
 from joblib import Parallel, delayed
+from moviepy import VideoFileClip, VideoClip, concatenate_videoclips
 
 # Functions
 def get_video_info(video_path):
@@ -33,7 +35,7 @@ def get_video_info(video_path):
 
 def process_background_subtraction(args):
     """
-    Process background subtraction
+    Do background subtraction
     
     :param args: video_path, start_index, end_index of frame
     
@@ -204,7 +206,7 @@ def cut_video_usingTime(video_path, output_path, start_sec, end_sec):
     clip = VideoFileClip(video_path)
     
     # Create the subclip
-    subclip = clip.subclip(start_sec, end_sec)
+    subclip = clip.subclipped(start_sec, end_sec)
     
     # Write the subclip to a file
     subclip.write_videofile(output_path)
@@ -283,23 +285,29 @@ def estimate_depth_monocular(video_path,
 
 def get_video_frames(video_path):
     """
-    Get video frames
-    
-    :param video_path(string): path for video
-    
-    return (np.array)
+    Get video frames (RGB)
+
+    :param video_path (str): path for video
+    :return: np.array (n_frames, height, width, 3)
     """
-    # Video information
+
     cap = cv2.VideoCapture(video_path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    
+
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
+
     results = []
-    for i in tqdm(range(frame_count)):
+    for _ in tqdm(range(frame_count)):
         ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results.append(frame)
-    return np.c_[results]
+
+    cap.release()
+
+    return np.stack(results)
 
 def convert_gray(video_path):
     """
@@ -339,10 +347,11 @@ def save_video(rgb_arrays, fps, output_path, is_progress_bar = False):
         return rgb_arrays[index]
     
     animation = VideoClip(make_frame, duration = time_duration)
+
+    my_logger = 'bar' if is_progress_bar else None
     animation.write_videofile(output_path, 
-                              fps = fps, 
-                              verbose = is_progress_bar, 
-                              logger = None)
+                              fps = fps,
+                              logger = my_logger)
     print(f"save: {output_path}")
 
 def append_frames(video_path, rgb_frames, fps_of_rgb_frames, is_progress_bar = False):
@@ -426,6 +435,102 @@ def calc_pixel_sum(video_path,
         
     return pixel_sums
 
+def save_3d_pos_video(pos_3d: xr.core.dataset.Dataset,
+                      bodyparts: list,
+                      output_path: str,
+                      obj_info: dict,
+                      continuous_body_parts: list = [],
+                      skeletons = [],
+                      fps: int = 30,
+                      figsize = (15, 5),
+                      dpi = 100):
+    """
+    Save pose video
+
+    :param pos_3d: (#frame, #marker, 3)
+    :param bodyparts: list or array of bodypart names
+    :param continuous_body_parts: list of bodypart for continous plot
+    :param output_path: output mp4 path
+    :param tablet_angle: angle of table
+    :param skeletons: list of tuples consisting of bodypart, e.g. [("Shoulder", "Elbow"), ...]
+    :param fps: output video fps
+    :param figsize: matplotlib figure size
+    :param dpi: figure dpi
+    :parma table_size: tablet width and height
+    """
+
+    # Data information
+    n_frames = len(pos_3d["Times"])
+    pos_array = pos_3d["3D"].to_numpy()
+
+    # Plot configuration
+    colors = plt.cm.tab10(np.linspace(0, 1, len(bodyparts)))
+    x_min, x_max = np.nanmin(pos_array[:, :, 0]), np.nanmax(pos_array[:, :, 0])
+    y_min, y_max = np.nanmin(pos_array[:, :, 1]), np.nanmax(pos_array[:, :, 1])
+    z_min, z_max = np.nanmin(pos_array[:, :, 2]), np.nanmax(pos_array[:, :, 2])
+    
+    fig_w = int(figsize[0] * dpi)
+    fig_h = int(figsize[1] * dpi)
+    
+    # Video configuration
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (fig_w, fig_h))
+
+    for step_i in range(n_frames):
+        fig = plt.figure(figsize = figsize, dpi = dpi)
+        ax = fig.add_subplot(1, 1, 1, projection="3d")
+
+        # 3D
+        for i, bodypart in enumerate(bodyparts):
+            if bodypart in continuous_body_parts:
+                xyz = pos_array[0:step_i+1, i, :]
+                ax.scatter(xyz[:,0], xyz[:,2], xyz[:,1], s=20, color=colors[i])
+            else:
+                xyz = pos_array[step_i, i, :]
+                ax.scatter(xyz[0], xyz[2], xyz[1], s=20, color=colors[i])
+            
+        for body_part1, body_part2 in skeletons:
+            idx1 = bodyparts.index(body_part1)
+            idx2 = bodyparts.index(body_part2)
+            dlc3d = np.array([pos_array[step_i, idx1, :], pos_array[step_i, idx2, :]])
+            ax.plot(dlc3d[:, 0], dlc3d[:, 2], dlc3d[:, 1], c="black")
+
+        # Visualize - Static Objects (e.g., table, environment boundaries)
+        obj_traces = []
+        for obj_name in obj_info:
+            obj_pts = np.array(obj_info[obj_name]["points"])
+            ax.plot(obj_pts[:, 0], obj_pts[:, 2], obj_pts[:, 1], color="black")
+            
+        # Others        
+        ax.set_title("3D")
+        ax.set_xlabel("X"), ax.set_ylabel("Z"), ax.set_zlabel("Y")
+        ax.set_xlim(x_min, x_max), ax.set_ylim(z_min, z_max), ax.set_zlim(y_min, y_max)
+
+        handles = [plt.Line2D([0], 
+                              [0],
+                              marker = "o",
+                              color = "w",
+                              markerfacecolor = colors[i],
+                              markersize = 8,
+                              label = bodyparts[i]) for i in range(len(bodyparts))]
+        fig.legend(handles = handles, loc = "upper right")
+        plt.tight_layout()
+
+        # figure -> numpy image
+        fig.canvas.draw()
+        img = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+        img = img.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+        img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+
+        writer.write(img)
+        plt.close(fig)
+
+        if step_i % 50 == 0:
+            print(f"Saved frame {step_i}/{n_frames}")
+    
+    writer.release()
+    print(f"Video saved to: {output_path}")
+    
 if __name__ == "__main__":
     parallel_background_subtraction(video_path, output_video_path, split_window = 30, n_process = 5)
     

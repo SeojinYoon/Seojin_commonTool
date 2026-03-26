@@ -6,7 +6,8 @@ import numpy as np
 import collections
 from operator import itemgetter
 import math
-
+from typing import Iterable, Any, List, Tuple
+    
 # Custom Libraries
 from sj_higher_function import recursive_map, flatten
 
@@ -364,30 +365,34 @@ def interleave_array(array1, array2, interleave_count):
             
     return temp
 
-def find_consecutive_ranges(data):
+def find_consecutive_ranges(data: Iterable[Any], target = None) -> List[Tuple[int, int]]:
     """
-    Slice list when a different value happens
-    
-    :param data: (list)
-    
-    return [(start index, stop index)]
+    Find consecutive ranges where values remain the same.
+    Optionally return only ranges matching a specific value.
+
+    :param data: iterable
+    :param target: value to filter (e.g., True). If None, return all ranges.
+
+    :return: [(start index, stop index)]
     """
-    if not isinstance(data, list):
-        data = list(data)
-        
-    if not data:
+    if len(data) == 0:
         return []
 
-    result = []
-    start = 0
+    consecutive_ranges = []
+    start_i = 0
 
     for i in range(1, len(data)):
         if data[i] != data[i - 1]:
-            result.append((start, i - 1))
-            start = i
+            # Check if this range matches the target
+            if target is None or data[start_i] == target:
+                consecutive_ranges.append((start_i, i - 1))
+            start_i = i
 
-    result.append((start, len(data) - 1))
-    return result
+    # Handle last range
+    if target is None or data[start_i] == target:
+        consecutive_ranges.append((start_i, len(data) - 1))
+
+    return consecutive_ranges
 
 def replace_element(data, from_, to_):
     """

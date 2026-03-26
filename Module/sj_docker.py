@@ -3,19 +3,19 @@ import docker
 from sj_linux import make_export_command
 
 def run_command_onDocker(command,
-                         environment_info = {},
-                         docker_name = "seojin_opensim2"):
+                         container_ID,
+                         environment_info = {}):
     """
     Run command on docker container
 
     :param command(string): command
-    :param docker_name(string): the name of docker
+    :param container_ID(string): the ID of docker container
 
     return output
     """
     # Get docker container
     client = docker.from_env()
-    container = client.containers.get(docker_name)
+    container = client.containers.get(container_ID)
 
     # Check whether the container exists
     if container.status == 'running':

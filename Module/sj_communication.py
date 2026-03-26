@@ -2,7 +2,11 @@
 import os
 import numpy as np
 
-def scp_download(server_ip, account_name, server_file_path, local_file_path):
+def scp_download(server_ip, 
+                 server_scp_port,
+                 account_name, 
+                 server_file_path, 
+                 local_file_path):
     """
     You must add local computer's ssh key in ~/.ssh/authorized_keys
 
@@ -11,7 +15,7 @@ def scp_download(server_ip, account_name, server_file_path, local_file_path):
     - (server) copy the content of ~/.ssh/id_rsa.pub and lastly add it to the remote machines ~/.ssh/authorized_keys
     - (server) make sure remote machine have the permissions 0700 for ~./ssh folder and 0600 for ~/.ssh/authorized_keys
     """
-    command = f"scp {account_name}@{server_ip}:{server_file_path} {local_file_path}"
+    command = f"scp -p {server_scp_port} {account_name}@{server_ip}:{server_file_path} {local_file_path}"
     print(command)
     os.system(command)
 
@@ -25,6 +29,7 @@ if __name__ == "__main__":
             '/mnt/sdb2/DeepDraw/Projects/20220802_DP03_mri/Camera_1/1_01_R_20220802083840.mp4',
             ]
     scp_download(server_ip = "166.104.75.133",
+                 server_scp_port = "22",
                  account_name = "seojin",
                  server_file_path = cam1_path,
                  local_file_path = directory_path + "\\" + "cam1.mp4")

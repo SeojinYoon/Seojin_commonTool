@@ -19,7 +19,7 @@ from collections import defaultdict, deque
 # Custom Libraries
 import sj_higher_function
 from sj_timer import convert_time_to_second, convert_second_to_time, convert_second_to_frame
-from sj_sequence import slice_list_usingDiff
+from sj_sequence import find_consecutive_ranges
 
 # Functions
 def shift_image(X, dx, dy):
@@ -570,7 +570,7 @@ def detect_high_gradients_regions(frames,
     
     previous_stop_i = 0
     region_indexes = []
-    for slicing_start_i, slicing_stop_i in slice_list_usingDiff(diff_indexes):
+    for slicing_start_i, slicing_stop_i in find_consecutive_ranges(diff_indexes):
         if slicing_stop_i - slicing_start_i > n_region_threshold:
             start_i = t_high_grad_indexes[slicing_start_i]
             stop_i = t_high_grad_indexes[slicing_stop_i]

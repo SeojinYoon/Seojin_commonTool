@@ -1,7 +1,6 @@
 
 # Common Libraries
-import os
-import sys
+import os, re, sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -10,6 +9,7 @@ import xml.etree.ElementTree as ET
 
 # Custom Libraries
 from sj_docker import run_command_onDocker
+from sj_datastructure import make_3d_dataset
 from XML.xml_util import search_tags_in_xml
 
 x_index = 0
@@ -22,7 +22,9 @@ def make_scale_setup(setup_template_path,
                      template_model_path, 
                      pose_trc_path, 
                      time_range,
-                     model_output_path):
+                     model_output_path,
+                     mass = None,
+                     is_preserver_mass_distribution = False):
     """
     Make scale setup file
     
@@ -59,6 +61,17 @@ def make_scale_setup(setup_template_path,
     scaling_markers_timeRange = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "time_range"])
     assert len(scaling_markers_timeRange) == 1, "Error - marker_file time range"
     scaling_markers_timeRange[0].text = f"{time_range[0]} {time_range[1]}"
+
+    # Mass
+    mass = -1 if mass is None else mass
+    mass_tag = search_tags_in_xml(root, ["ScaleTool", "mass"])
+    assert len(mass_tag) == 1, "Error - mass"
+    mass_tag[0].text = f"{mass}"
+
+    is_preserver_mass_distribution = "true" if is_preserver_mass_distribution else "false"
+    scaling_preserve_mass_distribution = search_tags_in_xml(root, ["ScaleTool", "ModelScaler", "preserve_mass_distribution"])
+    assert len(scaling_preserve_mass_distribution) == 1, "Error - preserver mass distribution"
+    scaling_preserve_mass_distribution[0].text = is_preserver_mass_distribution
     
     # Marker place
     marker_pos_element = search_tags_in_xml(root, ["ScaleTool", "MarkerPlacer", "marker_file"])
@@ -642,6 +655,119 @@ def convert_mot2sto(mot_file_path, save_file_path):
         
     return df_mot 
 
+def trc_to_dataset(trc_path, marker_names, is_convert_x = True):
+    """
+    Converts a TRC file into a structured 3D dataset.
+
+    :param trc_path: Path to the .trc file containing motion capture data.
+    :param marker_names: A list of marker labels to extract from the TRC data.
+    :return: A structured 3D dataset object (exp_marker_ds).
+    """
+    # Load raw TRC data and extract time sequence
+    trc_data = load_trc_file(trc_path)
+    times = trc_data["Time"].to_numpy()
+    
+    # Remove metadata columns to isolate positional data
+    pos_only = trc_data.drop(["Frame#", "Time"], axis = 1, level = 0)
+
+    # Marker position
+    exp_marker_pos = []
+    for marker_name in marker_names:
+        exp_marker_pos.append(pos_only[marker_name].to_numpy())
+    
+    # Convert list to array and transpose to shape: (Time, Markers, Coordinates)
+    exp_marker_pos = np.array(exp_marker_pos).transpose(1, 0, 2)
+    
+    # Coordinate transformation: Convert x-axis from R->L to L->R
+    if is_convert_x:
+        exp_marker_pos[:, :, 0] = -exp_marker_pos[:, :, 0] 
+    
+    # Create the final 3D dataset with coordinates and metadata
+    exp_marker_ds = make_3d_dataset(exp_marker_pos, 
+                                    "3D", 
+                                    element_dataset_names = ["Times", "Labels", "Coords"], 
+                                    dataset1_dim_names = times, 
+                                    dataset2_dim_names = marker_names,
+                                    dataset3_dim_names = ["X", "Y", "Z"])
+    return exp_marker_ds
+
+def load_ik_log(file_path):
+    pattern = re.compile(r"Frame (\d+) \(t = ([\d\.]+)\):.*RMS = ([\d\.]+), max = ([\d\.]+) \((.*?)\)")
+    data = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            match = pattern.search(line)
+            if match:
+                frame = int(match.group(1))
+                time = float(match.group(2))
+                rms = float(match.group(3))
+                max_err = float(match.group(4))
+                marker = match.group(5)
+                
+                data.append([frame, time, rms, max_err, marker])
+    df = pd.DataFrame(data, columns=["frame", "time", "RMS", "max_error", "max_marker"])
+    return df
+
+def extract_muscle_names(osim_file_path, tag = "Millard2012EquilibriumMuscle"):
+    tree = ET.parse(osim_file_path)
+    root = tree.getroot()
+
+    muscle_names = []
+    for muscle in root.iter(tag):
+        name = muscle.get('name')
+        if name:
+            muscle_names.append(name)
+
+    return muscle_names
+
+def run_python_onDocker(source, container_ID = "a8f265a7dadb"):
+    environment_info = {
+        "LD_LIBRARY_PATH" : [
+            "/tmp/moco_dependencies_install/simbody/lib",
+            "/tmp/opensim-moco-install/sdk/Python/opensim",
+            "/tmp/moco_dependencies_install/adol-c/lib64",
+            "/tmp/opensim-moco-install/sdk/Simbody/li",
+            ],
+    }
+    
+    command = f"python3.6 -c {repr(source)}"
+    output = run_command_onDocker(command, environment_info = environment_info, container_ID = container_ID)
+    return output
+
+def extract_muscle_names(osim_file_path, tag = "Millard2012EquilibriumMuscle"):
+    tree = ET.parse(osim_file_path)
+    root = tree.getroot()
+    return [muscle.get("name") for muscle in root.iter(tag)]
+    
+def extract_muscle_params(model_path, target_tag_name = "Millard2012EquilibriumMuscle"):
+    muscle_names = extract_muscle_names(model_path, target_tag_name)
+    
+    tree = ET.parse(model_path)
+    root = tree.getroot()
+    
+    data_info = {}
+    for muscle_name in muscle_names:
+        muscle_tag = root.find(f".//{target_tag_name}[@name='{muscle_name}']")
+        
+        for child in muscle_tag:
+            tag_name = child.tag
+            if "Curve" not in tag_name:
+                val = child.text.strip() if child.text is not None else ""
+                try: val = float(val) if '.' in val else int(val)
+                except ValueError: pass
+                data_info[(muscle_name, "Basic", tag_name)] = val
+            elif "Curve" in tag_name:
+                curve_root = muscle_tag.find(tag_name)        
+                for curve_child in curve_root:
+                    val = curve_child.text.strip() if curve_child.text is not None else ""
+                    try: val = float(val) if '.' in val else int(val)
+                    except ValueError: pass
+                        
+                    data_info[(muscle_name, tag_name, curve_child.tag)] = val
+    series_data = pd.Series(data_info)
+    df = series_data.unstack(level=[0])
+    return df
+    
 if __name__=="__main__":
     readStoFile("")
     read_mot_file("")
@@ -656,3 +782,5 @@ if __name__=="__main__":
                                     time_range = (0,5))
     
     load_trc_file("/mnt/sdb2/DeepDraw/Projects/20220801_DP02_mri/Opensim/TRC_files/resnet_50/trial/trial2.trc")
+
+    

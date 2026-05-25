@@ -88,6 +88,44 @@ def map_indicies(original_indices, including_indices):
     
     return result
 
+def reorient_array(data: np.ndarray, 
+                   current_orient: str, 
+                   target_orient: str) -> np.ndarray:
+    """
+    Re-orient 3D array
+
+    :param data(shape: (#times, #labels, 3)): 3D array
+    :param current_orient: current orientation ex) "LPS"
+    :param target_orient: orientation to be converted ex) "RAS"
+
+    return np.ndarray
+    """
+    def get_axis_group(char):
+        if char in 'LR': return 'LR'
+        if char in 'IS': return 'IS'
+        if char in 'PA': return 'PA'
+        return None
+        
+    current_groups = [get_axis_group(c) for c in current_orient]
+    target_groups = [get_axis_group(c) for c in target_orient]
+
+    new_order = [current_groups.index(g) for g in target_groups]
+    data_c = data[:, :, new_order].copy()
+    current_reordered = [current_orient[i] for i in new_order]
+    for i, (c, t) in enumerate(zip(current_reordered, target_orient)):
+        if c != t:
+            data_c[:, :, i] = -data_c[:, :, i]
+    return data_c
+    
 if __name__ == "__main__":
     map_indicies([0,1,2,3,4,5], [2,3,4])
+
+    n_times = 10
+    n_labels = 2
+    n_coords = 3
+    data = np.zeros((n_times, n_labels, n_coords))
+    for label_i in range(n_labels):
+        for coord_i in range(n_coords):
+            data[:, label_i, coord_i] = np.arange(coord_i * 10, coord_i * 10 + 10, 1)
+    reorient_array(data, current_ornt = "LPS", target_ornt = "RSA")
     

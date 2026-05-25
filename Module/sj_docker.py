@@ -1,5 +1,8 @@
 
+# Common Libraries
 import docker
+
+# Custom Libraries
 from sj_linux import make_export_command
 
 def run_command_onDocker(command,
@@ -29,13 +32,11 @@ def run_command_onDocker(command,
     export_command = make_export_command(environment_info)
     
     # Command for bash
-    if export_command != "":
-        bash_command = f"/bin/bash -c '{export_command}; {command}'"
-    else:
-        bash_command = f"/bin/bash -c '{command}'"
-    
+    full_script = f"{export_command}; {command}" if export_command else command
+    bash_command = ["/bin/bash", "-c", full_script]
+
     # Execute
-    print(f"\033[1m" + bash_command + "\033[0m")
+    # print(f"\033[1m" + bash_command + "\033[0m")
     exec_result = container.exec_run(cmd = bash_command, tty = True)
 
     # Output log

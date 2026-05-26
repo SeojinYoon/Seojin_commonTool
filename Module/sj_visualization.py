@@ -1261,11 +1261,21 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     
     :return: (IPython.display.HTML) Rendered Plotly 3D visualization.
     """
-
+    visualize_coord_order = "LPI"
+    
     # Preprocessing
     position_ds = copy.deepcopy(position_ds)
-    position_ds["3D"].data = reorient_array(position_ds["3D"].data, ds_coord_order, "LPI")
-        
+    position_ds["3D"].data = reorient_array(position_ds["3D"].data, ds_coord_order, visualize_coord_order)
+
+    obj_coord_order = ds_coord_order
+    obj_info = copy.deepcopy(obj_info)
+    for obj_name in obj_info:
+        kinds = obj_info[obj_name]["points"]
+        for kind in kinds:
+            pts = np.array(obj_info[obj_name]["points"][kind])
+            pts = reorient_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
+            obj_info[obj_name]["points"][kind] = pts[0]
+            
     # Index mapping for coordinates
     x_index, y_index, z_index = 0, 1, 2
 
@@ -1292,13 +1302,14 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
         kinds = obj_info[obj_name]["points"]
         for kind in kinds:
             pts = np.array(obj_info[obj_name]["points"][kind])
+            
             obj_trace = go.Scatter3d(
                 x=pts[:, x_index],
                 y=pts[:, y_index],
                 z=pts[:, z_index],
                 mode="lines",
                 line=dict(color="black", width=2),
-                visible=True,    # Set to True to display objects by default
+                visible=True,
                 showlegend=True,
                 name=kind,
                 hoverinfo="name"
@@ -1463,15 +1474,15 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
         margin={'l': 0, 'r': 0, 'b': 0, 't': 40},
         title=f"3D Estimation Traces ({len(times)} frames)",
         scene=dict(
-            xaxis=dict(title='X-axis', 
+            xaxis=dict(title="L->R", 
                        range=(scene_min_range[x_index] - x_range_width * 2/10, 
                               scene_max_range[x_index] + x_range_width * 2/10), 
                        backgroundcolor = axis_bg),
-            yaxis=dict(title='Y-axis', 
+            yaxis=dict(title="P->A", 
                        range=(scene_min_range[y_index] - y_range_width * 2/10, 
                               scene_max_range[y_index] + y_range_width * 2/10), 
                        backgroundcolor = axis_bg),
-            zaxis=dict(title='Z-axis', 
+            zaxis=dict(title="I->S", 
                        range=(scene_min_range[z_index] - z_range_width * 2/10, 
                               scene_max_range[z_index] + z_range_width * 2/10), 
                        backgroundcolor = axis_bg),
@@ -1519,9 +1530,22 @@ def plot_3D_datasets(
     
     :return: (IPython.display.HTML) Rendered Plotly 3D visualization.
     """
+    visualize_coord_order = "LPI"
     
+    # Preprocessing
     position_ds_list = copy.deepcopy(position_ds_list)
-    
+    for position_ds in position_ds_list:
+            position_ds["3D"].data = reorient_array(position_ds["3D"].data, ds_coord_order, visualize_coord_order)
+        
+    obj_coord_order = ds_coord_order
+    obj_info = copy.deepcopy(obj_info)
+    for obj_name in obj_info:
+        kinds = obj_info[obj_name]["points"]
+        for kind in kinds:
+            pts = np.array(obj_info[obj_name]["points"][kind])
+            pts = reorient_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
+            obj_info[obj_name]["points"][kind] = pts[0]
+            
     # Validation check
     n_ds = len(position_ds_list)
     dataset_names = [f"{i}" for i in range(n_ds)] if len(dataset_names) == 0 else dataset_names
@@ -1529,10 +1553,6 @@ def plot_3D_datasets(
     
     # Config
     x_index, y_index, z_index = 0, 1, 2
-    
-    # Preprocessing
-    for position_ds in position_ds_list:
-        position_ds["3D"].data = reorient_array(position_ds["3D"].data, ds_coord_order, "LPI")
     
     # 1. Static objects
     colors = plotly.colors.qualitative.Plotly
@@ -1724,15 +1744,15 @@ def plot_3D_datasets(
         margin={'l': 0, 'r': 0, 'b': 0, 't': 40},
         title=f"3D Estimation Traces ({len(times)} frames)",
         scene=dict(
-            xaxis=dict(title='X-axis', 
+            xaxis=dict(title="L->R", 
                        range=(scene_min_range[x_index] - x_range_width * 2/10, 
                               scene_max_range[x_index] + x_range_width * 2/10), 
                        backgroundcolor = axis_bg),
-            yaxis=dict(title='Y-axis', 
+            yaxis=dict(title="P->A", 
                        range=(scene_min_range[y_index] - y_range_width * 2/10, 
                               scene_max_range[y_index] + y_range_width * 2/10), 
                        backgroundcolor = axis_bg),
-            zaxis=dict(title='Z-axis', 
+            zaxis=dict(title="I->S", 
                        range=(scene_min_range[z_index] - z_range_width * 2/10, 
                               scene_max_range[z_index] + z_range_width * 2/10), 
                        backgroundcolor = axis_bg),

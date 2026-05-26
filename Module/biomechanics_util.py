@@ -13,6 +13,9 @@ from scipy.optimize import minimize
 from mink import Configuration, SE3, SO3, FrameTask, solve_ik
 from scipy.spatial.transform import Rotation as R
 
+# Custom Libraries
+from XML.xml_util import parse_xml_with_includes
+
 # Functions
 def align_joint_link(source_ds, parent_label, child_label, target_vec, affected_labels=None):
     """
@@ -522,3 +525,133 @@ def extract_mujoco_muscle_bias_params(model_path):
                                  "fp_max", "fv_max",
                                  "unused"]
     return actuator_gainprms.T
+
+def get_muscle_path(mujoco_path, muscle_name):
+    tree = ET.parse(mujoco_path)
+    root = tree.getroot()
+
+    def get_body_name(elem):
+        parent = {c: p for p in root.iter() for c in p}
+        p = parent.get(elem)
+        while p is not None:
+            if p.tag == "body":
+                return p.attrib.get("name")
+            p = parent.get(p)
+        return None
+        
+    sites = {}
+    for s in root.iter("site"):
+        name = s.attrib.get("name")
+        if name:
+            sites[name] = {
+                "site_name": name,
+                "body": get_body_name(s),
+                "pos": s.attrib.get("pos"),
+                "size": s.attrib.get("size"),
+            }
+            
+    actuator = None
+    for elem in root.iter():
+        if elem.tag in ["muscle", "general"] and elem.attrib.get("name") == muscle_name:
+            actuator = elem
+            break
+
+    tendon_name = actuator.attrib.get("tendon")
+    tendon = None
+    for elem in root.findall(".//tendon/*"):
+        if elem.attrib.get("name") == tendon_name:
+            tendon = elem
+            break
+
+    rows = []
+    for i, child in enumerate(tendon):
+        row = {
+            "order": i,
+            "element": child.tag,
+            "name": child.attrib.get("site") or child.attrib.get("geom"),
+            "sidesite": child.attrib.get("sidesite"),
+        }
+
+        if child.tag == "site":
+            site_info = sites.get(child.attrib.get("site"), {})
+            row.update(site_info)
+
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+def get_muscle_path_world(mujoco_path, muscle_name, qpos=None):
+    model = mujoco.MjModel.from_xml_path(mujoco_path)
+    data = mujoco.MjData(model)
+    if qpos is None:
+        data.qpos[:] = np.zeros_like(data.qpos)
+    mujoco.mj_forward(model, data)
+    
+    root = parse_xml_with_includes(mujoco_path)
+    actuator = None
+    for elem in root.iter():
+        if elem.tag in ["muscle", "general"] and elem.attrib.get("name") == muscle_name:
+            actuator = elem
+            break
+    
+    tendon_name = actuator.attrib.get("tendon")
+    tendon = None
+    for elem in root.findall(".//tendon/*"):
+        if elem.attrib.get("name") == tendon_name:
+            tendon = elem
+            break
+    
+    rows = []
+    for i, child in enumerate(tendon):
+        if child.tag == "site":
+            site_name = child.attrib["site"]
+            site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site_name)
+            rows.append({
+                "order": i,
+                "element": "site",
+                "site_name": site_name,
+                "world_x": data.site_xpos[site_id, 0],
+                "world_y": data.site_xpos[site_id, 1],
+                "world_z": data.site_xpos[site_id, 2],
+            })
+        elif child.tag == "geom":
+            continue
+            rows.append({
+                "order": i,
+                "element": "geom",
+                "geom": child.attrib.get("geom"),
+                "sidesite": child.attrib.get("sidesite"),
+                "note": "wrapping geom; path point is computed internally by MuJoCo"
+            })
+    df = pd.DataFrame(rows)
+    return df
+
+def enforce_equality_constraints(model: mujoco.MjModel,
+                                 data: mujoco.MjData):
+    """
+    Enforce equality constraint existing in mujoco model
+    
+    :param model: mujoco model
+    :param data: data
+    """
+    for i in range(model.neq):
+        if model.eq_type[i] == mujoco.mjtEq.mjEQ_JOINT and data.eq_active[i]:
+            y_jnt = model.eq_obj1id[i]
+            x_jnt = model.eq_obj2id[i]
+            y_adr = model.jnt_qposadr[y_jnt]
+            x_adr = model.jnt_qposadr[x_jnt]
+            coef = model.eq_data[i]  # a0~a4
+            x = data.qpos[x_adr]
+            x0 = model.qpos0[x_adr]
+            y0 = model.qpos0[y_adr]
+            dx = x - x0
+            data.qpos[y_adr] = (
+                y0
+                + coef[0]
+                + coef[1] * dx
+                + coef[2] * dx**2
+                + coef[3] * dx**3
+                + coef[4] * dx**4
+            )
+    mujoco.mj_forward(model, data)
+    

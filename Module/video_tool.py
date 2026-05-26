@@ -461,7 +461,7 @@ def save_3d_pos_video(pos_3d: xr.core.dataset.Dataset,
                       continuous_body_parts: list = [],
                       skeletons = [],
                       fps: int = 30,
-                      figsize = (15, 5),
+                      figsize = (6, 5),
                       dpi = 100):
     """
     Save pose video
@@ -500,6 +500,7 @@ def save_3d_pos_video(pos_3d: xr.core.dataset.Dataset,
     for step_i in range(n_frames):
         fig = plt.figure(figsize = figsize, dpi = dpi)
         ax = fig.add_subplot(1, 1, 1, projection="3d")
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
         # 3D
         for i, bodypart in enumerate(bodyparts):
@@ -524,7 +525,6 @@ def save_3d_pos_video(pos_3d: xr.core.dataset.Dataset,
                 ax.plot(obj_pts[:, x_index], obj_pts[:, z_index], obj_pts[:, y_index], color="black")
             
         # Others        
-        ax.set_title("3D")
         ax.set_xlabel("X"), ax.set_ylabel("Z"), ax.set_zlabel("Y")
         ax.set_xlim(x_min, x_max), ax.set_ylim(z_min, z_max), ax.set_zlim(y_min, y_max)
 
@@ -535,7 +535,8 @@ def save_3d_pos_video(pos_3d: xr.core.dataset.Dataset,
                               markerfacecolor = colors[i],
                               markersize = 8,
                               label = bodyparts[i]) for i in range(len(bodyparts))]
-        fig.legend(handles = handles, loc = "upper right")
+        ax.legend(handles = handles, loc = "upper right")
+        
         plt.tight_layout()
 
         # figure -> numpy image

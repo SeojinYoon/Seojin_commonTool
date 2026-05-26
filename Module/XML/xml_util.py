@@ -51,6 +51,44 @@ def search_tags_in_xml(parent, tags):
 
     return current_elements
 
+def parse_xml_with_includes(xml_path):
+    """
+    재귀와 루프 오염 문제를 완전히 해결한 include 병합 함수.
+    메인 XML을 열고 <include> 태그를 발견할 때마다 순차적으로 병합합니다.
+    """
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    base_dir = os.path.dirname(xml_path)
+    
+    while True:
+        include_elem = root.find(".//include")
+        if include_elem is None:
+            break
+            
+        file_attr = include_elem.attrib.get("file")
+        if file_attr:
+            sub_xml_path = os.path.normpath(os.path.join(base_dir, file_attr))
+            
+            if os.path.exists(sub_xml_path):
+                sub_root = parse_xml_with_includes(sub_xml_path)
+                
+                parent = root.find(f".//{include_elem.tag}/..")
+                if parent is None:
+                    parent = root
+                    
+                for child in list(sub_root):
+                    parent.append(child)
+                
+                parent.remove(include_elem)
+            else:
+                parent = root.find(f".//{include_elem.tag}/..") or root
+                parent.remove(include_elem)
+        else:
+            parent = root.find(f".//{include_elem.tag}/..") or root
+            parent.remove(include_elem)
+                
+    return root
+    
 if __name__ == "__main__":
     # target xml file path
     setup_scale_path = "/mnt/sdb2/DeepDraw/OpenSim/setup_scale.xml"
@@ -64,4 +102,3 @@ if __name__ == "__main__":
     root = tree.getroot()
     
     search_tags_in_xml(root, ["ScaleTool", "GenericModelMaker"])
-    

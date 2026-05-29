@@ -1374,7 +1374,8 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     marker_traces = []
     
     # Extract coordinates for the selected times and targets
-    marker_coordinates = position_ds.sel(Times=times, Labels=targets)["3D"].to_numpy()
+    selected_position_ds = position_ds.sel(Times=times, Labels=targets)
+    marker_coordinates = selected_position_ds["3D"].to_numpy()
     
     # Define color gradient based on time progression (Coolwarm colormap)
     num_colors = len(times)
@@ -1410,7 +1411,7 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     4. Skeleton
     """
     skeleton_traces = []
-    labels = list(position_ds.Labels)
+    labels = list(selected_position_ds.Labels.to_numpy())
     
     for p1, p2 in skeletons:
         i1 = labels.index(p1)
@@ -1503,7 +1504,7 @@ def plot_3D_datasets(
     position_ds_list,
     ds_coord_order,
     targets: list = [],
-    skeletons: list = [],
+    skeletons_list: list = [],
     obj_info = {},
     dataset_names = [],
     vis_info = {},
@@ -1516,7 +1517,7 @@ def plot_3D_datasets(
                           'Times', 'Labels', 'Coords' dimensions.
     :param ds_coord_order: the direction of x,y,z coord ex) IAL, LPI, ...
     :param targets: List of marker labels (Targets) to visualize.
-    :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+    :param skeletons: skeleton information ex) [[("Shoulder", "Elbow"), ("Elbow", "Wrist")]]
     :param obj_info: Dictionary for static objects.
                      Format: {'obj_name': {'points': [[x, y, z], ...]}}
     :param dataset_names: Names for each dataset to display in the legend.
@@ -1634,7 +1635,12 @@ def plot_3D_datasets(
         times = position_ds["Times"].to_numpy()
         marker_coordinates = position_ds.sel(Times=times)["3D"].to_numpy()
         labels = list(position_ds.Labels.to_numpy())
-        
+
+        if ds_idx < len(skeletons_list):
+            skeletons = skeletons_list[ds_idx]
+        else:
+            continue
+            
         for p1, p2 in skeletons:
             i1 = labels.index(p1)
             i2 = labels.index(p2)

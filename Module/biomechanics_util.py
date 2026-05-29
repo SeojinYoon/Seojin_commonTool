@@ -14,6 +14,7 @@ from mink import Configuration, SE3, SO3, FrameTask, solve_ik
 from scipy.spatial.transform import Rotation as R
 
 # Custom Libraries
+from sj_datastructure import make_3d_dataset
 from XML.xml_util import parse_xml_with_includes
 
 # Functions
@@ -654,4 +655,304 @@ def enforce_equality_constraints(model: mujoco.MjModel,
                 + coef[4] * dx**4
             )
     mujoco.mj_forward(model, data)
+
+def get_joint_pos(model: mujoco.MjModel, data: mujoco.MjData):
+    mujoco.mj_forward(model, data)
+
+    rows = []
+    for joint_id in range(model.njnt):
+        joint_name = mujoco.mj_id2name(model,
+                                       mujoco.mjtObj.mjOBJ_JOINT,
+                                       joint_id)
+
+        body_id = model.jnt_bodyid[joint_id]
+        body_name = mujoco.mj_id2name(model,
+                                      mujoco.mjtObj.mjOBJ_BODY,
+                                      body_id)
+
+        body_pos = data.xpos[body_id]
+        body_rot = data.xmat[body_id].reshape(3, 3)
+        local_pos = model.jnt_pos[joint_id]
+        global_pos = body_pos + body_rot @ local_pos
+
+        rows.append({
+            "joint_id": joint_id,
+            "joint_name": joint_name,
+            "parent_body_id": body_id,
+            "parent_body_name": body_name,
+            "local_x": local_pos[0],
+            "local_y": local_pos[1],
+            "local_z": local_pos[2],
+            "global_x": global_pos[0],
+            "global_y": global_pos[1],
+            "global_z": global_pos[2],
+        })
+
+    return pd.DataFrame(rows)
+
+def get_body_pos(model: mujoco.MjModel, data: mujoco.MjData):
+    mujoco.mj_forward(model, data)
+
+    rows = []
+    for body_id in range(model.nbody):
+        body_name = mujoco.mj_id2name(model,
+                                      mujoco.mjtObj.mjOBJ_BODY,
+                                      body_id)
+
+        if body_name is None:
+            continue
+
+        global_pos = data.xpos[body_id]
+        rows.append({
+            "body_id": body_id,
+            "body_name": body_name,
+            "global_x": global_pos[0],
+            "global_y": global_pos[1],
+            "global_z": global_pos[2],
+        })
+
+    return pd.DataFrame(rows)
+
+def get_site_pos(model: mujoco.MjModel, data: mujoco.MjData):
+    mujoco.mj_forward(model, data)
+    
+    site_rows = []
+    for site_id in range(model.nsite):
+        site_name = mujoco.mj_id2name(model,
+                                      mujoco.mjtObj.mjOBJ_SITE,
+                                      site_id)
+        
+        parent_body_id = model.site_bodyid[site_id]
+        parent_body_name = mujoco.mj_id2name(model,
+                                             mujoco.mjtObj.mjOBJ_BODY,
+                                             parent_body_id)
+
+        local_pos = model.site_pos[site_id]
+        global_pos = data.site_xpos[site_id]
+        site_rows.append({
+            "site_id": site_id,
+            "site_name": site_name,
+            "parent_body_id": parent_body_id,
+            "parent_body_name": parent_body_name,
+            "local_x": local_pos[0],
+            "local_y": local_pos[1],
+            "local_z": local_pos[2],
+            "global_x": global_pos[0],
+            "global_y": global_pos[1],
+            "global_z": global_pos[2],
+        })
+    df_sites = pd.DataFrame(site_rows)
+    return df_sites
+
+def get_geom_pos(model, data):
+    mujoco.mj_forward(model, data)
+
+    rows = []
+    for geom_id in range(model.ngeom):
+        geom_name = mujoco.mj_id2name(model,
+                                      mujoco.mjtObj.mjOBJ_GEOM,
+                                      geom_id)
+
+        body_id = model.geom_bodyid[geom_id]
+        body_name = mujoco.mj_id2name(model,
+                                      mujoco.mjtObj.mjOBJ_BODY,
+                                      body_id)
+
+        local_pos = model.geom_pos[geom_id]
+        global_pos = data.geom_xpos[geom_id]
+
+        rows.append({
+            "geom_id": geom_id,
+            "geom_name": geom_name,
+            "parent_body_id": body_id,
+            "parent_body_name": body_name,
+            "local_x": local_pos[0],
+            "local_y": local_pos[1],
+            "local_z": local_pos[2],
+            "global_x": global_pos[0],
+            "global_y": global_pos[1],
+            "global_z": global_pos[2],
+        })
+
+    return pd.DataFrame(rows)
+    
+def transform_ds(df, name_col):
+    names = df[name_col].to_numpy()
+    locs = df[["global_x", "global_y", "global_z"]].to_numpy()
+    
+    ds = make_3d_dataset(locs[None, :, :],
+                         "3D",
+                         element_dataset_names = ["Times", "Labels", "Coords"],
+                         dataset1_dim_names = np.arange(1),
+                         dataset2_dim_names = names,
+                         dataset3_dim_names = ["X", "Y", "Z"])
+    return ds
+
+def find_child_bodies(path, target_body_name):
+    tree = ET.parse(path)
+    root = tree.getroot()
+    
+    target_body = root.find(f".//body[@name='{target_body_name}']")
+    
+    child_bodies = target_body.findall(".//body")
+    child_body_names = [body.get("name") for body in child_bodies]
+    return child_body_names
+
+def get_MoBL_finger_info(mobl_geom_df, fingers = ["Index", "Middle", "Ring", "Little", "Thumb"]):
+    """
+    Get finger information from geometry data
+
+    :param fingers: searching finger names
+
+    return (dictionary)
+    """
+    finger_info = {}
+    for finger in fingers:
+        if finger == "Index":
+            finger_number = 2
+            number_str = "Second"
+        elif finger == "Middle":
+            finger_number = 3
+            number_str = "Third"
+        elif finger == "Ring":
+            finger_number = 4
+            number_str = "Fourth"
+        elif finger == "Little":
+            finger_number = 5
+            number_str = "Fifth"
+        
+        if finger in ["Index", "Middle", "Ring", "Little"]:
+            mcp = mobl_geom_df[mobl_geom_df["geom_name"].str.contains(f"_{finger_number}rdmcp_ext|{number_str}mcp_ext")]["geom_name"].iloc[0]
+            pm = mobl_geom_df[mobl_geom_df["geom_name"].str.contains(f"_{finger_number}rdpm_ext|{number_str}pm_ext")]["geom_name"].iloc[0]
+            md = mobl_geom_df[mobl_geom_df["geom_name"].str.contains(f"_{finger_number}rdmd_ext|{number_str}md_ext")]["geom_name"].iloc[0]
+    
+            finger_info[finger] = [mcp, pm, md]
+        else:
+            mc = mobl_geom_df[mobl_geom_df["geom_name"].str.contains(f"hand_geom_23")]["geom_name"].iloc[0]
+            mp = mobl_geom_df[mobl_geom_df["geom_name"].str.contains(f"MPthumb")]["geom_name"].iloc[0]
+            ip = mobl_geom_df[mobl_geom_df["geom_name"].str.contains(f"IPthumb")]["geom_name"].iloc[0]
+            finger_info[finger] = [mc, mp, ip]
+    return finger_info
+
+def get_myoarm_fingerJoint_info(myoarm_joint_df, fingers = ["Index", "Middle", "Ring", "Little", "Thumb"]):
+    """
+    Get finger information from geometry data
+
+    :param fingers: searching finger names
+
+    return (dictionary)
+    """
+    finger_info = {}
+    for finger in fingers:
+        if finger == "Index":
+            finger_number = 2
+        elif finger == "Middle":
+            finger_number = 3
+        elif finger == "Ring":
+            finger_number = 4
+        elif finger == "Little":
+            finger_number = 5
+        
+        if finger in ["Index", "Middle", "Ring", "Little"]:
+            mcp = myoarm_joint_df[myoarm_joint_df["joint_name"].str.contains(f"mcp{finger_number}_flexion")]["joint_name"].iloc[0]
+            pm = myoarm_joint_df[myoarm_joint_df["joint_name"].str.contains(f"pm{finger_number}_flexion")]["joint_name"].iloc[0]
+            md = myoarm_joint_df[myoarm_joint_df["joint_name"].str.contains(f"md{finger_number}_flexion")]["joint_name"].iloc[0]
+            finger_info[finger] = [mcp, pm, md]
+        else:
+            mc = myoarm_joint_df[myoarm_joint_df["joint_name"].str.contains("cmc_flexion")]["joint_name"].iloc[0]
+            mp = myoarm_joint_df[myoarm_joint_df["joint_name"].str.contains("mp_flexion")]["joint_name"].iloc[0]
+            ip = myoarm_joint_df[myoarm_joint_df["joint_name"].str.contains("ip_flexion")]["joint_name"].iloc[0]
+            finger_info[finger] = [mc, mp, ip]
+    return finger_info
+
+def calc_joint_angle(model: mujoco.MjModel,
+                     data: mujoco.MjData,
+                     joint_name: str):
+    """
+    Calculate joint angle from mujoco model
+
+    :param model: mujoco model
+    :param data: mujoco data
+    :param joint_name: joint name to be searched
+
+    :return: A tuple containing:
+        - tuple (str, str): (parent_body_name, child_body_name)
+        - float: rotation angle in radian
+    """
+    # Params
+    seq = "xyz"
+
+    # Get parent and child segment
+    parent_body_name, child_body_name = get_joint_segments(joint_name)
+    child_body_id = model.jnt_bodyid[joint_id]
+    parent_body_id = model.body_parentid[child_body_id]
+
+    # Get Orientation
+    R_parent = data.xmat[parent_body_id].reshape(3, 3)
+    R_child = data.xmat[child_body_id].reshape(3, 3)
+
+    # Calculate angle between parenr and child
+    R_relative = R_parent.T @ R_child
+    matrix_trace = np.trace(R_relative)
+    clipped_value = np.clip((matrix_trace - 1.0) / 2.0, -1.0, 1.0)
+    pure_angle_deg = np.arccos(clipped_value)
+    
+    return (parent_body_name, child_body_name), pure_angle_deg
+
+def get_joint_segments(model: mujoco.MjModel, joint_name: str) -> (str, str):
+    """
+    Get child and parent segment linked by joint 
+
+    :param model: mujoco model
+    :param joint_name: name of join
+
+    :return: parent_body_name, child_body_name
+    """
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+
+    child_body_id = model.jnt_bodyid[joint_id]
+    child_body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, child_body_id)
+    
+    parent_body_id = model.body_parentid[child_body_id]
+    parent_body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, parent_body_id)
+
+    return parent_body_name, child_body_name
+    
+def extract_geometry_info(xml_path: str) -> pd.DataFrame:
+    """
+    Extract geometry information from mujoco model
+
+    :param xml_path: mujoco model path
+
+    :return: geometry information
+    """
+    # Parse xml
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+
+    # mesh information: { 'mesh_name': 'file_path_or_filename' }
+    mesh_dict = {}
+    asset = root.find('asset')
+    if asset is not None:
+        for mesh in asset.findall('mesh'):
+            mesh_name = mesh.get('name')
+            mesh_file = mesh.get('file', 'No File Path')  # 파일 경로가 없는 경우 대비
+            if mesh_name:
+                mesh_dict[mesh_name] = mesh_file
+
+    # search geometry tag
+    data_list = []
+    worldbody = root.find('worldbody')
+    if worldbody is not None:
+        for geom in worldbody.iter('geom'):
+            geom_mesh = geom.get('mesh')
+            geom_name = geom.get('name')
+
+            if geom_name and geom_mesh:
+                mesh_file_path = mesh_dict.get(geom_mesh, geom_mesh)
+                data_list.append({
+                    "geom_name": geom_name,
+                    "mesh_file_path": mesh_file_path
+                })
+    return pd.DataFrame(data_list)
     

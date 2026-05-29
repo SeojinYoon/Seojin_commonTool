@@ -51,10 +51,13 @@ def search_tags_in_xml(parent, tags):
 
     return current_elements
 
-def parse_xml_with_includes(xml_path):
+def parse_xml_with_includes(xml_path: str) -> ET.ElementTree:
     """
-    재귀와 루프 오염 문제를 완전히 해결한 include 병합 함수.
-    메인 XML을 열고 <include> 태그를 발견할 때마다 순차적으로 병합합니다.
+    Read xml with include tag
+
+    :param xml_path: xml path
+    
+    return root tag
     """
     tree = ET.parse(xml_path)
     root = tree.getroot()

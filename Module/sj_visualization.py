@@ -25,7 +25,7 @@ from ipywidgets.widgets import Button, IntSlider, interact, HBox, VBox, Output
 
 # Custom Libraries
 from sj_enum import Visualizing
-from sj_array import reorient_array
+from sj_array import reorient_ACS_array, get_ACS_axis_group
 from sj_string import search_string
 from sj_matplotlib import draw_title, draw_grid, draw_threshold, draw_ticks, draw_spine, draw_text, draw_legend, draw_label
 
@@ -1076,14 +1076,40 @@ class ImageSelector:
         display(ui)
         self.display_image({'new': 0}) # 초기 이미지 로드
 
-def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
+def create_3d_time_series_plot(dataset_3d,
+                               obj_info={},
+                               skeletons = [],
+                               visualize_coord_order = "LAS"):
     """
     Create 3d time series plot using plotly
     
     :param dataset_3d: xarray Dataset containing the 3D marker data. Expected dimensions include Times, Labels, and Coords, with variable "3D" storing the coordinates.
     :param obj_info: Dictionary describing static objects to visualize. Each key is an object name and the value must contain a "points" entry specifying the object's 3D coordinates.
     :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+    :param visualize_coord_order: visualization coords ex) "LAS"
     """
+    
+    # Organize coordinate system
+    opposite_coord_order = []
+    for vis_coord in visualize_coord_order:
+        axis_group = get_ACS_axis_group(vis_coord)
+        opposite_coord_order.append(axis_group.replace(vis_coord, ""))
+        
+    # Preprocessing
+    dataset_3d = copy.deepcopy(dataset_3d)
+    ds_coord_order = [coord[0] for coord in dataset_3d.Coords.to_numpy()]
+
+    dataset_3d["3D"].data = reorient_ACS_array(dataset_3d["3D"].data, ds_coord_order, visualize_coord_order)
+    
+    obj_info = copy.deepcopy(obj_info)
+    for obj_name in obj_info:
+        kinds = obj_info[obj_name]["points"]
+        obj_coord_order = [e[0] for e in obj_info[obj_name]["coords"]]
+        for kind in kinds:
+            pts = np.array(obj_info[obj_name]["points"][kind])
+            pts = reorient_ACS_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
+            obj_info[obj_name]["points"][kind] = pts[0]
+    
     # 1. Initialization
     times = dataset_3d["Times"].to_numpy()
     n_frame = len(times)
@@ -1094,11 +1120,7 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
     # Helper function
     def make_traces(step_i: int):
         sel_times = times[:step_i + 1]
-        
-        marker_coordinates = dataset_3d.sel(
-            Times=sel_times, 
-            Labels=labels
-        )["3D"].to_numpy()
+        marker_coordinates = dataset_3d.sel(Times=sel_times, Labels=labels)["3D"].to_numpy()
             
         # Visualize - object (Static or dependent on points)
         obj_traces = []
@@ -1107,12 +1129,12 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
             for kind in kinds:
                 pts = np.array(obj_info[obj_name]["points"][kind])
                 obj_trace = go.Scatter3d(
-                    x=pts[:, 0],
-                    y=pts[:, 2], # Mapping Y to Z for Plotly orientation
-                    z=pts[:, 1], # Mapping Z to Y for Plotly orientation
+                    x=pts[:, x_index],
+                    y=pts[:, y_index],
+                    z=pts[:, z_index],
                     mode="lines",
                     line=dict(color="black", width=2),
-                    visible=True,    # Set to True to display objects by default
+                    visible=True,
                     showlegend=True,
                     name=kind,
                     hoverinfo="name"
@@ -1130,8 +1152,8 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
             color_str = f"rgba({int(color[0]*255)}, {int(color[1]*255)}, {int(color[2]*255)}, {color[3]})"
             trace = go.Scatter3d(
                 x=marker_coordinates[:, target_index, x_index],
-                y=marker_coordinates[:, target_index, z_index],
-                z=marker_coordinates[:, target_index, y_index],
+                y=marker_coordinates[:, target_index, y_index],
+                z=marker_coordinates[:, target_index, z_index],
                 mode="markers",
                 marker=dict(size=2, opacity=0.6, color=color_str),
                 visible=False,
@@ -1147,8 +1169,8 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
         
             trace = go.Scatter3d(
                 x=[marker_coordinates[-1, i1, x_index], marker_coordinates[-1, i2, x_index]],
-                y=[marker_coordinates[-1, i1, z_index], marker_coordinates[-1, i2, z_index]],
-                z=[marker_coordinates[-1, i1, y_index], marker_coordinates[-1, i2, y_index]],
+                y=[marker_coordinates[-1, i1, y_index], marker_coordinates[-1, i2, y_index]],
+                z=[marker_coordinates[-1, i1, z_index], marker_coordinates[-1, i2, z_index]],
                 mode="lines",
                 line=dict(color="gray", width=4),
                 visible=False,
@@ -1209,8 +1231,8 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
     mins = dataset_3d["3D"].min(dim=[d for d in dataset_3d["3D"].dims if d != "Coords"], skipna=True)
     maxs = dataset_3d["3D"].max(dim=[d for d in dataset_3d["3D"].dims if d != "Coords"], skipna=True)
     
-    min_x, min_y, min_z = mins.sel(Coords="X").item(), mins.sel(Coords="Y").item(), mins.sel(Coords="Z").item()
-    max_x, max_y, max_z = maxs.sel(Coords="X").item(), maxs.sel(Coords="Y").item(), maxs.sel(Coords="Z").item()
+    min_x, min_y, min_z = mins.to_numpy()
+    max_x, max_y, max_z = maxs.to_numpy()
     range_candidates.append([min_x, min_y, min_z])
     range_candidates.append([max_x, max_y, max_z])
     
@@ -1218,7 +1240,7 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
     
     scene_min_range = np.min(range_candidates, axis = 0)
     scene_max_range = np.max(range_candidates, axis = 0)
-    
+
     fig.update_layout(
         sliders=[dict(
             active=0,
@@ -1227,9 +1249,12 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
             steps=steps
         )],
         scene=dict(
-            xaxis=dict(title='X-axis', range=(scene_min_range[x_index], scene_max_range[x_index])),
-            yaxis=dict(title='Z-axis', range=(scene_min_range[z_index], scene_max_range[z_index])),
-            zaxis=dict(title='Y-axis', range=(scene_min_range[y_index], scene_max_range[y_index])),
+            xaxis=dict(title=f"{visualize_coord_order[0]}(-), {opposite_coord_order[0]}(+)", 
+                       range=(scene_min_range[x_index], scene_max_range[x_index])),
+            yaxis=dict(title=f"{visualize_coord_order[1]}(-), {opposite_coord_order[1]}(+)", 
+                       range=(scene_min_range[y_index], scene_max_range[y_index])),
+            zaxis=dict(title=f"{visualize_coord_order[2]}(-), {opposite_coord_order[2]}(+)", 
+                       range=(scene_min_range[z_index], scene_max_range[z_index])),
         ),
         showlegend=True,
         height=800
@@ -1238,17 +1263,16 @@ def create_3d_time_series_plot(dataset_3d, obj_info={}, skeletons = []):
     return HTML(fig.to_html(include_plotlyjs="cdn"))
 
 def plot_3D_dataset(position_ds: xarray.Dataset,
-                    ds_coord_order: str,
                     targets: list = [],
                     obj_info: dict = {},
                     skeletons: list = [],
                     vis_info: dict = {},
-                    axis_info: dict = {}):
+                    axis_info: dict = {},
+                    visualize_coord_order = "LAS"):
     """
     Plot 3D coordinates from an xarray dataset.
 
     :param position_ds: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'.
-    :param ds_coord_order: the direction of x,y,z coord ex) IAL, LPI, ...
     :param targets: List of marker labels (Targets) to visualize.
     :param obj_info: Dictionary for static objects. Format: {'obj_name': {'points': [[x,y,z], ...]}}.
     :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
@@ -1258,41 +1282,37 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
         * axis_length (float): The length of the line for each axis. (default: 0.2)
         * cone_size (float): The size of the arrowhead (cone) at the end of each axis. (default: 0.1)
         * axis_origin (tuple): The (x, y, z) coordinates where the axes will be centered. (default: (0, 0, 0))
+    :param visualize_coord_order: visualization coords ex) "LAS"
     
     :return: (IPython.display.HTML) Rendered Plotly 3D visualization.
     """
-    visualize_coord_order = "LPI"
+
+    # Organize coordinate system
+    opposite_coord_order = []
+    for vis_coord in visualize_coord_order:
+        axis_group = get_ACS_axis_group(vis_coord)
+        opposite_coord_order.append(axis_group.replace(vis_coord, ""))
+
+    ds_coord_order = [coord[0] for coord in position_ds.Coords.to_numpy()]
     
     # Preprocessing
     position_ds = copy.deepcopy(position_ds)
-    position_ds["3D"].data = reorient_array(position_ds["3D"].data, ds_coord_order, visualize_coord_order)
-
-    obj_coord_order = ds_coord_order
+    position_ds["3D"].data = reorient_ACS_array(position_ds["3D"].data, ds_coord_order, visualize_coord_order)
+    
     obj_info = copy.deepcopy(obj_info)
     for obj_name in obj_info:
         kinds = obj_info[obj_name]["points"]
+        obj_coord_order = [e[0] for e in obj_info[obj_name]["coords"]]
         for kind in kinds:
             pts = np.array(obj_info[obj_name]["points"][kind])
-            pts = reorient_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
+            pts = reorient_ACS_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
             obj_info[obj_name]["points"][kind] = pts[0]
             
-    # Index mapping for coordinates
+    # Constants
     x_index, y_index, z_index = 0, 1, 2
-
-    # Time
     times = position_ds["Times"].to_numpy()
-
-    # Target
+    
     targets = list(position_ds.Labels.to_numpy()) if len(targets) == 0 else list(targets)
-    
-    # Calculate axis ranges based on the entire dataset for consistency
-    min_x = np.nanmin(position_ds.sel(Coords="X")["3D"].to_numpy())
-    min_y = np.nanmin(position_ds.sel(Coords="Y")["3D"].to_numpy())
-    min_z = np.nanmin(position_ds.sel(Coords="Z")["3D"].to_numpy())
-    
-    max_x = np.nanmax(position_ds.sel(Coords="X")["3D"].to_numpy())
-    max_y = np.nanmax(position_ds.sel(Coords="Y")["3D"].to_numpy())
-    max_z = np.nanmax(position_ds.sel(Coords="Z")["3D"].to_numpy())
     
     """
     1. Visualize - Static Objects (e.g., table, environment boundaries)
@@ -1304,15 +1324,15 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
             pts = np.array(obj_info[obj_name]["points"][kind])
             
             obj_trace = go.Scatter3d(
-                x=pts[:, x_index],
-                y=pts[:, y_index],
-                z=pts[:, z_index],
-                mode="lines",
-                line=dict(color="black", width=2),
-                visible=True,
-                showlegend=True,
-                name=kind,
-                hoverinfo="name"
+                x = pts[:, x_index],
+                y = pts[:, y_index],
+                z = pts[:, z_index],
+                mode = "lines",
+                line = dict(color="black", width=2),
+                visible = True,
+                showlegend = True,
+                name = kind,
+                hoverinfo = "name"
             )
             obj_traces.append(obj_trace)
 
@@ -1329,19 +1349,19 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
         x_origin, y_origin, z_origin = axis_origin[x_index], axis_origin[y_index], axis_origin[z_index]
         
         # X-axis
-        axis_traces.append(go.Scatter3d(x=[x_origin, x_origin + axis_length], 
-                                        y=[y_origin, y_origin], 
-                                        z=[z_origin, z_origin],
-                                        mode="lines+text", 
-                                        line=dict(color="red", width=8),
-                                        text=["", "X"], 
-                                        textposition="top center", 
-                                        name="X-axis", 
-                                        showlegend=False))
+        axis_traces.append(go.Scatter3d(x = [x_origin, x_origin + axis_length], 
+                                        y = [y_origin, y_origin], 
+                                        z = [z_origin, z_origin],
+                                        mode = "lines+text", 
+                                        line = dict(color="red", width=8),
+                                        text = ["", "X"], 
+                                        textposition = "top center", 
+                                        name = "X-axis", 
+                                        showlegend = False))
         axis_traces.append(go.Cone(
-            x=[x_origin + axis_length], y=[y_origin], z=[z_origin],
-            u=[axis_length * 0.3], v=[0], w=[0], # 방향 벡터
-            colorscale=[[0, 'red'], [1, 'red']], showscale=False, sizemode="absolute", sizeref=cone_size
+            x = [x_origin + axis_length], y = [y_origin], z = [z_origin],
+            u = [axis_length * 0.3], v = [0], w = [0], # 방향 벡터
+            colorscale = [[0, 'red'], [1, 'red']], showscale = False, sizemode = "absolute", sizeref = cone_size
         ))
 
         # Y-axis
@@ -1375,7 +1395,7 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     
     # Extract coordinates for the selected times and targets
     selected_position_ds = position_ds.sel(Times=times, Labels=targets)
-    marker_coordinates = selected_position_ds["3D"].to_numpy()
+    selected_position_array = selected_position_ds["3D"].to_numpy()
     
     # Define color gradient based on time progression (Coolwarm colormap)
     num_colors = len(times)
@@ -1392,9 +1412,9 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     for target in targets:
         target_index = targets.index(target)
         trace = go.Scatter3d(
-            x = marker_coordinates[:, target_index, x_index],
-            y = marker_coordinates[:, target_index, y_index],
-            z = marker_coordinates[:, target_index, z_index],
+            x = selected_position_array[:, target_index, x_index],
+            y = selected_position_array[:, target_index, y_index],
+            z = selected_position_array[:, target_index, z_index],
             showlegend=False,
             mode = mode,
             marker = dict(
@@ -1407,6 +1427,15 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
         )
         marker_traces.append(trace)
 
+    # Calculate axis ranges based on the entire dataset for consistency
+    min_x = np.nanmin(selected_position_array[:, :, x_index])
+    min_y = np.nanmin(selected_position_array[:, :, y_index])
+    min_z = np.nanmin(selected_position_array[:, :, z_index])
+    
+    max_x = np.nanmax(selected_position_array[:, :, x_index])
+    max_y = np.nanmax(selected_position_array[:, :, y_index])
+    max_z = np.nanmax(selected_position_array[:, :, z_index])
+    
     """
     4. Skeleton
     """
@@ -1417,9 +1446,9 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
         i1 = labels.index(p1)
         i2 = labels.index(p2)
         trace = go.Scatter3d(
-            x=[marker_coordinates[-1, i1, x_index], marker_coordinates[-1, i2, x_index]],
-            y=[marker_coordinates[-1, i1, y_index], marker_coordinates[-1, i2, y_index]],
-            z=[marker_coordinates[-1, i1, z_index], marker_coordinates[-1, i2, z_index]],
+            x=[selected_position_array[-1, i1, x_index], selected_position_array[-1, i2, x_index]],
+            y=[selected_position_array[-1, i1, y_index], selected_position_array[-1, i2, y_index]],
+            z=[selected_position_array[-1, i1, z_index], selected_position_array[-1, i2, z_index]],
             mode="lines",
             line=dict(color="gray", width=4),
             visible=True,
@@ -1471,25 +1500,29 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     z_range_width = scene_max_range[z_index] - scene_min_range[z_index]
     
     axis_bg = vis_info.get("axis_bg", "rgba(230,230,230,30)")
+
+    vis_x_range = (scene_min_range[x_index] - x_range_width * 2/10, scene_max_range[x_index] + x_range_width * 2/10)
+    vis_y_range = (scene_min_range[y_index] - y_range_width * 2/10, scene_max_range[y_index] + y_range_width * 2/10)
+    vis_z_range = (scene_min_range[z_index] - z_range_width * 2/10, scene_max_range[z_index] + z_range_width * 2/10)
     layout = go.Layout(
         margin={'l': 0, 'r': 0, 'b': 0, 't': 40},
         title=f"3D Estimation Traces ({len(times)} frames)",
         scene=dict(
-            xaxis=dict(title="L->R", 
-                       range=(scene_min_range[x_index] - x_range_width * 2/10, 
-                              scene_max_range[x_index] + x_range_width * 2/10), 
-                       backgroundcolor = axis_bg),
-            yaxis=dict(title="P->A", 
-                       range=(scene_min_range[y_index] - y_range_width * 2/10, 
-                              scene_max_range[y_index] + y_range_width * 2/10), 
-                       backgroundcolor = axis_bg),
-            zaxis=dict(title="I->S", 
-                       range=(scene_min_range[z_index] - z_range_width * 2/10, 
-                              scene_max_range[z_index] + z_range_width * 2/10), 
-                       backgroundcolor = axis_bg),
-            aspectmode='data'
+            xaxis=dict(title=f"{visualize_coord_order[0]}(-), {opposite_coord_order[0]}(+)",
+                       range=vis_x_range, 
+                       backgroundcolor = axis_bg,
+                       autorange=False),
+            yaxis=dict(title=f"{visualize_coord_order[1]}(-), {opposite_coord_order[1]}(+)", 
+                       range=vis_y_range, 
+                       backgroundcolor = axis_bg,
+                       autorange=False),
+            zaxis=dict(title=f"{visualize_coord_order[2]}(-), {opposite_coord_order[2]}(+)", 
+                       range=vis_z_range, 
+                       backgroundcolor = axis_bg,
+                       autorange=False),
+            aspectmode = "data",
         ),
-        showlegend=True
+        showlegend=True,
     )
     
     """
@@ -1502,20 +1535,19 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
 
 def plot_3D_datasets(
     position_ds_list,
-    ds_coord_order,
     targets: list = [],
     skeletons_list: list = [],
     obj_info = {},
     dataset_names = [],
     vis_info = {},
     axis_info = {},
+    visualize_coord_order = "LAS"
 ):
     """
     Plot 3D coordinates from multiple xarray datasets.
     
     :param position_ds_list: (list[xarray.Dataset]) List of datasets containing the '3D' variable with
                           'Times', 'Labels', 'Coords' dimensions.
-    :param ds_coord_order: the direction of x,y,z coord ex) IAL, LPI, ...
     :param targets: List of marker labels (Targets) to visualize.
     :param skeletons: skeleton information ex) [[("Shoulder", "Elbow"), ("Elbow", "Wrist")]]
     :param obj_info: Dictionary for static objects.
@@ -1528,23 +1560,28 @@ def plot_3D_datasets(
         * axis_length: The length of the line for each axis. (default: 0.2)
         * cone_size: The size of the arrowhead (cone) at the end of each axis. (default: 0.1)
         * axis_origin: The (x, y, z) coordinates where the axes will be centered. (default: (0, 0, 0))
+    am visualize_coord_order: visualization coords ex) "LAS"
     
     :return: (IPython.display.HTML) Rendered Plotly 3D visualization.
     """
-    visualize_coord_order = "LPI"
-    
+    opposite_coord_order = []
+    for vis_coord in visualize_coord_order:
+        axis_group = get_ACS_axis_group(vis_coord)
+        opposite_coord_order.append(axis_group.replace(vis_coord, ""))
+
     # Preprocessing
     position_ds_list = copy.deepcopy(position_ds_list)
     for position_ds in position_ds_list:
-            position_ds["3D"].data = reorient_array(position_ds["3D"].data, ds_coord_order, visualize_coord_order)
+        ds_coord_order = [coord[0] for coord in position_ds.Coords.to_numpy()]
+        position_ds["3D"].data = reorient_ACS_array(position_ds["3D"].data, ds_coord_order, visualize_coord_order)
         
-    obj_coord_order = ds_coord_order
     obj_info = copy.deepcopy(obj_info)
     for obj_name in obj_info:
         kinds = obj_info[obj_name]["points"]
+        obj_coord_order = [e[0] for e in obj_info[obj_name]["coords"]]
         for kind in kinds:
             pts = np.array(obj_info[obj_name]["points"][kind])
-            pts = reorient_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
+            pts = reorient_ACS_array(pts[None, :, :], obj_coord_order, visualize_coord_order)
             obj_info[obj_name]["points"][kind] = pts[0]
             
     # Validation check
@@ -1618,13 +1655,14 @@ def plot_3D_datasets(
             marker_traces.append(trace)
 
         # collect axis ranges across all datasets
-        all_min_x.append(np.nanmin(position_ds.sel(Coords="X")["3D"].to_numpy()))
-        all_min_y.append(np.nanmin(position_ds.sel(Coords="Y")["3D"].to_numpy()))
-        all_min_z.append(np.nanmin(position_ds.sel(Coords="Z")["3D"].to_numpy()))
+        
+        all_min_x.append(np.nanmin(marker_coordinates[:, :, x_index]))
+        all_min_y.append(np.nanmin(marker_coordinates[:, :, y_index]))
+        all_min_z.append(np.nanmin(marker_coordinates[:, :, z_index]))
 
-        all_max_x.append(np.nanmax(position_ds.sel(Coords="X")["3D"].to_numpy()))
-        all_max_y.append(np.nanmax(position_ds.sel(Coords="Y")["3D"].to_numpy()))
-        all_max_z.append(np.nanmax(position_ds.sel(Coords="Z")["3D"].to_numpy()))
+        all_max_x.append(np.nanmax(marker_coordinates[:, :, x_index]))
+        all_max_y.append(np.nanmax(marker_coordinates[:, :, y_index]))
+        all_max_z.append(np.nanmax(marker_coordinates[:, :, z_index]))
 
     min_x, min_y, min_z = np.min(all_min_x), np.min(all_min_y), np.min(all_min_z)
     max_x, max_y, max_z = np.max(all_max_x), np.max(all_max_y), np.max(all_max_z)
@@ -1744,25 +1782,28 @@ def plot_3D_datasets(
     x_range_width = scene_max_range[x_index] - scene_min_range[x_index]
     y_range_width = scene_max_range[y_index] - scene_min_range[y_index]
     z_range_width = scene_max_range[z_index] - scene_min_range[z_index]
-    
+
+    vis_x_range = (scene_min_range[x_index] - x_range_width * 2/10, scene_max_range[x_index] + x_range_width * 2/10)
+    vis_y_range = (scene_min_range[y_index] - y_range_width * 2/10, scene_max_range[y_index] + y_range_width * 2/10)
+    vis_z_range = (scene_min_range[z_index] - z_range_width * 2/10, scene_max_range[z_index] + z_range_width * 2/10)
     axis_bg = vis_info.get("axis_bg", "rgba(230,230,230,30)")
     layout = go.Layout(
         margin={'l': 0, 'r': 0, 'b': 0, 't': 40},
         title=f"3D Estimation Traces ({len(times)} frames)",
         scene=dict(
-            xaxis=dict(title="L->R", 
-                       range=(scene_min_range[x_index] - x_range_width * 2/10, 
-                              scene_max_range[x_index] + x_range_width * 2/10), 
-                       backgroundcolor = axis_bg),
-            yaxis=dict(title="P->A", 
-                       range=(scene_min_range[y_index] - y_range_width * 2/10, 
-                              scene_max_range[y_index] + y_range_width * 2/10), 
-                       backgroundcolor = axis_bg),
-            zaxis=dict(title="I->S", 
-                       range=(scene_min_range[z_index] - z_range_width * 2/10, 
-                              scene_max_range[z_index] + z_range_width * 2/10), 
-                       backgroundcolor = axis_bg),
-            aspectmode='data'
+            xaxis=dict(title=f"{visualize_coord_order[0]}(-), {opposite_coord_order[0]}(+)",
+                       range=vis_x_range, 
+                       backgroundcolor = axis_bg,
+                       autorange=False),
+            yaxis=dict(title=f"{visualize_coord_order[1]}(-), {opposite_coord_order[1]}(+)", 
+                       range=vis_y_range, 
+                       backgroundcolor = axis_bg,
+                       autorange=False),
+            zaxis=dict(title=f"{visualize_coord_order[2]}(-), {opposite_coord_order[2]}(+)", 
+                       range=vis_z_range, 
+                       backgroundcolor = axis_bg,
+                       autorange=False),
+            aspectmode = "data",
         ),
         showlegend=True
     )
@@ -1878,6 +1919,656 @@ def compare_trajectories(trajectories,
         plot_index,
         idx=IntSlider(min=0, max=max_index, step=1, value=0, description="Index"),
     )
+
+def plot_3D_dataset_no_reorient(position_ds: xarray.Dataset,
+                                targets: list = [],
+                                obj_info: dict = {},
+                                skeletons: list = [],
+                                vis_info: dict = {},
+                                axis_info: dict = {}):
+    """
+    Plot 3D coordinates from an xarray dataset without coordinate reorientation.
+
+    :param position_ds: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'.
+    :param targets: List of marker labels to visualize.
+    :param obj_info: Dictionary for static objects.
+    :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+    :param vis_info: Dictionary containing configuration for visualization.
+    :param axis_info: Dictionary containing configuration for origin axes visualization.
+    """
+
+    position_ds = copy.deepcopy(position_ds)
+    obj_info = copy.deepcopy(obj_info)
+
+    x_index, y_index, z_index = 0, 1, 2
+    times = position_ds["Times"].to_numpy()
+
+    targets = list(position_ds.Labels.to_numpy()) if len(targets) == 0 else list(targets)
+
+    """
+    1. Static Objects
+    """
+    obj_traces = []
+
+    for obj_name in obj_info:
+        kinds = obj_info[obj_name]["points"]
+
+        for kind in kinds:
+            pts = np.array(obj_info[obj_name]["points"][kind])
+
+            obj_trace = go.Scatter3d(
+                x=pts[:, x_index],
+                y=pts[:, y_index],
+                z=pts[:, z_index],
+                mode="lines",
+                line=dict(color="black", width=2),
+                visible=True,
+                showlegend=True,
+                name=kind,
+                hoverinfo="name"
+            )
+            obj_traces.append(obj_trace)
+
+    """
+    2. Coordinate Axes
+    """
+    show_origin_axes = axis_info.get("show_origin_axes", False)
+    axis_length = axis_info.get("axis_length", 0.1)
+    cone_size = axis_info.get("cone_size", 0.05)
+    axis_origin = axis_info.get("axis_origin", (0, 0, 0))
+
+    axis_traces = []
+
+    if show_origin_axes:
+        x_origin, y_origin, z_origin = axis_origin
+
+        axis_traces.append(go.Scatter3d(
+            x=[x_origin, x_origin + axis_length],
+            y=[y_origin, y_origin],
+            z=[z_origin, z_origin],
+            mode="lines+text",
+            line=dict(color="red", width=8),
+            text=["", "X"],
+            textposition="top center",
+            name="X-axis",
+            showlegend=False
+        ))
+
+        axis_traces.append(go.Cone(
+            x=[x_origin + axis_length],
+            y=[y_origin],
+            z=[z_origin],
+            u=[axis_length * 0.3],
+            v=[0],
+            w=[0],
+            colorscale=[[0, "red"], [1, "red"]],
+            showscale=False,
+            sizemode="absolute",
+            sizeref=cone_size
+        ))
+
+        axis_traces.append(go.Scatter3d(
+            x=[x_origin, x_origin],
+            y=[y_origin, y_origin + axis_length],
+            z=[z_origin, z_origin],
+            mode="lines+text",
+            line=dict(color="green", width=8),
+            text=["", "Y"],
+            textposition="top center",
+            name="Y-axis",
+            showlegend=False
+        ))
+
+        axis_traces.append(go.Cone(
+            x=[x_origin],
+            y=[y_origin + axis_length],
+            z=[z_origin],
+            u=[0],
+            v=[axis_length * 0.3],
+            w=[0],
+            colorscale=[[0, "green"], [1, "green"]],
+            showscale=False,
+            sizemode="absolute",
+            sizeref=cone_size
+        ))
+
+        axis_traces.append(go.Scatter3d(
+            x=[x_origin, x_origin],
+            y=[y_origin, y_origin],
+            z=[z_origin, z_origin + axis_length],
+            mode="lines+text",
+            line=dict(color="blue", width=8),
+            text=["", "Z"],
+            textposition="top center",
+            name="Z-axis",
+            showlegend=False
+        ))
+
+        axis_traces.append(go.Cone(
+            x=[x_origin],
+            y=[y_origin],
+            z=[z_origin + axis_length],
+            u=[0],
+            v=[0],
+            w=[axis_length * 0.3],
+            colorscale=[[0, "blue"], [1, "blue"]],
+            showscale=False,
+            sizemode="absolute",
+            sizeref=cone_size
+        ))
+
+    """
+    3. Markers
+    """
+    marker_traces = []
+
+    selected_position_ds = position_ds.sel(Times=times, Labels=targets)
+    selected_position_array = selected_position_ds["3D"].to_numpy()
+
+    num_colors = len(times)
+    my_cmap = plt.get_cmap("coolwarm")
+
+    if num_colors > 1:
+        colors = [
+            f"rgba({int(c[0] * 255)}, {int(c[1] * 255)}, {int(c[2] * 255)}, {c[3]})"
+            for i in range(num_colors)
+            for c in [my_cmap(i / (num_colors - 1))]
+        ]
+    else:
+        colors = ["rgba(0, 0, 255, 1)"]
+
+    mode = vis_info.get("marker_mode", "markers")
+
+    for target in targets:
+        target_index = targets.index(target)
+
+        trace = go.Scatter3d(
+            x=selected_position_array[:, target_index, x_index],
+            y=selected_position_array[:, target_index, y_index],
+            z=selected_position_array[:, target_index, z_index],
+            showlegend=False,
+            mode=mode,
+            marker=dict(
+                size=4,
+                opacity=0.8,
+                color=colors,
+            ),
+            name=target,
+            text=[f"{target} {t}" for t in times],
+        )
+
+        marker_traces.append(trace)
+
+    min_x = np.nanmin(selected_position_array[:, :, x_index])
+    min_y = np.nanmin(selected_position_array[:, :, y_index])
+    min_z = np.nanmin(selected_position_array[:, :, z_index])
+
+    max_x = np.nanmax(selected_position_array[:, :, x_index])
+    max_y = np.nanmax(selected_position_array[:, :, y_index])
+    max_z = np.nanmax(selected_position_array[:, :, z_index])
+
+    """
+    4. Skeleton
+    """
+    skeleton_traces = []
+    labels = list(selected_position_ds.Labels.to_numpy())
+
+    for p1, p2 in skeletons:
+        i1 = labels.index(p1)
+        i2 = labels.index(p2)
+
+        trace = go.Scatter3d(
+            x=[
+                selected_position_array[-1, i1, x_index],
+                selected_position_array[-1, i2, x_index]
+            ],
+            y=[
+                selected_position_array[-1, i1, y_index],
+                selected_position_array[-1, i2, y_index]
+            ],
+            z=[
+                selected_position_array[-1, i1, z_index],
+                selected_position_array[-1, i2, z_index]
+            ],
+            mode="lines",
+            line=dict(color="gray", width=4),
+            visible=True,
+            showlegend=False,
+            hoverinfo="skip"
+        )
+
+        skeleton_traces.append(trace)
+
+    """
+    5. Layout
+    """
+    range_candidates = []
+
+    if show_origin_axes:
+        range_candidates.append([
+            axis_origin[x_index] - axis_length,
+            axis_origin[y_index] - axis_length,
+            axis_origin[z_index] - axis_length
+        ])
+
+        range_candidates.append([
+            axis_origin[x_index] + axis_length,
+            axis_origin[y_index] + axis_length,
+            axis_origin[z_index] + axis_length
+        ])
+
+    if obj_info:
+        all_corners = []
+
+        for obj in obj_info:
+            obj_data = obj_info[obj]
+
+            if "corners" in obj_data:
+                for kind in obj_data["corners"]:
+                    all_corners.append([
+                        obj_data["corners"][kind][corner_name]
+                        for corner_name in obj_data["corners"][kind]
+                    ])
+
+        if len(all_corners) > 0:
+            all_corners = np.concatenate(all_corners, axis=0)
+
+            min_obj_x, min_obj_y, min_obj_z = np.min(all_corners, axis=0)
+            max_obj_x, max_obj_y, max_obj_z = np.max(all_corners, axis=0)
+
+            range_candidates.append([min_obj_x, min_obj_y, min_obj_z])
+            range_candidates.append([max_obj_x, max_obj_y, max_obj_z])
+
+    range_candidates.append([min_x, min_y, min_z])
+    range_candidates.append([max_x, max_y, max_z])
+
+    range_candidates = np.array(range_candidates)
+
+    scene_min_range = np.min(range_candidates, axis=0)
+    scene_max_range = np.max(range_candidates, axis=0)
+
+    x_range_width = scene_max_range[x_index] - scene_min_range[x_index]
+    y_range_width = scene_max_range[y_index] - scene_min_range[y_index]
+    z_range_width = scene_max_range[z_index] - scene_min_range[z_index]
+
+    axis_bg = vis_info.get("axis_bg", "rgba(230,230,230,30)")
+
+    vis_x_range = (
+        scene_min_range[x_index] - x_range_width * 2 / 10,
+        scene_max_range[x_index] + x_range_width * 2 / 10
+    )
+    vis_y_range = (
+        scene_min_range[y_index] - y_range_width * 2 / 10,
+        scene_max_range[y_index] + y_range_width * 2 / 10
+    )
+    vis_z_range = (
+        scene_min_range[z_index] - z_range_width * 2 / 10,
+        scene_max_range[z_index] + z_range_width * 2 / 10
+    )
+
+    layout = go.Layout(
+        margin={"l": 0, "r": 0, "b": 0, "t": 40},
+        title=f"3D Estimation Traces ({len(times)} frames)",
+        scene=dict(
+            xaxis=dict(
+                title="X",
+                range=vis_x_range,
+                backgroundcolor=axis_bg,
+                autorange=False
+            ),
+            yaxis=dict(
+                title="Y",
+                range=vis_y_range,
+                backgroundcolor=axis_bg,
+                autorange=False
+            ),
+            zaxis=dict(
+                title="Z",
+                range=vis_z_range,
+                backgroundcolor=axis_bg,
+                autorange=False
+            ),
+            aspectmode="data",
+        ),
+        showlegend=True,
+    )
+
+    data = axis_traces + obj_traces + marker_traces + skeleton_traces
+    plot_figure = go.Figure(data=data, layout=layout)
+
+    return HTML(plot_figure.to_html(include_plotlyjs="cdn"))
+
+def plot_3D_datasets_no_reorient(
+    position_ds_list,
+    targets: list = [],
+    skeletons_list: list = [],
+    obj_info = {},
+    dataset_names = [],
+    vis_info = {},
+    axis_info = {},
+):
+    """
+    Plot 3D coordinates from multiple xarray datasets without coordinate reorientation.
+    """
+
+    position_ds_list = copy.deepcopy(position_ds_list)
+    obj_info = copy.deepcopy(obj_info)
+
+    n_ds = len(position_ds_list)
+    dataset_names = [f"{i}" for i in range(n_ds)] if len(dataset_names) == 0 else dataset_names
+    assert len(dataset_names) == n_ds, "dataset_names and position_ds_list must have the same length"
+
+    x_index, y_index, z_index = 0, 1, 2
+
+    """
+    1. Static objects
+    """
+    colors = plotly.colors.qualitative.Plotly
+
+    obj_traces = []
+    for i, obj_name in enumerate(obj_info):
+        kinds = obj_info[obj_name]["points"]
+        color = colors[i % len(colors)]
+
+        for j, kind in enumerate(kinds):
+            pts = np.array(obj_info[obj_name]["points"][kind])
+
+            obj_trace = go.Scatter3d(
+                x=pts[:, x_index],
+                y=pts[:, y_index],
+                z=pts[:, z_index],
+                mode="lines",
+                line=dict(color=color, width=2),
+                visible=True,
+                showlegend=(j == 0),
+                name=obj_name,
+                hoverinfo="name"
+            )
+            obj_traces.append(obj_trace)
+
+    """
+    2. Marker traces
+    """
+    marker_traces = []
+
+    cmap_dataset = plt.get_cmap("tab10")
+    dataset_rgbs = [cmap_dataset(i % 10)[:3] for i in range(n_ds)]
+
+    all_min_x, all_min_y, all_min_z = [], [], []
+    all_max_x, all_max_y, all_max_z = [], [], []
+
+    mode = vis_info.get("marker_mode", "markers")
+
+    for ds_idx, position_ds in enumerate(position_ds_list):
+        ds_name = dataset_names[ds_idx]
+
+        rgb = dataset_rgbs[ds_idx]
+        r, g, b = [int(v * 255) for v in rgb]
+
+        times = position_ds["Times"].to_numpy()
+        alphas = np.linspace(1.0, 0.15, len(times))
+        point_colors = [f"rgba({r},{g},{b},{a})" for a in alphas]
+
+        sel_t = list(position_ds.Labels.to_numpy()) if len(targets) == 0 else targets
+        marker_coordinates = position_ds.sel(Times=times, Labels=sel_t)["3D"].to_numpy()
+
+        for target_idx, target in enumerate(sel_t):
+            trace = go.Scatter3d(
+                x=marker_coordinates[:, target_idx, x_index],
+                y=marker_coordinates[:, target_idx, y_index],
+                z=marker_coordinates[:, target_idx, z_index],
+                mode=mode,
+                marker=dict(
+                    size=4,
+                    opacity=0.8,
+                    color=point_colors,
+                ),
+                name=ds_name,
+                legendgroup=ds_name,
+                showlegend=(target_idx == 0),
+                text=[f"{target} {t}" for t in times],
+            )
+            marker_traces.append(trace)
+
+        all_min_x.append(np.nanmin(marker_coordinates[:, :, x_index]))
+        all_min_y.append(np.nanmin(marker_coordinates[:, :, y_index]))
+        all_min_z.append(np.nanmin(marker_coordinates[:, :, z_index]))
+
+        all_max_x.append(np.nanmax(marker_coordinates[:, :, x_index]))
+        all_max_y.append(np.nanmax(marker_coordinates[:, :, y_index]))
+        all_max_z.append(np.nanmax(marker_coordinates[:, :, z_index]))
+
+    min_x, min_y, min_z = np.min(all_min_x), np.min(all_min_y), np.min(all_min_z)
+    max_x, max_y, max_z = np.max(all_max_x), np.max(all_max_y), np.max(all_max_z)
+
+    """
+    3. Skeleton
+    """
+    skeleton_traces = []
+
+    for ds_idx, position_ds in enumerate(position_ds_list):
+        times = position_ds["Times"].to_numpy()
+        marker_coordinates = position_ds.sel(Times=times)["3D"].to_numpy()
+        labels = list(position_ds.Labels.to_numpy())
+
+        if ds_idx < len(skeletons_list):
+            skeletons = skeletons_list[ds_idx]
+        else:
+            continue
+
+        for p1, p2 in skeletons:
+            i1 = labels.index(p1)
+            i2 = labels.index(p2)
+
+            trace = go.Scatter3d(
+                x=[
+                    marker_coordinates[-1, i1, x_index],
+                    marker_coordinates[-1, i2, x_index]
+                ],
+                y=[
+                    marker_coordinates[-1, i1, y_index],
+                    marker_coordinates[-1, i2, y_index]
+                ],
+                z=[
+                    marker_coordinates[-1, i1, z_index],
+                    marker_coordinates[-1, i2, z_index]
+                ],
+                mode="lines",
+                line=dict(color="gray", width=4),
+                visible=True,
+                showlegend=False,
+                hoverinfo="skip"
+            )
+
+            skeleton_traces.append(trace)
+
+    """
+    4. Axis
+    """
+    show_origin_axes = axis_info.get("show_origin_axes", False)
+    axis_length = axis_info.get("axis_length", 0.2)
+    cone_size = axis_info.get("cone_size", 0.1)
+    axis_origin = axis_info.get("axis_origin", (0, 0, 0))
+
+    axis_traces = []
+
+    if show_origin_axes:
+        x_origin, y_origin, z_origin = axis_origin
+
+        axis_traces.append(go.Scatter3d(
+            x=[x_origin, x_origin + axis_length],
+            y=[y_origin, y_origin],
+            z=[z_origin, z_origin],
+            mode="lines+text",
+            line=dict(color="red", width=8),
+            text=["", "X"],
+            textposition="top center",
+            name="X-axis",
+            showlegend=False
+        ))
+
+        axis_traces.append(go.Cone(
+            x=[x_origin + axis_length],
+            y=[y_origin],
+            z=[z_origin],
+            u=[axis_length * 0.3],
+            v=[0],
+            w=[0],
+            colorscale=[[0, "red"], [1, "red"]],
+            showscale=False,
+            sizemode="absolute",
+            sizeref=cone_size
+        ))
+
+        axis_traces.append(go.Scatter3d(
+            x=[x_origin, x_origin],
+            y=[y_origin, y_origin + axis_length],
+            z=[z_origin, z_origin],
+            mode="lines+text",
+            line=dict(color="green", width=8),
+            text=["", "Y"],
+            textposition="top center",
+            name="Y-axis",
+            showlegend=False
+        ))
+
+        axis_traces.append(go.Cone(
+            x=[x_origin],
+            y=[y_origin + axis_length],
+            z=[z_origin],
+            u=[0],
+            v=[axis_length * 0.3],
+            w=[0],
+            colorscale=[[0, "green"], [1, "green"]],
+            showscale=False,
+            sizemode="absolute",
+            sizeref=cone_size
+        ))
+
+        axis_traces.append(go.Scatter3d(
+            x=[x_origin, x_origin],
+            y=[y_origin, y_origin],
+            z=[z_origin, z_origin + axis_length],
+            mode="lines+text",
+            line=dict(color="blue", width=8),
+            text=["", "Z"],
+            textposition="top center",
+            name="Z-axis",
+            showlegend=False
+        ))
+
+        axis_traces.append(go.Cone(
+            x=[x_origin],
+            y=[y_origin],
+            z=[z_origin + axis_length],
+            u=[0],
+            v=[0],
+            w=[axis_length * 0.3],
+            colorscale=[[0, "blue"], [1, "blue"]],
+            showscale=False,
+            sizemode="absolute",
+            sizeref=cone_size
+        ))
+
+    """
+    5. Layout configuration
+    """
+    range_candidates = []
+
+    if show_origin_axes:
+        range_candidates.append([
+            axis_origin[x_index] - axis_length,
+            axis_origin[y_index] - axis_length,
+            axis_origin[z_index] - axis_length
+        ])
+
+        range_candidates.append([
+            axis_origin[x_index] + axis_length,
+            axis_origin[y_index] + axis_length,
+            axis_origin[z_index] + axis_length
+        ])
+
+    if obj_info:
+        all_corners = []
+
+        for obj in obj_info:
+            obj_data = obj_info[obj]
+
+            if "corners" not in obj_data:
+                continue
+
+            for kind in obj_data["corners"]:
+                all_corners.append([
+                    obj_data["corners"][kind][corner_name]
+                    for corner_name in obj_data["corners"][kind]
+                ])
+
+        if len(all_corners) > 0:
+            all_corners = np.concatenate(all_corners, axis=0)
+
+            min_obj_x, min_obj_y, min_obj_z = np.min(all_corners, axis=0)
+            max_obj_x, max_obj_y, max_obj_z = np.max(all_corners, axis=0)
+
+            range_candidates.append([min_obj_x, min_obj_y, min_obj_z])
+            range_candidates.append([max_obj_x, max_obj_y, max_obj_z])
+
+    range_candidates.append([min_x, min_y, min_z])
+    range_candidates.append([max_x, max_y, max_z])
+    range_candidates = np.array(range_candidates)
+
+    scene_min_range = np.min(range_candidates, axis=0)
+    scene_max_range = np.max(range_candidates, axis=0)
+
+    x_range_width = scene_max_range[x_index] - scene_min_range[x_index]
+    y_range_width = scene_max_range[y_index] - scene_min_range[y_index]
+    z_range_width = scene_max_range[z_index] - scene_min_range[z_index]
+
+    vis_x_range = (
+        scene_min_range[x_index] - x_range_width * 2 / 10,
+        scene_max_range[x_index] + x_range_width * 2 / 10
+    )
+    vis_y_range = (
+        scene_min_range[y_index] - y_range_width * 2 / 10,
+        scene_max_range[y_index] + y_range_width * 2 / 10
+    )
+    vis_z_range = (
+        scene_min_range[z_index] - z_range_width * 2 / 10,
+        scene_max_range[z_index] + z_range_width * 2 / 10
+    )
+
+    axis_bg = vis_info.get("axis_bg", "rgba(230,230,230,30)")
+
+    layout = go.Layout(
+        margin={"l": 0, "r": 0, "b": 0, "t": 40},
+        title="3D Estimation Traces",
+        scene=dict(
+            xaxis=dict(
+                title="X",
+                range=vis_x_range,
+                backgroundcolor=axis_bg,
+                autorange=False
+            ),
+            yaxis=dict(
+                title="Y",
+                range=vis_y_range,
+                backgroundcolor=axis_bg,
+                autorange=False
+            ),
+            zaxis=dict(
+                title="Z",
+                range=vis_z_range,
+                backgroundcolor=axis_bg,
+                autorange=False
+            ),
+            aspectmode="data",
+        ),
+        showlegend=True
+    )
+
+    data = axis_traces + obj_traces + marker_traces + skeleton_traces
+    plot_figure = go.Figure(data=data, layout=layout)
+
+    return HTML(plot_figure.to_html(include_plotlyjs="cdn"))
     
 if __name__=="__main__":
     import F_Visualize

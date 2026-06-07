@@ -88,9 +88,24 @@ def map_indicies(original_indices, including_indices):
     
     return result
 
-def reorient_array(data: np.ndarray, 
-                   current_orient: str, 
-                   target_orient: str) -> np.ndarray:
+def get_ACS_explicit_orientation(orientation: str):
+    """
+    Convert a shorthand human orientation string into explicit axis pairs
+
+    :param orientation: Starting orientation shorthand, e.g., "RAI" or "LPS".
+    
+    :return: A list of two-character axis pairs, e.g., ['RL', 'AP', 'IS'].
+    """
+    starts = [ori for ori in orientation]
+    
+    axis_groups = [get_ACS_axis_group(coord) for coord in starts]
+    ends = [group.replace(start, "") for start, group in zip(starts, axis_groups)]
+    
+    return [f"{start}{end}" for start, end in zip(starts, ends)]
+    
+def reorient_ACS_array(data: np.ndarray, 
+                       current_orient: str, 
+                       target_orient: str) -> np.ndarray:
     """
     Re-orient 3D array
 
@@ -98,24 +113,38 @@ def reorient_array(data: np.ndarray,
     :param current_orient: current orientation ex) "LPS"
     :param target_orient: orientation to be converted ex) "RAS"
 
-    return np.ndarray
+    return reoriented array
     """
-    def get_axis_group(char):
-        if char in 'LR': return 'LR'
-        if char in 'IS': return 'IS'
-        if char in 'PA': return 'PA'
-        return None
-        
-    current_groups = [get_axis_group(c) for c in current_orient]
-    target_groups = [get_axis_group(c) for c in target_orient]
+    M = get_ACS_orientation_mat(current_orient, target_orient)
+    return data @ M.T
 
-    new_order = [current_groups.index(g) for g in target_groups]
-    data_c = data[:, :, new_order].copy()
-    current_reordered = [current_orient[i] for i in new_order]
-    for i, (c, t) in enumerate(zip(current_reordered, target_orient)):
-        if c != t:
-            data_c[:, :, i] = -data_c[:, :, i]
-    return data_c
+def get_ACS_axis_group(char):
+    if char in "LR": return "LR"
+    if char in "IS": return "IS"
+    if char in "PA": return "PA"
+    return None
+
+def get_ACS_orientation_mat(current_orient: str, target_orient: str) -> np.ndarray:
+    """
+    Get transform matrix in ACS (Anatomical Coordinate System)
+
+    :param current_orient: current orientation ex) LPS
+    :param target_orient: target orientation to be converted ex) RPS
+
+    return 3x3 transform matrix 
+    """
+    current_groups = [get_ACS_axis_group(c) for c in current_orient]
+    target_groups = [get_ACS_axis_group(c) for c in target_orient]
+    
+    M = np.zeros((3, 3))
+    for target_idx, t_group in enumerate(target_groups):
+        current_idx = current_groups.index(t_group)
+        
+        c_char = current_orient[current_idx]
+        t_char = target_orient[target_idx]
+        
+        M[target_idx, current_idx] = 1 if c_char == t_char else -1
+    return M
     
 if __name__ == "__main__":
     map_indicies([0,1,2,3,4,5], [2,3,4])

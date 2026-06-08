@@ -148,8 +148,7 @@ def find_child_bodies(path, target_body_name):
     return child_body_names
     
 # Joint
-def get_joints(model_path: str,
-                      constraint_suffix = "_con") -> pd.DataFrame:
+def get_joints(model_path: str, constraint_suffix = "_con") -> pd.DataFrame:
     """
     get joints from mujoco compatible model
     
@@ -774,6 +773,8 @@ def get_marker_local_position(xml_path: str, target_marker_name: str):
     return local_pos
     
 # Torque
+
+    
 def get_torque_range(model, qpos: np.ndarray) -> pd.DataFrame:
     """
     Calculate torque range when the model has the pose
@@ -797,22 +798,7 @@ def get_torque_range(model, qpos: np.ndarray) -> pd.DataFrame:
         
     return torque_range_df
     
-def calc_qfrc_inverse_manually(M,
-                               qacc,
-                               qfrc_bias,
-                               qfrc_passive,
-                               qfrc_constraint):
-    """
-    Calculate joint torque from basis torque and inertia information
 
-    :param M: inertia matrix
-    :param qacc: acceleration acting on the joint
-    :param qfrc_bias:
-    :param qfrc_passive: torque from passive muscle element
-    :param qfrc_constraint: torque from constraint
-    """
-    qfrc_inverse_manual = (M @ qacc) + qfrc_bias - qfrc_passive - qfrc_constraint
-    return qfrc_inverse_manual
 
 def calculate_muscle_to_joint_torque(model, mj_data, activation = 1.0) -> pd.DataFrame:
     """
@@ -910,49 +896,6 @@ def calc_ID_result(model: mujoco.MjModel, data: mujoco.MjData, disable_constrain
     
     return torque_df
     
-# Force
-def calculate_muscle_force(model, mj_data, activation = 1.0) -> pd.DataFrame:
-    """
-    Calculate muscle force
-
-    :param model: mujoco model
-    :param mj_data: mujoco data
-    :param activation: muscle activation for simulation
-
-    return muscle forces (columns: muscle, index: Active, Passive)
-    """
-    # Constants
-    n_actuators = model.nu
-    actuator_names = np.array([model.actuator(i).name for i in range(model.nu)])
-    
-    # Update geometry information
-    mujoco.mj_step1(model, mj_data)
-    
-    # Calculate active forces
-    active_forces = np.zeros(n_actuators)
-    passive_forces = np.zeros(n_actuators)
-    for act_i in range(n_actuators):
-        # Extract target muscle params
-        length = mj_data.actuator_length[act_i]
-        velocity = mj_data.actuator_velocity[act_i]
-        lengthrange = model.actuator_lengthrange[act_i]
-        acc0 = model.actuator_acc0[act_i]
-        prmb = model.actuator_biasprm[act_i, :9]
-        prmg = model.actuator_gainprm[act_i, :9]
-        
-        # Calculate gain and bias
-        bias = mujoco.mju_muscleBias(length, lengthrange, acc0, prmb)
-        gain = min(-1.0, mujoco.mju_muscleGain(length, velocity, lengthrange, acc0, prmg))
-        
-        # Calculate muscle force
-        active_forces[act_i] = gain * activation
-        passive_forces[act_i] = bias
-    muscle_forces = np.vstack([active_forces, passive_forces])
-    
-    muscle_forces_df = pd.DataFrame(muscle_forces, columns = actuator_names)
-    muscle_forces_df.index = ["Active", "Passive"]
-    return muscle_forces_df
-    
 # Constraint
 def enforce_equality_constraints(model: mujoco.MjModel,
                                  data: mujoco.MjData):
@@ -1032,4 +975,82 @@ def get_simulated_img(model: mujoco.MjModel,
     # Get image
     renderer.update_scene(mj_data, camera = camera, scene_option = scene_option)
     return renderer.render(), mj_data
+
+# Verification
+def calc_actuator_force_manually(model: mujoco.MjModel, mj_data: mujoco.MjData) -> np.ndarray:
+    """
+    Calculate actuator force manually
+
+    :param model: mujoco model
+    :param mj_data: model state
+
+    :return: actuator force generated on each joint
+    """
+    moment_arm_mat = get_moment_arm_matrix(model, mj_data)
+    manual_qfrc = np.dot(mj_data.actuator_force * model.actuator_gear[:, 0], moment_arm_mat)
+    return manual_qfrc
+
+def calc_qfrc_inverse_manually(M,
+                               qacc,
+                               qfrc_bias,
+                               qfrc_passive,
+                               qfrc_constraint):
+    """
+    Calculate joint torque from basis torque and inertia information
+
+    - (M * acceleration) + bias - passive - constraint
+    
+    :param M: inertia matrix
+    :param qacc: acceleration acting on the joint
+    :param qfrc_bias:
+    :param qfrc_passive: torque from passive muscle element
+    :param qfrc_constraint: torque from constraint
+    """
+    qfrc_inverse_manual = (M @ qacc) + qfrc_bias - qfrc_passive - qfrc_constraint
+    return qfrc_inverse_manual
+
+def calculate_muscle_force_manually(model, mj_data, activation = 1.0) -> pd.DataFrame:
+    """
+    Calculate muscle force
+
+    - active force: gain * muscle activation
+    - passive force: bias
+    
+    :param model: mujoco model
+    :param mj_data: mujoco data
+    :param activation: muscle activation for simulation
+
+    return muscle forces (columns: muscle, index: Active, Passive)
+    """
+    # Constants
+    n_actuators = model.nu
+    actuator_names = np.array([model.actuator(i).name for i in range(model.nu)])
+    
+    # Update geometry information
+    mujoco.mj_step1(model, mj_data)
+    
+    # Calculate active forces
+    active_forces = np.zeros(n_actuators)
+    passive_forces = np.zeros(n_actuators)
+    for act_i in range(n_actuators):
+        # Extract target muscle params
+        length = mj_data.actuator_length[act_i]
+        velocity = mj_data.actuator_velocity[act_i]
+        lengthrange = model.actuator_lengthrange[act_i]
+        acc0 = model.actuator_acc0[act_i]
+        prmb = model.actuator_biasprm[act_i, :9]
+        prmg = model.actuator_gainprm[act_i, :9]
+        
+        # Calculate gain and bias
+        bias = mujoco.mju_muscleBias(length, lengthrange, acc0, prmb)
+        gain = min(-1.0, mujoco.mju_muscleGain(length, velocity, lengthrange, acc0, prmg))
+        
+        # Calculate muscle force
+        active_forces[act_i] = gain * activation
+        passive_forces[act_i] = bias
+    muscle_forces = np.vstack([active_forces, passive_forces])
+    
+    muscle_forces_df = pd.DataFrame(muscle_forces, columns = actuator_names)
+    muscle_forces_df.index = ["Active", "Passive"]
+    return muscle_forces_df
     

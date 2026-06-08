@@ -428,6 +428,31 @@ def make_grouping_indexes(n_group, n_data, postProcessing = "absorbEndGroup"):
                 del grouping_indexes[i]
 
     return grouping_indexes
+
+def downsampling_DF_withTimes(df: pd.DataFrame, simulation_time_interval: float, kind: str = "linear") -> pd.DataFrame:
+    """
+    Do downsampling over each column using time information with interpolation.
+
+    :param df: The dataframe must include a 'times' column.
+    :param kind: Specifies the kind of interpolation as a string ('linear', 'cubic', etc.).
+
+    :return result: The downsampled DataFrame
+    """
+    x = df["times"].values
+    y = df.drop(columns=["times"]).values
+
+    new_times = np.arange(x.min(), x.max() + 1e-7, simulation_time_interval)
+    new_times = np.clip(new_times, x.min(), x.max())
+
+    # Interpolation
+    f = interp1d(x, y, kind=kind, axis=0, bounds_error=False, fill_value=(y[0], y[-1]))
+    new_y = f(new_times)
+
+    # Make dataframe
+    new_df = pd.DataFrame(new_y, columns=df.columns.drop("times"))
+    new_df.insert(0, "times", new_times)
+    
+    return new_df
     
 ####### Examples #######
 if __name__ == "__main__":

@@ -1655,7 +1655,6 @@ def plot_3D_datasets(
             marker_traces.append(trace)
 
         # collect axis ranges across all datasets
-        
         all_min_x.append(np.nanmin(marker_coordinates[:, :, x_index]))
         all_min_y.append(np.nanmin(marker_coordinates[:, :, y_index]))
         all_min_z.append(np.nanmin(marker_coordinates[:, :, z_index]))
@@ -2571,7 +2570,6 @@ def plot_3D_datasets_no_reorient(
     return HTML(plot_figure.to_html(include_plotlyjs="cdn"))
     
 if __name__=="__main__":
-    import F_Visualize
     test = pd.DataFrame([
         [100, 200, 150],
         [123, 180, 159],

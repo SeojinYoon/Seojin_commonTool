@@ -1,13 +1,15 @@
 
 # Common Libraries
-import os, re, sys
+import os, re, sys, opensim, itertools
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import xml.dom.minidom as md
 import xml.etree.ElementTree as ET
 
 # Custom Libraries
 from sj_datastructure import make_3d_dataset
+from XML.xml_util import search_tags_in_xml
 
 # Joint
 def get_independent_joints(osim_model_path):
@@ -64,23 +66,23 @@ def get_joint_ranges(model_path):
     
     objects = root.find(".//objects")
     
-    for joint in list(objects):
-        joint_name = joint.attrib.get("name")
-        joint_type = joint.tag
+    for obj in list(objects):
+        obj_name = obj.attrib.get("name")
+        obj_type = obj.tag
     
-        for coord in joint.findall(".//Coordinate"):
-            coord_name = coord.attrib.get("name")
+        for coord in obj.findall(".//Coordinate"):
+            joint_name = coord.attrib.get("name")
             range_elem = coord.find("range")
     
             if range_elem is not None and range_elem.text:
                 min_val, max_val = map(float, range_elem.text.split())
     
                 data.append({
+                    "obj_name": obj_name,
+                    "obj_type": obj_type,
                     "joint_name": joint_name,
-                    "joint_type": joint_type,
-                    "coordinate_name": coord_name,
-                    "min_angle": min_val,
-                    "max_angle": max_val
+                    "min": min_val,
+                    "max": max_val
                 })
     
     df = pd.DataFrame(data)
@@ -722,7 +724,129 @@ def make_staticOptimization_setup(setup_template_path,
     print(f"Static optimization setup file is created completely: {setup_file_path}")
     
     return destination
+
+def get_muscle_lengths(osim_model: opensim.simulation.Model,
+                       osim_muscle: opensim.simulation.Muscle,
+                       joint_configs: pd.DataFrame,
+                       joint_names: [str]) -> (list, pd.DataFrame):
+    """
+    Get selected length of muscle from joint configuration
+
+    :param osim_model: opensim model
+    :param osim_muscle: opensim muscle
+    :param joint_configs: joint angle configurations
+    :param joint_names: joint name list
     
+    return muscle tendon lengths
+    """
+    # Initialize model and get constants
+    currentState = osim_model.initSystem()
+    joints_idx = [osim_model.getCoordinateSet().get(j) for j in joint_names]
+    
+    # Calculate muscle tendon lengths based on the meshes of joint angles
+    n_rows = len(joint_configs)
+    mtu_len = np.zeros(n_rows, dtype=np.float64)
+    joint_values_matrix = joint_configs.values
+    for i in range(n_rows):
+        angles = joint_values_matrix[i]
+        for osim_joint, angle in zip(joints_idx, angles):
+            osim_joint.setValue(currentState, angle)
+            
+        mtu_len[i] = osim_muscle.getGeometryPath().getLength(currentState)
+        
+    return mtu_len
+    
+def get_muscle_length_dist(osim_model: opensim.simulation.Model,
+                           osim_muscle: opensim.simulation.Muscle,
+                           joint_names: [str],
+                           joint_angle_ranges: pd.DataFrame,
+                           n_eval_angle: int = 3,
+                           n_dist_sampling: int = 15) -> (list, pd.DataFrame):
+    """
+    Get selected length of muscle from joint configuration
+
+    :param osim_model: opensim model
+    :param osim_muscle: opensim muscle
+    :param joint_names: joint name list
+    :param joint_angle_ranges: range of motion on each joint (#column: #joint, rows: min, max)
+    :param n_eval_angle: the number of evaluation, which is used splitting angle on each joint
+    :param n_dist_sampling: the number of sampling to construct distribution of joint configuration 
+    
+    return muscle tendon lengths, joint configurations
+    """
+    # Initialize model and get constants
+    currentState = osim_model.initSystem()
+    joints_idx = [osim_model.getCoordinateSet().get(j) for j in joint_names]
+    
+    # Make joint configurations
+    ang_mesh = [np.linspace(joint_angle_ranges.loc["min", joint_name],
+                            joint_angle_ranges.loc["max", joint_name], n_eval_angle) for joint_name in joint_names]
+    joint_angle_configs = pd.DataFrame(list(itertools.product(*ang_mesh)), columns = joint_names)
+
+    # Get musculotendon lengths
+    mtu_lengths = get_muscle_lengths(osim_model = osim_model,
+                                     osim_muscle = osim_muscle,
+                                     joint_configs = joint_angle_configs,
+                                     joint_names = joint_names)
+    
+    # Generate the even distributed muscle tendon lenghts based on the min 
+        # and max of muscle lengths that calculated from the mesh joint angles
+    mtu_lengths_dis = np.linspace(mtu_lengths.min(), mtu_lengths.max(), n_dist_sampling)
+    selected_indices = []
+    for target_len in mtu_lengths_dis:
+        # find the closed muscle tendon lengths from the even distributed mtu lengths
+        abs_diff = np.abs(mtu_lengths - target_len)
+        closest_idx = int(np.where(abs_diff == abs_diff.min())[0][0])
+        selected_indices.append(closest_idx)
+    
+    final_mtu_lengths = mtu_lengths[selected_indices]
+    final_joint_configs_df = joint_angle_configs.iloc[selected_indices].reset_index().drop("index", axis = 1)
+    return final_mtu_lengths, final_joint_configs_df
+                                         
+def get_muscle_forces(osim_model: opensim.simulation.Model,
+                      osim_muscle: opensim.simulation.Muscle,
+                      joint_names: [str],
+                      joint_configs: pd.DataFrame,
+                      act_list: [float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Get muscle forces when a muscle actives 
+
+    :param osim_model: opensim model
+    :param osim_muscle: opensim muscle
+    :param joint_names: joint name list
+    :param joint_configs: joint angle configurations
+    :param act_list: muscle activation value to be simulated
+
+    :return: total muscle force, active muscle force, passive muscle force
+    """
+    # Initialize model
+    currentState = osim_model.initSystem()
+    joints = [osim_model.getCoordinateSet().get(j) for j in joint_names]
+    
+    # Calculate equilibrated muscle force from the selected joint configurations
+    n_config = len(joint_configs)
+    n_act = len(act_list)
+    mtu_act = np.zeros((n_act, n_config))
+    mtu_pas = np.zeros((n_act, n_config))
+    mtu_for = np.zeros((n_act, n_config))
+    for config_i, joint_angle_config in enumerate(joint_configs.values):
+        for osim_joint, angle in zip(joints, joint_angle_config):
+            osim_joint.setValue(currentState, angle)
+    
+        for act_i, activation in enumerate(act_list):
+            osim_muscle.setActivation(currentState, activation)
+            osim_model.equilibrateMuscles(currentState)
+    
+            mtu_act[act_i, config_i] = osim_muscle.getActiveFiberForce(currentState)
+            mtu_pas[act_i, config_i] = osim_muscle.getPassiveFiberForce(currentState)
+            mtu_for[act_i, config_i] = osim_muscle.getFiberForceAlongTendon(currentState) # might return Nan, don't know why...
+    
+    # if total fiber force contains NaN, then calculate from active and passive forces
+    if np.isnan(mtu_for).any():
+        return mtu_act + mtu_pas, mtu_act, mtu_pas
+    else:
+        return mtu_for, mtu_act, mtu_pas
+        
 if __name__=="__main__":
     readStoFile("")
     read_mot_file("")

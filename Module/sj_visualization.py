@@ -1533,16 +1533,14 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
 
     return HTML(plot_figure.to_html(include_plotlyjs="cdn"))
 
-def plot_3D_datasets(
-    position_ds_list,
-    targets: list = [],
-    skeletons_list: list = [],
-    obj_info = {},
-    dataset_names = [],
-    vis_info = {},
-    axis_info = {},
-    visualize_coord_order = "LAS"
-):
+def plot_3D_datasets(position_ds_list,
+                     targets: list = [],
+                     skeletons_list: list = [],
+                     obj_info = {},
+                     dataset_names = [],
+                     vis_info = {},
+                     axis_info = {},
+                     visualize_coord_order = "LAS"):
     """
     Plot 3D coordinates from multiple xarray datasets.
     

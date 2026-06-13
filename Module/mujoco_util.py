@@ -1,10 +1,15 @@
 
 # Common Libraries
-import os, sys, mujoco
+import os, sys, mujoco, mediapy, shutil
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+if shutil.which("nvidia-smi") is not None:
+    os.environ["MUJOCO_GL"] = "egl"
+import mujoco
 
 # Custom Libraries
 from XML.xml_util import parse_xml_with_includes
@@ -148,6 +153,65 @@ def find_child_bodies(path, target_body_name):
     return child_body_names
     
 # Joint
+def calc_dependent_joint_angle(mjc_model: mujoco.MjModel,
+                               indep_joint_names: [str],
+                               joint_config: pd.Series) -> pd.DataFrame:
+    """
+    Calculate dependent joint angle based on joint configuration.
+
+    :param mjc_model: MuJoCo model object.
+    :param indep_joint_names: List of independent joint names to consider.
+    :param joint_config: Joint configuration data with joint names as index.
+
+    :return: DataFrame containing calculation results.
+             Columns: indep_joint_i, indep_joint, indep_joint_angle, 
+                      dep_joint_i, dep_joint, dep_joint_angle
+    """
+    # Constants
+    JOINT_COUPLING = 2
+    ACTIVE = 1
+
+    n_equalities = mjc_model.neq
+    joint_names = [mujoco.mj_id2name(mjc_model, mujoco.mjtObj.mjOBJ_JOINT, idx) for idx in range(mjc_model.njnt)]
+
+    # Filter target equality
+    is_joint_equalities = mjc_model.eq_type == JOINT_COUPLING
+    is_active_equalities = mjc_model.eq_active == ACTIVE
+    
+    ind_joint_inEqualities = np.array([joint_names[mjc_model.eq_obj2id[equality_i]] for equality_i in range(n_equalities)])
+    dep_joint_inEqualities = np.array([joint_names[mjc_model.eq_obj1id[equality_i]] for equality_i in range(n_equalities)])
+    
+    is_considered = np.isin(ind_joint_inEqualities, indep_joint_names)
+    is_target_equalities = is_joint_equalities & is_active_equalities & is_considered
+    equalities_idx = np.where(is_target_equalities)[0]
+    n_target_equalities = len(equalities_idx)
+    
+    rows = []
+    for i, equality_i in enumerate(equalities_idx):
+        # Get independent joint angle
+        indep_joint = ind_joint_inEqualities[equality_i]
+        indep_joint_angle = joint_config[indep_joint]
+    
+        # Calculate dependent joint angle based on the independent joint angle
+        poly_gains = mjc_model.eq_data[equality_i][:5]
+        powers = np.arange(len(poly_gains))
+    
+        dep_jnt = dep_joint_inEqualities[equality_i]
+        dep_joint_angle = np.sum(poly_gains * (indep_joint_angle ** powers))
+
+        # Stack result
+        rows.append({
+            "indep_joint_i": joint_names.index(indep_joint),
+            "indep_joint": indep_joint,
+            "indep_joint_angle": indep_joint_angle,
+            "dep_joint_i": joint_names.index(dep_jnt),
+            "dep_joint": dep_jnt,
+            "dep_joint_angle": dep_joint_angle
+        })
+
+    results = pd.DataFrame(rows)
+    return results
+    
 def get_joints(model_path: str, constraint_suffix = "_con") -> pd.DataFrame:
     """
     get joints from mujoco compatible model
@@ -205,6 +269,30 @@ def get_joint_ranges(model_path: str) -> pd.DataFrame:
     df.columns = joint_names
     df.index = ["min", "max"]
     return df
+
+def get_locked_joint_angle(mjc_model: mujoco.MjModel) -> pd.DataFrame:
+    """
+    Get locked joint angles
+
+    :param mjc_model: mujoco model
+
+    return joint angles(columns: ["joint_i", "joint", "angle"])
+    """
+    # Constants
+    JOINT_COUPLING = 2
+    ACTIVE = 1
+    joint_names = [mujoco.mj_id2name(mjc_model, mujoco.mjtObj.mjOBJ_JOINT, idx) for idx in range(mjc_model.njnt)]
+    
+    # Filter target f
+    is_locked = (mjc_model.eq_type == JOINT_COUPLING) & (mjc_model.eq_active == ACTIVE) & (mjc_model.eq_obj2id == -1)
+    target_equalitiex_idx = np.where(is_locked)[0]
+
+    # Get locked joints angles
+    locked_joints = [mjc_model.eq_obj1id[equality_i] for equality_i in target_equalitiex_idx]
+    locked_joints_idx = [joint_names[mjc_model.eq_obj1id[equality_i]] for equality_i in target_equalitiex_idx]
+    locked_joint_angles = [mjc_model.eq_data[equality_i][0] for equality_i in target_equalitiex_idx]
+
+    return pd.DataFrame(np.vstack([locked_joints, locked_joints_idx, locked_joint_angles]).T, columns = ["joint_i", "joint", "angle"])
     
 def get_dof_names(model: mujoco.MjModel) -> [str]:
     """
@@ -635,8 +723,7 @@ def get_muscle_path(mujoco_path, muscle_name):
 
     return pd.DataFrame(rows)
 
-def extract_mujoco_muscle_bias_params(model_path):
-    model = mujoco.MjModel.from_xml_path(model_path)
+def extract_mujoco_muscle_bias_params(model):
     muscle_names = [model.actuator(i).name for i in range(model.nu)]
     
     actuator_gainprms = pd.DataFrame(model.actuator_biasprm)
@@ -649,8 +736,42 @@ def extract_mujoco_muscle_bias_params(model_path):
                                  "unused"]
     return actuator_gainprms.T
 
-def extract_muscle_gain_params(model_path):
+def mju_muscleBias_manually(model_path, actuator_acc0s, acutator_lengths, actuator_lengthranges):
     model = mujoco.MjModel.from_xml_path(model_path)
+    muscle_bias_param_df = extract_mujoco_muscle_bias_params(model)
+    
+    acc0 = model.actuator_acc0
+    length = mj_data.actuator_length
+    length_range = model.actuator_lengthrange
+    
+    mt_range = muscle_bias_param_df.loc[["l_mt_min", "l_mt_max"], :].T.to_numpy()
+    F_max = muscle_bias_param_df.loc["F_max", :].to_numpy()
+    F_scale = muscle_bias_param_df.loc["F_scale", :].to_numpy()
+    F_max = np.where(F_scale < 0, F_scale / np.maximum(mujoco.mjMINVAL, actuator_acc0s), F_max)
+    l_m_max = muscle_bias_param_df.loc["l_m_max", :].to_numpy()
+    fp_max = muscle_bias_param_df.loc["fp_max", :].to_numpy()
+    
+    # Optimum length
+    l0 = (actuator_lengthranges[:, 1] - actuator_lengthranges[:, 0]) / np.maximum(mujoco.mjMINVAL, mt_range[:, 1] - mt_range[:, 0])
+    
+    # Normalized length
+    l = mt_range[:, 0] + (acutator_lengths - actuator_lengthranges[:, 0]) / np.maximum(mujoco.mjMINVAL, l0)
+    
+    # half-quadratic to (L0+lmax)/2, linear beyond
+    b = 0.5 * (1 + l_m_max)
+    
+    result1 = np.where(l <= 1, 0, np.nan)
+    
+    x = (l - 1) / np.maximum(mujoco.mjMINVAL, b-1)
+    result2 = -F_max * fp_max * 0.5 * x * x
+    result2 = np.where(l <= b, result2, result1)
+    
+    x = (l - b) / np.maximum(mujoco.mjMINVAL, b-1)
+    result3 = -F_max * fp_max * (0.5 + x)
+    result = np.where(np.isnan(result2), result3, result2)
+    return result
+    
+def extract_muscle_gain_params(model):
     muscle_names = [model.actuator(i).name for i in range(model.nu)]
     
     actuator_gainprms = pd.DataFrame(model.actuator_gainprm)
@@ -773,8 +894,6 @@ def get_marker_local_position(xml_path: str, target_marker_name: str):
     return local_pos
     
 # Torque
-
-    
 def get_torque_range(model, qpos: np.ndarray) -> pd.DataFrame:
     """
     Calculate torque range when the model has the pose
@@ -907,10 +1026,12 @@ def enforce_equality_constraints(model: mujoco.MjModel,
     """
     for i in range(model.neq):
         if model.eq_type[i] == mujoco.mjtEq.mjEQ_JOINT and data.eq_active[i]:
-            y_jnt = model.eq_obj1id[i]
             x_jnt = model.eq_obj2id[i]
-            y_adr = model.jnt_qposadr[y_jnt]
+            y_jnt = model.eq_obj1id[i]
+            
             x_adr = model.jnt_qposadr[x_jnt]
+            y_adr = model.jnt_qposadr[y_jnt]
+            
             coef = model.eq_data[i]  # a0~a4
             x = data.qpos[x_adr]
             x0 = model.qpos0[x_adr]
@@ -946,7 +1067,7 @@ def get_simulated_img(model: mujoco.MjModel,
 
     return img(np.ndarray), mj_data
     """
-    # Model config
+    # Model configl
     mj_data = mujoco.MjData(model)
     mj_data.qpos[:] = initial_qpos[:]
     joint_names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, idx) for idx in range(model.njnt)]
@@ -976,6 +1097,65 @@ def get_simulated_img(model: mujoco.MjModel,
     renderer.update_scene(mj_data, camera = camera, scene_option = scene_option)
     return renderer.render(), mj_data
 
+# Mucle
+def get_muscle_forceLengths(mjc_model: mujoco.MjModel,
+                            muscle_name: str,
+                            related_joint_names: list[str],
+                            joint_configs: pd.DataFrame,
+                            activations: list[float],
+                            timestep = 0.005) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Get muscle force and lengths when joint configuration is given
+
+    :param mjc_model: mujoco model
+    :param muscle_name: muscle name
+    :param related_joint_names: related joint names on muscle
+    :param joint_configs: joint angle configurations
+    :param activations: value to activate muscle
+    :param timestep: time step for forward dynamics
+    
+    :return: musculotendon forces given configuration, musculotendon lengths given configuration 
+    """
+    # Constants
+    n_activations, n_configs = len(activations), len(joint_configs)
+    related_joint_configs = joint_configs[related_joint_names]
+    
+    # Initialize model
+    mjc_data = mujoco.MjData(mjc_model)
+    mjc_model.opt.timestep = timestep
+    joints_idx = [mujoco.mj_name2id(mjc_model, mujoco.mjtObj.mjOBJ_JOINT, joint_name) for joint_name in related_joint_names]
+    muscle_id = mujoco.mj_name2id(mjc_model, mujoco.mjtObj.mjOBJ_ACTUATOR, muscle_name)
+
+    locked_joint_data = get_locked_joint_angle(mjc_model)
+
+    # Calculate muscle forces & lengths
+    mtu_forces = np.zeros((n_activations, n_configs))
+    mtu_lengths = np.zeros((n_activations, n_configs))
+    for act_i, act in enumerate(activations):
+        mjc_data.ctrl[muscle_id] = act # set control signal
+        mujoco.mj_step(mjc_model, mjc_data)
+
+        for config_i in range(n_configs):
+            # Set joint configuration
+            joint_config = related_joint_configs.iloc[config_i]
+            mjc_data.qpos[:] = 0
+            mjc_data.qvel[:] = 0
+            mjc_data.qpos[joints_idx] = joint_config.values
+
+            dependent_joint_data = calc_dependent_joint_angle(mjc_model, related_joint_names, joint_config)
+            mjc_data.qpos[dependent_joint_data["dep_joint_i"]] = dependent_joint_data["dep_joint_angle"]
+            mjc_data.qpos[locked_joint_data["joint_i"]] = locked_joint_data["angle"]
+
+            # Forward dynamics
+            mujoco.mj_step(mjc_model, mjc_data)
+
+            # Stack result
+            mtu_forces[act_i, config_i] = mjc_data.actuator_force[muscle_id].copy()
+            mtu_lengths[act_i, config_i] = mjc_data.actuator_length[muscle_id].copy()
+    result = np.concatenate([mtu_forces, mtu_lengths], axis = 0).T
+    result = pd.DataFrame(result, columns = ["actuator_force", "mtu_length"])
+    return result
+    
 # Verification
 def calc_actuator_force_manually(model: mujoco.MjModel, mj_data: mujoco.MjData) -> np.ndarray:
     """
@@ -1053,4 +1233,144 @@ def calculate_muscle_force_manually(model, mj_data, activation = 1.0) -> pd.Data
     muscle_forces_df = pd.DataFrame(muscle_forces, columns = actuator_names)
     muscle_forces_df.index = ["Active", "Passive"]
     return muscle_forces_df
+
+# Viewer
+def display_qpos_viewer(
+    model_path,
+    qposes,
+    marker_group = 4,
+    marker_default_class="marker",
+    height=400,
+    width=600,
+    framewidth=0.1,
+    framelength=1.0,
+    init_lookat=(0, 0, 0),
+    init_camera=(2.5, -90, -90),
+):
+    # Model
+    model = mujoco.MjModel.from_xml_path(model_path)
+    model.vis.scale.framewidth = framewidth
+    model.vis.scale.framelength = framelength
+    data = mujoco.MjData(model)
+
+    # Marker group from XML
+    tree = ET.parse(model_path)
+    root = tree.getroot()
+    try:
+        marker_default = root.find(f".//default[@class='{marker_default_class}']/site")
+        marker_group = int(marker_default.get("group"))
+    except:
+        marker_group = marker_group
+
+    # Render
+    renderer = mujoco.Renderer(model, height=height, width=width)
+
+    # Camera
+    camera = mujoco.MjvCamera()
+
+    # Scene option
+    scene_option = mujoco.MjvOption()
+    scene_option.frame = mujoco.mjtFrame.mjFRAME_WORLD
+    scene_option.sitegroup[:] = 0
+    scene_option.sitegroup[marker_group] = 1
+
+    output_area = widgets.Output()
+
+    # Widgets
+    img_slider = widgets.IntSlider(
+        value=0,
+        min=0,
+        max=len(qposes) - 1,
+        step=1,
+        description="img:",
+    )
+
+    x_slider = widgets.FloatSlider(
+        value=init_lookat[0],
+        min=-1.0,
+        max=1.0,
+        step=0.01,
+        description="look X:",
+    )
+    y_slider = widgets.FloatSlider(
+        value=init_lookat[1],
+        min=-1.0,
+        max=1.0,
+        step=0.01,
+        description="look Y:",
+    )
+    z_slider = widgets.FloatSlider(
+        value=init_lookat[2],
+        min=-1.0,
+        max=1.0,
+        step=0.01,
+        description="look Z:",
+    )
+
+    c_dist = widgets.FloatSlider(
+        value=init_camera[0],
+        min=0.0,
+        max=10.0,
+        step=0.1,
+        description="Cam Dist",
+        continuous_update=False,
+    )
+    c_azim = widgets.FloatSlider(
+        value=init_camera[1],
+        min=-180,
+        max=180,
+        step=1,
+        description="Cam Azim",
+        continuous_update=False,
+    )
+    c_elev = widgets.FloatSlider(
+        value=init_camera[2],
+        min=-90,
+        max=90,
+        step=1,
+        description="Cam Elev",
+        continuous_update=False,
+    )
+
+    def update(i, x, y, z, cam_dist, cam_azim, cam_elev):
+        data.qpos[:] = qposes[i]
+        mujoco.mj_forward(model, data)
+
+        camera.lookat[:] = [x, y, z]
+        camera.distance = cam_dist
+        camera.azimuth = cam_azim
+        camera.elevation = cam_elev
+
+        renderer.update_scene(
+            data,
+            scene_option=scene_option,
+            camera=camera,
+        )
+
+        pixels = renderer.render()
+
+        with output_area:
+            clear_output(wait=True)
+            mediapy.show_image(pixels)
+
+    ui = widgets.VBox([
+        img_slider,
+        widgets.HBox([x_slider, y_slider, z_slider]),
+        widgets.HBox([c_dist, c_azim, c_elev]),
+    ])
+
+    out = widgets.interactive_output(
+        update,
+        {
+            "i": img_slider,
+            "x": x_slider,
+            "y": y_slider,
+            "z": z_slider,
+            "cam_dist": c_dist,
+            "cam_azim": c_azim,
+            "cam_elev": c_elev,
+        },
+    )
+
+    display(widgets.VBox([ui, output_area, out]))
     

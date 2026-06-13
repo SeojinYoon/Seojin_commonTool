@@ -328,8 +328,6 @@ class Permutation:
     def except_data(datas, removal_index):
         return [e for i, e in enumerate(datas) if i != removal_index]
 
-
-
 def make_3d_dataset(data, 
                     wrapping_dataset_name,
                     element_dataset_names,

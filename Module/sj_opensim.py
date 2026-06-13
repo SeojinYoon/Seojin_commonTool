@@ -4,7 +4,6 @@ import os, re, sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import xml.dom.minidom as md
 import xml.etree.ElementTree as ET
 
 # Custom Libraries

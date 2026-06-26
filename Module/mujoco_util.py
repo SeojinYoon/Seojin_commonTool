@@ -1176,7 +1176,124 @@ def get_muscle_forceLengths(mjc_model: mujoco.MjModel,
     result = np.concatenate([mtu_forces, mtu_lengths], axis = 0).T
     result = pd.DataFrame(result, columns = ["actuator_force", "mtu_length"])
     return result
+
+def get_muscle_forces(mjc_model: mujoco.MjModel,
+                      muscle_name: str,
+                      related_joint_names: list[str],
+                      joint_configs: pd.DataFrame,
+                      activations: list[float],
+                      timestep = 0.005) -> pd.DataFrame:
+    """
+    Get muscle force and lengths when joint configuration is given
+
+    :param mjc_model: mujoco model
+    :param muscle_name: muscle name
+    :param related_joint_names: related joint names on muscle
+    :param joint_configs: joint angle configurations
+    :param activations: value to activate muscle
+    :param timestep: time step for forward dynamics
     
+    :return: musculotendon forces given configuration, musculotendon lengths given configuration 
+    """
+    # Constants
+    n_act, n_configs = len(activations), len(joint_configs)
+    related_joint_configs = joint_configs[related_joint_names]
+    
+    # Initialize model
+    mjc_data = mujoco.MjData(mjc_model)
+    mjc_model.opt.timestep = timestep
+    joints_idx = [mujoco.mj_name2id(mjc_model, mujoco.mjtObj.mjOBJ_JOINT, joint_name) for joint_name in related_joint_names]
+    muscle_id = mujoco.mj_name2id(mjc_model, mujoco.mjtObj.mjOBJ_ACTUATOR, muscle_name)
+
+    locked_joint_data = get_locked_joint_angle(mjc_model)
+
+    # Calculate muscle forces & lengths
+    mtu_act = np.zeros(n_act * n_configs)
+    mtu_len = np.zeros(n_act * n_configs)
+    mtu_active_force = np.zeros(n_act * n_configs)
+    mtu_passive_force = np.zeros(n_act * n_configs)
+    mtu_total_force = np.zeros(n_act * n_configs)
+
+    for config_i in range(n_configs):
+        # Set joint configuration
+        joint_config = related_joint_configs.iloc[config_i]
+        mjc_data.qpos[:] = 0
+        mjc_data.qvel[:] = 0
+        mjc_data.qpos[joints_idx] = joint_config.values
+
+        dependent_joint_data = calc_dependent_joint_angle(mjc_model, related_joint_names, joint_config)
+        if len(dependent_joint_data) > 0:
+            mjc_data.qpos[dependent_joint_data["dep_joint_i"]] = dependent_joint_data["dep_joint_angle"]
+            mjc_data.qpos[locked_joint_data["joint_i"]] = locked_joint_data["angle"]
+    
+        for act_i, act in enumerate(activations):
+            mjc_data.ctrl[muscle_id] = act # set control signal
+            mujoco.mj_forward(mjc_model, mjc_data)
+
+            # Stack result
+            data_i = config_i * n_act + act_i
+            mtu_act[data_i] = act
+            mtu_len[data_i] = mjc_data.actuator_length[muscle_id].copy()
+            
+            force_info = calc_muscle_force(model = mjc_model,
+                                           data = mjc_data,
+                                           muscle_name = muscle_name,
+                                           activation = act)
+            
+            mtu_active_force[data_i] = force_info["active_force"]
+            mtu_passive_force[data_i] = force_info["passive_force"]
+            mtu_total_force[data_i] = force_info["total_force"]
+            
+    result = pd.DataFrame({
+        "activation": mtu_act,
+        "mtu_len": mtu_len,
+        "active_force": mtu_active_force,
+        "passive_force": mtu_passive_force,
+        "total_force": mtu_total_force,
+    })
+    return result
+
+def calc_muscle_force(model: mujoco.MjModel,
+                      data: mujoco.MjData,
+                      muscle_name: str,
+                      activation: float) -> dict:
+    """
+    Calculate muscle force based on mujoco muscle parameter
+
+    :param model: mujoco model
+    :param data: model state
+    :param muscle_name: actuator name
+    :param activation: activation value
+
+    return dictionary
+        - k: active_force
+        - k: passive_force
+        - k: total_force
+    """
+    mujoco.mj_forward(model, data)
+    
+    # Actuator info
+    actuator_names = [model.actuator(i).name for i in range(model.nu)]
+    actuator_i = actuator_names.index(muscle_name)
+
+    # Muscle info
+    length = data.actuator_length[actuator_i]
+    velocity = data.actuator_velocity[actuator_i]
+    lengthrange = model.actuator_lengthrange[actuator_i]
+    acc0 = model.actuator_acc0[actuator_i]
+    prmb = model.actuator_biasprm[actuator_i, :9]
+    prmg = model.actuator_gainprm[actuator_i, :9]
+
+    # Get gain and bias
+    gain = mujoco.mju_muscleGain(length, velocity, lengthrange, acc0, prmg)
+    bias = mujoco.mju_muscleBias(length, lengthrange, acc0, prmb)
+    
+    return {
+        "active_force" : gain * activation,
+        "passive_force" : bias,
+        "total_force" : gain * activation + bias,
+    }
+
 # Verification
 def calc_actuator_force_manually(model: mujoco.MjModel,
                                  mj_data: mujoco.MjData) -> np.ndarray:

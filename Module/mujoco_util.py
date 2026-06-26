@@ -15,7 +15,7 @@ import mujoco
 from XML.xml_util import parse_xml_with_includes
 
 # KeyFrame
-def extract_keyframe_qpos(xml_path, key_name="default-pose"):
+def extract_keyframe_qpos(xml_path, key_name = "default-pose"):
     root = ET.parse(xml_path).getroot()
 
     # MuJoCo qpos order follows joints inside <worldbody>
@@ -176,7 +176,7 @@ def calc_dependent_joint_angle(mjc_model: mujoco.MjModel,
 
     # Filter target equality
     is_joint_equalities = mjc_model.eq_type == JOINT_COUPLING
-    is_active_equalities = mjc_model.eq_active == ACTIVE
+    is_active_equalities = get_equality_active(mjc_model) == ACTIVE
     
     ind_joint_inEqualities = np.array([joint_names[mjc_model.eq_obj2id[equality_i]] for equality_i in range(n_equalities)])
     dep_joint_inEqualities = np.array([joint_names[mjc_model.eq_obj1id[equality_i]] for equality_i in range(n_equalities)])
@@ -284,15 +284,25 @@ def get_locked_joint_angle(mjc_model: mujoco.MjModel) -> pd.DataFrame:
     joint_names = [mujoco.mj_id2name(mjc_model, mujoco.mjtObj.mjOBJ_JOINT, idx) for idx in range(mjc_model.njnt)]
     
     # Filter target f
-    is_locked = (mjc_model.eq_type == JOINT_COUPLING) & (mjc_model.eq_active == ACTIVE) & (mjc_model.eq_obj2id == -1)
+    eq_actives = get_equality_active(mjc_model)
+    is_locked = (mjc_model.eq_type == JOINT_COUPLING) & (eq_actives == ACTIVE) & (mjc_model.eq_obj2id == -1)
     target_equalitiex_idx = np.where(is_locked)[0]
 
     # Get locked joints angles
-    locked_joints = [mjc_model.eq_obj1id[equality_i] for equality_i in target_equalitiex_idx]
-    locked_joints_idx = [joint_names[mjc_model.eq_obj1id[equality_i]] for equality_i in target_equalitiex_idx]
-    locked_joint_angles = [mjc_model.eq_data[equality_i][0] for equality_i in target_equalitiex_idx]
+    locked_joints = np.array([joint_names[mjc_model.eq_obj1id[equality_i]] for equality_i in target_equalitiex_idx])
+    locked_joints_idx = np.array([mjc_model.eq_obj1id[equality_i] for equality_i in target_equalitiex_idx])
+    locked_joint_angles = np.array([mjc_model.eq_data[equality_i][0] for equality_i in target_equalitiex_idx])
 
-    return pd.DataFrame(np.vstack([locked_joints, locked_joints_idx, locked_joint_angles]).T, columns = ["joint_i", "joint", "angle"])
+    df = pd.DataFrame(np.vstack([locked_joints_idx,
+                                 locked_joints,
+                                 locked_joint_angles]).T, columns = ["joint_i", "joint", "angle"])
+    df = df.astype({
+        "joint_i": np.int32,
+        "joint": str,
+        "angle": np.float64
+    })
+        
+    return df
     
 def get_dof_names(model: mujoco.MjModel) -> [str]:
     """
@@ -771,7 +781,14 @@ def mju_muscleBias_manually(model_path, actuator_acc0s, acutator_lengths, actuat
     result = np.where(np.isnan(result2), result3, result2)
     return result
     
-def extract_muscle_gain_params(model):
+def extract_muscle_gain_params(model: mujoco.MjModel) -> pd.DataFrame:
+    """
+    Extract muscle gain parameters
+
+    :param model: mujoco model
+
+    return actuator gain parameters
+    """
     muscle_names = [model.actuator(i).name for i in range(model.nu)]
     
     actuator_gainprms = pd.DataFrame(model.actuator_gainprm)
@@ -784,7 +801,7 @@ def extract_muscle_gain_params(model):
                                  "unused"]
     return actuator_gainprms.T
 
-def calc_muscle_influence_toJoint(model, qpos: np.ndarray) -> pd.DataFrame:
+def calc_muscle_influence_toJoint(model: mujoco.MjModel, qpos: np.ndarray) -> pd.DataFrame:
     """
     Calculate torque acting on each joint when muscle activates maximally
 
@@ -917,8 +934,6 @@ def get_torque_range(model, qpos: np.ndarray) -> pd.DataFrame:
         
     return torque_range_df
     
-
-
 def calculate_muscle_to_joint_torque(model, mj_data, activation = 1.0) -> pd.DataFrame:
     """
     Calculate muscle contribution to joint torque
@@ -1047,6 +1062,12 @@ def enforce_equality_constraints(model: mujoco.MjModel,
             )
     mujoco.mj_forward(model, data)
 
+def get_equality_active(model):
+    if hasattr(model, "eq_active"):
+        return model.eq_active
+    elif hasattr(model, "eq_active0"):
+        return model.eq_active0
+        
 # Simulation
 def get_simulated_img(model: mujoco.MjModel,
                       initial_qpos: np.ndarray,
@@ -1103,7 +1124,7 @@ def get_muscle_forceLengths(mjc_model: mujoco.MjModel,
                             related_joint_names: list[str],
                             joint_configs: pd.DataFrame,
                             activations: list[float],
-                            timestep = 0.005) -> tuple[np.ndarray, np.ndarray]:
+                            timestep = 0.005) -> pd.DataFrame:
     """
     Get muscle force and lengths when joint configuration is given
 
@@ -1157,7 +1178,8 @@ def get_muscle_forceLengths(mjc_model: mujoco.MjModel,
     return result
     
 # Verification
-def calc_actuator_force_manually(model: mujoco.MjModel, mj_data: mujoco.MjData) -> np.ndarray:
+def calc_actuator_force_manually(model: mujoco.MjModel,
+                                 mj_data: mujoco.MjData) -> np.ndarray:
     """
     Calculate actuator force manually
 
@@ -1189,7 +1211,9 @@ def calc_qfrc_inverse_manually(M,
     qfrc_inverse_manual = (M @ qacc) + qfrc_bias - qfrc_passive - qfrc_constraint
     return qfrc_inverse_manual
 
-def calculate_muscle_force_manually(model, mj_data, activation = 1.0) -> pd.DataFrame:
+def calculate_muscle_force_manually(model,
+                                    mj_data,
+                                    activation = 1.0) -> pd.DataFrame:
     """
     Calculate muscle force
 
@@ -1223,7 +1247,7 @@ def calculate_muscle_force_manually(model, mj_data, activation = 1.0) -> pd.Data
         
         # Calculate gain and bias
         bias = mujoco.mju_muscleBias(length, lengthrange, acc0, prmb)
-        gain = min(-1.0, mujoco.mju_muscleGain(length, velocity, lengthrange, acc0, prmg))
+        gain = mujoco.mju_muscleGain(length, velocity, lengthrange, acc0, prmg)
         
         # Calculate muscle force
         active_forces[act_i] = gain * activation
@@ -1373,4 +1397,4 @@ def display_qpos_viewer(
     )
 
     display(widgets.VBox([ui, output_area, out]))
-    
+

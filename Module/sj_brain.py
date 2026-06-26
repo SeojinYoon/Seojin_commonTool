@@ -43,7 +43,7 @@ from sj_visualization import plot_timeseries
 from sj_sequence import check_duplication
 from sj_file_system import load, save
 from sj_higher_function import recursive_mapWithDepth
-from sj_preprocessing import change_df
+from df_util import change_df
 from sj_datastructure import quick_sort
 from sj_string import make_pad_fromInt, str_join
 from sj_brain_mask import apply_mask_change_shape

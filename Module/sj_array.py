@@ -107,7 +107,7 @@ def reorient_ACS_array(data: np.ndarray,
                        current_orient: str, 
                        target_orient: str) -> np.ndarray:
     """
-    Re-orient 3D array
+    Re-orient Anatomical Coordinate System (ACS) array
 
     :param data(shape: (#times, #labels, 3)): 3D array
     :param current_orient: current orientation ex) "LPS"
@@ -119,6 +119,18 @@ def reorient_ACS_array(data: np.ndarray,
     return data @ M.T
 
 def get_ACS_axis_group(char):
+    """
+    Get the corresponding anatomical axis group for a given direction character.
+
+    This function categorizes a direction character into its respective anatomical pair:
+    - L/R (Left/Right)
+    - I/S (Inferior/Superior) 
+    - P/A (Posterior/Anterior) 
+
+    :param char: A single character representing an anatomical direction (e.g., 'R', 'L', 'A')
+    :return: The axis group name ("LR", "IS", "PA") if valid, otherwise None
+    """
+    
     if char in "LR": return "LR"
     if char in "IS": return "IS"
     if char in "PA": return "PA"
@@ -156,5 +168,5 @@ if __name__ == "__main__":
     for label_i in range(n_labels):
         for coord_i in range(n_coords):
             data[:, label_i, coord_i] = np.arange(coord_i * 10, coord_i * 10 + 10, 1)
-    reorient_array(data, current_ornt = "LPS", target_ornt = "RSA")
+    reorient_ACS_array(data, current_ornt = "LPS", target_ornt = "RSA")
     

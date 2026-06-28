@@ -1251,6 +1251,7 @@ def get_muscle_forces(mjc_model: mujoco.MjModel,
         "passive_force": mtu_passive_force,
         "total_force": mtu_total_force,
     })
+    
     return result
 
 def calc_muscle_force(model: mujoco.MjModel,

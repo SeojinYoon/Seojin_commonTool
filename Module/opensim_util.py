@@ -1,6 +1,6 @@
 
 # Common Libraries
-import os, re, sys, opensim, itertools
+import os, re, sys, opensim, itertools, xarray
 import numpy as np
 import pandas as pd
 import opensim as osim
@@ -11,7 +11,153 @@ import xml.etree.ElementTree as ET
 # Custom Libraries
 from sj_datastructure import make_3d_dataset
 from XML.xml_util import search_tags_in_xml
+from sj_array import get_ACS_explicit_orientation
 
+# TRC
+def convert_to_trc_coordinate(estim_3D: xarray.Dataset, 
+                              target_markers: list[str]) -> tuple:
+    """
+    Convert 3D coordinates from xarray.Dataset into TRC-compatible numpy arrays.
+
+    :param estim_3D: Input Dataset with dimensions (Times, Labels, Coords).
+    :param target_markers: List of marker names to include (e.g., ["S", "E", "W", "EF"]).
+    
+    :return: A tuple of (processed_3d_array, flattened_trc_array).
+             - processed_3d_array: Shape (n_time, n_marker, 3)
+             - flattened_trc_array: Shape (n_time, n_marker * 3)
+    :rtype: tuple
+    """
+    
+    # 1. Select and Copy to avoid mutating the original Dataset
+    selected_ds = estim_3D.sel(Labels = target_markers).copy()
+    
+    # 3. Ensure fixed dimension order (Time, Marker, Coord)
+    # This prevents errors if the input dataset has a different axis order
+    ordered_da = selected_ds["3D"].transpose("Times", "Labels", "Coords")
+    processed_data = ordered_da.to_numpy()
+    
+    # 4. Reshape for OpenSim TRC Format
+    # OpenSim expects each row to be one time step: [X1, Y1, Z1, X2, Y2, Z2, ...]
+    n_time = processed_data.shape[0]
+    n_marker = processed_data.shape[1]
+    n_coord = processed_data.shape[2]
+    
+    # Shape becomes (n_time, n_marker * 3)
+    data_trc = processed_data.reshape(n_time, n_marker * n_coord)
+    
+    return processed_data, data_trc
+    
+def numpy_to_trc(data, labels, trc_file_path, time):
+    """
+    Convert numpy arrays into trc file (meters) and save it.
+    """
+    # 시간 및 주파수 계산
+    freq = 1 / (time[1] - time[0])
+    n_frames = data.shape[0]
+    frames = np.arange(1, n_frames + 1) # 프레임 번호는 보통 1부터 시작
+    
+    n_markers = len(labels)
+    ncoords = 3
+    
+    # 헤더 작성 (Units를 m으로 변경)
+    header = '\n'.join([
+        'PathFileType\t4\t(X/Y/Z)\t{}'.format(trc_file_path),
+        'DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames',
+        '{:.1f}\t{:.1f}\t{}\t{}\tm\t{:.1f}\t1\t{}'.format(freq, freq, n_frames, n_markers, freq, n_frames),
+        'Frame#\tTime\t' + '\t\t\t'.join(labels),
+        '\t\t' + '\t'.join(['X{}\tY{}\tZ{}'.format(i, i, i) for i in range(1, n_markers + 1)])
+    ]) + '\n'
+    
+    # 데이터 결합 (Frame#, Time, X1, Y1, Z1, ...)
+    kine = np.c_[frames, time, data.reshape(n_frames, n_markers * ncoords)]
+    
+    with open(trc_file_path, 'w') as output:
+        output.write(header)
+        # 포맷팅: Frame#는 정수(%d), 나머지는 소수점 아래 6자리(%.6f)로 정밀도 확보
+        fmt = ['%d', '%.4f'] + (n_markers * ncoords * ['%.6f'])
+        np.savetxt(output, kine, delimiter='\t', fmt=fmt)
+
+    print(f"TRC file is saved (in meters): {trc_file_path}")
+
+def trc_to_dataset(trc_path: str,
+                   marker_names: list[str],
+                   orientation: list[str]):
+    """
+    Converts a TRC file into a structured 3D dataset.
+
+    :param trc_path: Path to the .trc file containing motion capture data.
+    :param marker_names: A list of marker labels to extract from the TRC data.
+    :param orientation: orientation of the data ex) ["LR", "IS", "AP"]
+    
+    :return: A structured 3D dataset object (exp_marker_ds).
+    """
+    # Load raw TRC data and extract time sequence
+    trc_data = load_trc_file(trc_path)
+    times = trc_data["Time"].to_numpy()
+    
+    # Remove metadata columns to isolate positional data
+    pos_only = trc_data.drop(["Frame#", "Time"], axis = 1, level = 0)
+
+    # Marker position
+    exp_marker_pos = []
+    for marker_name in marker_names:
+        exp_marker_pos.append(pos_only[marker_name].to_numpy())
+    
+    # Convert list to array and transpose to shape: (Time, Markers, Coordinates)
+    exp_marker_pos = np.array(exp_marker_pos).transpose(1, 0, 2)
+    
+    # Create the final 3D dataset with coordinates and metadata
+    exp_marker_ds = make_3d_dataset(exp_marker_pos, 
+                                    "3D", 
+                                    element_dataset_names = ["Times", "Labels", "Coords"], 
+                                    dataset1_dim_names = times, 
+                                    dataset2_dim_names = marker_names,
+                                    dataset3_dim_names = orientation)
+    return exp_marker_ds
+    
+# Marker
+def get_marker_positions(model: osim.simulation.Model,
+                         state: osim.simbody.State,
+                         marker_names: list):
+    marker_locs = []
+    for marker_name in marker_names:
+        marker = model.getMarkerSet().get(marker_name)
+        position = marker.getLocationInGround(state)
+        position = np.array([position[0], position[1], position[2]])
+        marker_locs.append(position)
+    
+    model_marker_pos = np.array(marker_locs)
+    return model_marker_pos
+
+def model_marker_positions(model: osim.simulation.Model,
+                           state: osim.simbody.State,
+                           marker_names: list , 
+                           orientation: list[str]):
+    """
+    Generates a 3D dataset by extracting marker positions from a specified model.
+
+    :param model: opensim model
+    :param state: state
+    :param marker_names: A list of marker labels/names to extract coordinates for.
+    :param orientation: orientation of the data ex) ["LR", "IS", "AP"]
+    
+    :return: A structured 3D dataset object containing times, labels, and coordinates.
+    """
+    
+    model_marker_pos = get_marker_positions(model, state, marker_names)
+
+    # Convert list to NumPy array and add a batch dimension (index 0)
+    model_marker_pos = np.expand_dims(model_marker_pos, 0)
+    
+    # Construct the final 3D dataset with metadata
+    model_marker_pos_ds = make_3d_dataset(model_marker_pos, 
+                                          "3D", 
+                                          element_dataset_names = ["Times", "Labels", "Coords"], 
+                                          dataset1_dim_names = [0], 
+                                          dataset2_dim_names = marker_names,
+                                          dataset3_dim_names = get_ACS_explicit_orientation(orientation))
+    return model_marker_pos_ds
+    
 # Joint
 def get_independent_joints(osim_model_path):
     text = Path(osim_model_path).read_text(errors="replace")
@@ -283,42 +429,6 @@ def load_trc_file(file_path, indicator='Frame#'):
     data.columns = columns
 
     return data
-    
-def trc_to_dataset(trc_path, marker_names, is_convert_x = True):
-    """
-    Converts a TRC file into a structured 3D dataset.
-
-    :param trc_path: Path to the .trc file containing motion capture data.
-    :param marker_names: A list of marker labels to extract from the TRC data.
-    :return: A structured 3D dataset object (exp_marker_ds).
-    """
-    # Load raw TRC data and extract time sequence
-    trc_data = load_trc_file(trc_path)
-    times = trc_data["Time"].to_numpy()
-    
-    # Remove metadata columns to isolate positional data
-    pos_only = trc_data.drop(["Frame#", "Time"], axis = 1, level = 0)
-
-    # Marker position
-    exp_marker_pos = []
-    for marker_name in marker_names:
-        exp_marker_pos.append(pos_only[marker_name].to_numpy())
-    
-    # Convert list to array and transpose to shape: (Time, Markers, Coordinates)
-    exp_marker_pos = np.array(exp_marker_pos).transpose(1, 0, 2)
-    
-    # Coordinate transformation: Convert x-axis from R->L to L->R
-    if is_convert_x:
-        exp_marker_pos[:, :, 0] = -exp_marker_pos[:, :, 0] 
-    
-    # Create the final 3D dataset with coordinates and metadata
-    exp_marker_ds = make_3d_dataset(exp_marker_pos, 
-                                    "3D", 
-                                    element_dataset_names = ["Times", "Labels", "Coords"], 
-                                    dataset1_dim_names = times, 
-                                    dataset2_dim_names = marker_names,
-                                    dataset3_dim_names = ["X", "Y", "Z"])
-    return exp_marker_ds
 
 def find_data_start(file_path, indicator='Frame#'):
     """
@@ -873,19 +983,6 @@ def get_muscle_forces(osim_model: opensim.simulation.Model,
     })
     
     return result
-
-def get_marker_positions(model: osim.simulation.Model,
-                         state: osim.simbody.State,
-                         marker_names: list):
-    marker_locs = []
-    for marker_name in marker_names:
-        marker = model.getMarkerSet().get(marker_name)
-        position = marker.getLocationInGround(state)
-        position = np.array([position[0], position[1], position[2]])
-        marker_locs.append(position)
-    
-    model_marker_pos = np.array(marker_locs)
-    return model_marker_pos
     
 if __name__=="__main__":
     readStoFile("")

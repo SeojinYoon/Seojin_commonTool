@@ -1,8 +1,6 @@
 
 # Common Libraries
-import os
-import glob 
-import subprocess
+import os, glob, subprocess
 from pathlib import Path
 
 # Functions

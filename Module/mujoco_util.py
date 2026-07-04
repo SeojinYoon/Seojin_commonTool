@@ -211,36 +211,41 @@ def calc_dependent_joint_angle(mjc_model: mujoco.MjModel,
 
     results = pd.DataFrame(rows)
     return results
-    
-def get_joints(model_path: str, constraint_suffix = "_con") -> pd.DataFrame:
+
+def get_joints(model_path: str) -> pd.DataFrame:
     """
     get joints from mujoco compatible model
     
     :param model_path: xml path of mujoco model
-    :param constraint_sub_fix:
-    :param lock_sub_fix: sufix for 
-    return 
-        dependent_joints: joint which changes its angle depending on independent joints
-        independent_joints: joint which changes its angle independently
+    
+    return
+        dependent: joint which changes its angle depending on another joint
+        independent: joint which changes its angle independently
     """
 
-    tree = ET.parse(model_path)
-    root = tree.getroot()
-    
-    all_joint_elements = [joint for joint in root.findall(".//joint") if joint.get("name") is not None]
-    all_joint_elements = [joint for joint in all_joint_elements if constraint_suffix not in joint.get("name")]
-    all_joint_names = [joint.get("name") for joint in all_joint_elements]
-    
-    dependent_joint_elements = [joint for joint in root.findall(".//equality/joint") if joint.get("joint1") is not None]
-    dependent_joint_names = [joint.get("name").replace(constraint_suffix, "") for joint in dependent_joint_elements]
+    model = mujoco.MjModel.from_xml_path(model_path)
 
-    joint_df = pd.DataFrame(columns = all_joint_names)
-    is_dependent = np.array([joint_name in dependent_joint_names for joint_name in all_joint_names])
+    # Get all joint names
+    all_joint_names = [model.joint(i).name for i in range(model.njnt)]
+
+    # Get dependent joints from equality constraints
+    dependent_joint_names = []
+
+    for i in range(model.neq):
+        if model.eq_type[i] == mujoco.mjtEq.mjEQ_JOINT:
+            joint_id = model.eq_obj1id[i]
+            dependent_joint_names.append(model.joint(joint_id).name)
+
+    # Create dataframe
+    joint_df = pd.DataFrame(columns=all_joint_names)
+
+    is_dependent = np.array(
+        [joint_name in dependent_joint_names for joint_name in all_joint_names]
+    )
+
     joint_df.loc["dependent"] = is_dependent
-    
-    is_independent = np.logical_not(is_dependent)
-    joint_df.loc["independent"] = is_independent
-    
+    joint_df.loc["independent"] = ~is_dependent
+
     return joint_df
     
 def get_joint_ranges(model_path: str) -> pd.DataFrame:
@@ -1516,3 +1521,297 @@ def display_qpos_viewer(
 
     display(widgets.VBox([ui, output_area, out]))
 
+# Torque
+def calc_torque_ranges(model_path: str,
+                       qpos_data: pd.DataFrame,
+                       target_joint_names: list[str]):
+    """
+    Calculate torque ranges over the qpos time series
+
+    :param model_path: model path
+    :param qpos_data: qpos data
+    :param target_joint_names: joint names
+    """
+    # Model
+    model = mujoco.MjModel.from_xml_path(model_path)
+    mj_data = mujoco.MjData(model)
+    joint_names = np.array([model.joint(i).name for i in range(model.njnt)])
+    muscle_names = np.array([model.actuator(i).name for i in range(model.nu)])
+
+    # Constants
+    n_data = len(qpos_data)
+    n_target_joint = len(target_joint_names)
+    n_muscle = len(muscle_names)
+    
+    # Calculate muscle contribution to each torque
+    total_muscle_torques = np.zeros((n_data, n_muscle, n_target_joint))
+    for data_i in range(n_data):
+        qpos = qpos_data[joint_names].iloc[data_i].to_numpy()
+        mj_data.qpos[:] = qpos
+        mujoco.mj_forward(model, mj_data)
+        
+        # Activation torque
+        MA_to_torque = calculate_muscle_to_joint_torque(model = model,
+                                                        mj_data = mj_data,
+                                                        activation = 1.0)
+        
+        total_MA_to_torque = MA_to_torque[MA_to_torque["types"] == "Total"]
+        total_muscle_torques[data_i] = total_MA_to_torque[target_joint_names]
+
+    # Calculate torque range
+    total_min_torques = np.sum(np.where(total_muscle_torques < 0, total_muscle_torques, 0), axis=1)
+    total_max_torques = np.sum(np.where(total_muscle_torques > 0, total_muscle_torques, 0), axis=1)
+
+    # Organize result    
+    columns = pd.MultiIndex.from_product([["Min", "Max"], target_joint_names], names=["Bound", "Joint"])
+    merged_torques = np.hstack([total_min_torques, total_max_torques])
+    torque_range_df = pd.DataFrame(merged_torques, columns = columns, index = qpos_data.index)
+        
+    return torque_range_df
+
+def get_muscle_path_locations(model: mujoco.MjModel,
+                              data: mujoco.MjData,
+                              muscle_name: str) -> np.ndarray:
+    """
+    get muscle path locations from mujoco model
+
+    :param model: mujoco model
+    :param data: mujoco data
+    :param muscle_name: muscle actuator name
+
+    return
+        path_locations: n_site x 3 world positions of muscle path sites
+    """
+    actuator_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_ACTUATOR,
+        muscle_name,
+    )
+    if actuator_id < 0:
+        raise ValueError(f"Cannot find actuator: {muscle_name}")
+
+    tendon_id = model.actuator_trnid[actuator_id, 0]
+    if tendon_id < 0:
+        raise ValueError(f"Actuator {muscle_name} is not connected to tendon")
+
+    site_ids = []
+
+    adr = model.tendon_adr[tendon_id]
+    num = model.tendon_num[tendon_id]
+
+    for i in range(adr, adr + num):
+        if model.wrap_type[i] == mujoco.mjtWrap.mjWRAP_SITE:
+            site_ids.append(model.wrap_objid[i])
+
+    path_locations = np.array([
+        data.site_xpos[site_id].copy()
+        for site_id in site_ids
+    ])
+
+    return path_locations
+
+def get_all_muscle_paths(model: mujoco.MjModel,
+                         data: mujoco.MjData) -> (np.ndarray, np.ndarray):
+    """
+    Get all muscle's paths
+
+    :param model: mujoco model
+    :param data: mujoco data
+
+    return muscle path labels, muscle path locations
+    """
+    # Load muscle names
+    muscle_names = [ model.actuator(i).name for i in range(model.nu) if model.actuator(i).name is not None ]
+
+    # Get muscle path across muscles
+    muscle_path_locs = []
+    muscle_path_point_names = []
+    for muscle_name in muscle_names:
+        locs = get_muscle_path_locations(model, data, muscle_name)
+    
+        muscle_path_locs.append(locs)
+        muscle_path_point_names.append([
+            f"{muscle_name}_path_{i}"
+            for i in range(len(locs))
+        ])
+    muscle_path_locs = np.concatenate(muscle_path_locs, axis = 0)
+    muscle_path_point_names = np.concatenate(muscle_path_point_names, axis = 0)
+
+    return muscle_path_point_names, muscle_path_locs
+
+def torque_sim_by_RA(model,
+                     qpos,
+                     n_samples = 5000) -> pd.DataFrame:
+    """
+    Make torques when the muscle actives randomly
+
+    :param model: mujoco model
+    :param qpos: joint angles
+    :param n_samples: #sample to generate random torque
+
+    return torques geneated by random activation of muscles
+    """
+    mj_data = mujoco.MjData(model)
+    
+    joint_names = np.array([model.joint(i).name for i in range(model.njnt)])
+    
+    acts = np.random.rand(n_samples, model.nu)
+    torques = []
+    for act in acts:
+        mj_data.qpos[:] = qpos
+        mj_data.qvel[:] = 0
+        mj_data.act[:] = act
+        mujoco.mj_forward(model, mj_data)
+    
+        torques.append(mj_data.qfrc_actuator.copy())
+    torques = np.array(torques)
+
+    result = pd.DataFrame(torques, columns = joint_names)
+    return result
+
+class StaticOpt_ID_constraint:
+    def __init__(self, 
+                 model: mujoco.MjModel,
+                 joint_names: list[str],
+                 indep_joint_names: list[str]):
+        # Initialize model & data
+        self.model = model
+        self.test_data = mujoco.MjData(model)
+
+        # Initialize joint information
+        self.target_joint_indices = [joint_names.index(name) for name in indep_joint_names]
+
+        # Initialize muscle information
+        self.n_actuators = model.nu
+        
+    def _update_simulation(self,
+                           act: np.ndarray,
+                           qpos: np.ndarray,
+                           qvel: np.ndarray,
+                           qforce: np.ndarray):
+        # Update mujoco simulation
+        self.test_data.qpos[:] = qpos
+        self.test_data.qvel[:] = qvel
+        self.test_data.act[:] = act
+        mujoco.mj_forward(self.model, self.test_data)
+
+        # Calcualte error
+        calculated_qforce = self.test_data.qfrc_actuator
+
+        return calculated_qforce - qforce
+
+    def loss_fn(self,
+                act: np.ndarray):
+        return 0.5 * np.sum(act**2)
+        
+    def optimize(self,
+                 data: mujoco.MjData,
+                 qvel: np.ndarray,
+                 qforce: np.ndarray,
+                 max_iter: int = 100,
+                 constraint_tolerance: float = 1e-3,
+                 initial_act: np.ndarray = None):
+        
+        # Qpos Data
+        qpos = data.qpos.copy()
+
+        # Initial values for optimization
+        if initial_act is None:
+            initial_act = np.full(self.n_actuators, 0.5)
+
+        # Define constraints
+        def constraint_fn(act):
+            error = self._update_simulation(act, qpos, qvel, qforce)[self.target_joint_indices]
+            return np.concatenate([constraint_tolerance - error, error + constraint_tolerance])
+            
+        constraints = [{
+            'type': 'ineq', 
+            'fun': constraint_fn
+        }]
+
+        bounds = [(0.0, 1.0) for _ in range(self.n_actuators)]
+        result = minimize(self.loss_fn,
+                          x0=initial_act,
+                          method="SLSQP",
+                          bounds=bounds,
+                          constraints=constraints,
+                          options={"maxiter": max_iter, "disp": False, "eps": 1e-4})
+
+        # Calculate torque error & loss
+        torque_error = self._update_simulation(result.x, qpos, qvel, qforce)
+        loss = self.loss_fn(result.x)
+
+        return loss, torque_error, result
+
+class StaticOpt_ID_loss:
+    def __init__(self, 
+                 model: mujoco.MjModel,
+                 joint_names: list[str],
+                 indep_joint_names: list[str],
+                 torque_weight: float = 1.0):
+        # Initialize model & data
+        self.model = model
+        self.test_data = mujoco.MjData(model)
+
+        # Initialize joint information
+        self.target_joint_indices = [joint_names.index(name) for name in indep_joint_names]
+
+        # Initialize muscle information
+        self.n_actuators = model.nu
+        self.torque_weight = torque_weight
+        
+    def _update_simulation(self,
+                           qpos: np.ndarray,
+                           qvel: np.ndarray,
+                           qforce: np.ndarray,
+                           act: np.ndarray):
+        # Update mujoco simulation
+        self.test_data.qpos[:] = qpos
+        self.test_data.qvel[:] = qvel
+        self.test_data.act[:] = act
+        mujoco.mj_forward(self.model, self.test_data)
+
+    def torque_error(self, qpos, qvel, qforce, act):
+        self._update_simulation(qpos, qvel, qforce, act)
+        calculated_qforce = self.test_data.qfrc_actuator.copy()
+        return calculated_qforce - qforce
+
+    def loss_fn(self, act, qpos, qvel, qforce):
+        # Activation loss
+        act_loss = np.sum(act**2)
+
+        # Torque error loss
+        torque_error = self.torque_error(qpos, qvel, qforce, act)
+        torque_error = torque_error[self.target_joint_indices]
+        torque_loss = np.sum(torque_error**2)
+
+        return act_loss + self.torque_weight * torque_loss
+        
+    def optimize(self,
+                 data: mujoco.MjData,
+                 qvel: np.ndarray,
+                 qforce: np.ndarray,
+                 max_iter: int = 100,
+                 initial_act: np.ndarray = None):
+        
+        qpos = data.qpos.copy()
+
+        if initial_act is None:
+            initial_act = np.full(self.n_actuators, 0.5)
+
+        bounds = [(0.0, 1.0) for _ in range(self.n_actuators)]
+
+        result = minimize(
+            self.loss_fn,
+            x0=initial_act,
+            args=(qpos, qvel, qforce),
+            method="SLSQP",
+            bounds=bounds,
+            options={"maxiter": max_iter, "disp": False, "eps": 1e-4}
+        )
+
+        torque_error = self.torque_error(qpos, qvel, qforce, result.x)
+        loss = self.loss_fn(result.x, qpos, qvel, qforce)
+
+        return loss, torque_error, result
+        

@@ -1262,13 +1262,13 @@ def create_3d_time_series_plot(dataset_3d,
 
     return HTML(fig.to_html(include_plotlyjs="cdn"))
 
-def plot_3D_dataset(position_ds: xarray.Dataset,
-                    targets: list = [],
-                    obj_info: dict = {},
-                    skeletons: list = [],
-                    vis_info: dict = {},
-                    axis_info: dict = {},
-                    visualize_coord_order = "LAS"):
+def plotting_3D(position_ds: xarray.Dataset,
+                targets: list = [],
+                obj_info: dict = {},
+                skeletons: list = [],
+                vis_info: dict = {},
+                axis_info: dict = {},
+                visualize_coord_order = "LAS"):
     """
     Plot 3D coordinates from an xarray dataset.
 
@@ -1530,8 +1530,40 @@ def plot_3D_dataset(position_ds: xarray.Dataset,
     """
     data = axis_traces + obj_traces + marker_traces + skeleton_traces
     plot_figure = go.Figure(data=data, layout=layout)
+    return plot_figure
 
-    return HTML(plot_figure.to_html(include_plotlyjs="cdn"))
+def plot_3D_dataset(position_ds: xarray.Dataset,
+                    targets: list = [],
+                    obj_info: dict = {},
+                    skeletons: list = [],
+                    vis_info: dict = {},
+                    axis_info: dict = {},
+                    visualize_coord_order = "LAS"):
+    """
+    Plot 3D coordinates from an xarray dataset.
+
+    :param position_ds: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'.
+    :param targets: List of marker labels (Targets) to visualize.
+    :param obj_info: Dictionary for static objects. Format: {'obj_name': {'points': [[x,y,z], ...]}}.
+    :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+    :param vis_info: Dictionary containing configuration for visualization.
+    :param axis_info: Dictionary containing configuration for the origin axes visualization.
+        * show_origin_axes (bool): Whether to display the coordinate axes at the origin. (default: True)
+        * axis_length (float): The length of the line for each axis. (default: 0.2)
+        * cone_size (float): The size of the arrowhead (cone) at the end of each axis. (default: 0.1)
+        * axis_origin (tuple): The (x, y, z) coordinates where the axes will be centered. (default: (0, 0, 0))
+    :param visualize_coord_order: visualization coords ex) "LAS"
+    
+    :return: (IPython.display.HTML) Rendered Plotly 3D visualization.
+    """
+    fig = plotting_3D(position_ds = position_ds,
+                      targets = targets,
+                      obj_info = obj_info,
+                      skeletons = skeletons,
+                      vis_info = vis_info,
+                      axis_info = axis_info,
+                      visualize_coord_order = visualize_coord_order)
+    return HTML(fig.to_html(include_plotlyjs="cdn"))
 
 def plot_3D_datasets(position_ds_list,
                      targets: list = [],

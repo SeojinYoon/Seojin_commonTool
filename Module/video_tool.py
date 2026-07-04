@@ -815,6 +815,28 @@ def save_3d_poses_video(
 
     writer.release()
     print(f"Success! Video saved at: {output_path}")
+
+def extract_frames(video: cv2.VideoCapture, frame_idx: np.ndarray) -> np.ndarray:
+    """
+    Extract sub frames from a video 
+
+    :param video: video
+    :param frame_idx: Indices of the frames to extract
+
+    return frames (#frame, height, width, 3)
+    """
+    n_frames = len(frame_idx)
+    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frames = np.zeros((n_frames, height, width, 3), dtype = np.uint8)
+    for i, frame_i in enumerate(frame_idx):
+        video.set(cv2.CAP_PROP_POS_FRAMES, frame_i)
+        ret, frame = video.read()
+        if not ret:
+            raise ValueError(f"Cannot read frame {frame_idx}")
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames[i] = frame
+    return frames
     
 if __name__ == "__main__":
     parallel_background_subtraction(video_path, output_video_path, split_window = 30, n_process = 5)

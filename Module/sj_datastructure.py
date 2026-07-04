@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 # Custom Libraries
 from sj_linux import exec_command, make_command
 from sj_string import search_stringAcrossTarget
+from sj_array import get_ACS_explicit_orientation
 
 # Custom Libraries
 
@@ -359,6 +360,24 @@ def make_3d_dataset(data,
     )
     return ds
 
+def make_ACS_timeseries(data: np.ndarray, labels, coord_system):
+    """
+    Make time series dataset in Anatomical Coordinate System (ACS)
+    
+    :param data: (shape: (#times, #labels, #coords))
+    :param labels: label of each data
+    
+    return (xarray.Dataset)
+    """
+    orientation = get_ACS_explicit_orientation(coord_system)
+    ds = make_3d_dataset(data,
+                         "3D",
+                         element_dataset_names = ["Times", "Labels", "Coords"],
+                         dataset1_dim_names = [0],
+                         dataset2_dim_names = labels,
+                         dataset3_dim_names = orientation)
+    return ds
+    
 # Test  #############################################################################################
 if __name__=="__main__":
     import my_function

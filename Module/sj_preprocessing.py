@@ -174,6 +174,44 @@ def make_grouping_indexes(n_group, n_data, postProcessing = "absorbEndGroup"):
 
     return grouping_indexes
 
+def upsampling(df: pd.DataFrame,
+               interval: float,
+               method: str = "linear") -> pd.DataFrame:
+    """
+    Upsample a dataframe by interpolation.
+
+    :param df: dataframe containing a time column
+    :param interval: target sampling interval in seconds
+    :param method: interpolation method (e.g., "linear", "quadratic", "cubic")
+
+    :return: upsampled dataframe
+    """
+    times = df["Time"].to_numpy()
+
+    target_times = np.arange(
+        times[0],
+        times[-1] + interval / 2,
+        interval,
+    )
+
+    upsampled = pd.DataFrame({"Time": target_times})
+
+    for col in df.columns:
+        if col == "Time":
+            continue
+
+        f = interp1d(
+            times,
+            df[col].to_numpy(),
+            kind=method,
+            bounds_error=False,
+            fill_value="extrapolate",
+        )
+
+        upsampled[col] = f(target_times)
+
+    return upsampled
+    
 # MARK: - Examples
 if __name__ == "__main__":
     is_nan(np.NaN)
@@ -183,7 +221,5 @@ if __name__ == "__main__":
 
     one_hot_encoding("a b c", " ", ["a", "b", "d"])
     one_hot_encodings(["a b c", "b"], " ", ["a", "b", "d"])
-    
-    
     
     make_grouping_indexes(12, 202)

@@ -1,6 +1,5 @@
 # Common Libraries
-import copy
-import io
+import copy, cv2, io
 import numpy as np
 import xarray
 import matplotlib.pyplot as plt
@@ -23,7 +22,7 @@ class Plotter3D:
         3D plot visualization manger
 
         :param visualize_coord_order: visualization coords ex) "LAS"
-        :param obj_info: Dictionary for static objects ex) {'obj_name': {'points': [[x, y, z], ...]}}
+        :param obj_info: Dictionary for static objects ex) {'obj_name': {'point': [[x, y, z], ...]}}
         :param axis_info: Dictionary containing configuration for the origin axes visualization.
             * show_origin_axes: Whether to display the coordinate axes at the origin. (default: True)
             * axis_length: The length of the line for each axis. (default: 0.2)
@@ -60,13 +59,13 @@ class Plotter3D:
         """
         Align dataset coordinate system
 
-        :param dataset_3d: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'
+        :param dataset_3d: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'
         """
         dataset_3d = copy.deepcopy(dataset_3d)
         if not self.coord_order:
             return dataset_3d
             
-        ds_coord_order = [coord[0] for coord in dataset_3d.Coords.to_numpy()]
+        ds_coord_order = [coord[0] for coord in dataset_3d.Coord.to_numpy()]
         dataset_3d["3D"].data = reorient_ACS_array(dataset_3d["3D"].data, ds_coord_order, self.coord_order)
         return dataset_3d
 
@@ -79,23 +78,23 @@ class Plotter3D:
             
         for obj_name in self.obj_info:
             obj_data = self.obj_info[obj_name]
-            if "coords" not in obj_data:
+            if "coord" not in obj_data:
                 continue
                 
-            obj_coord_order = [e[0] for e in obj_data["coords"]]
+            obj_coord_order = [e[0] for e in obj_data["coord"]]
             
-            if "points" in obj_data:
-                for kind in obj_data["points"]:
-                    pts = np.array(obj_data["points"][kind])
+            if "point" in obj_data:
+                for kind in obj_data["point"]:
+                    pts = np.array(obj_data["point"][kind])
                     pts = reorient_ACS_array(pts[None, :, :], obj_coord_order, self.coord_order)
-                    obj_data["points"][kind] = pts[0]
+                    obj_data["point"][kind] = pts[0]
                     
-            if "corners" in obj_data:
-                for kind in obj_data["corners"]:
-                    for corner_name in obj_data["corners"][kind]:
-                        corner_pt = np.array(obj_data["corners"][kind][corner_name])
+            if "corner" in obj_data:
+                for kind in obj_data["corner"]:
+                    for corner_name in obj_data["corner"][kind]:
+                        corner_pt = np.array(obj_data["corner"][kind][corner_name])
                         reoriented_pt = reorient_ACS_array(corner_pt[None, None, :], obj_coord_order, self.coord_order)
-                        obj_data["corners"][kind][corner_name] = reoriented_pt[0, 0]
+                        obj_data["corner"][kind][corner_name] = reoriented_pt[0, 0]
 
     def _create_axis_traces(self):
         """
@@ -138,7 +137,7 @@ class Plotter3D:
         plotly_colors = plotly.colors.qualitative.Plotly
         
         for idx, obj_name in enumerate(self.obj_info):
-            kinds = self.obj_info[obj_name].get("points", {})
+            kinds = self.obj_info[obj_name].get("point", {})
             color = plotly_colors[idx % len(plotly_colors)] if use_qualitative_colors else "black"
             
             for j, kind in enumerate(kinds):
@@ -179,7 +178,7 @@ class Plotter3D:
         """
         Optimize scene ranges
 
-        :param dataset_3d_list: List of datasets containing the '3D' variable with 'Times', 'Labels', 'Coords' dimensions
+        :param dataset_3d_list: List of datasets containing the '3D' variable with 'Time', 'Label', 'Coord' dimensions
         """
         candidates = []
         
@@ -193,16 +192,16 @@ class Plotter3D:
             all_corners = []
             for obj in self.obj_info:
                 obj_data = self.obj_info[obj]
-                if "corners" in obj_data:
-                    for kind in obj_data["corners"]:
-                        all_corners.extend([obj_data["corners"][kind][c] for c in obj_data["corners"][kind]])
+                if "corner" in obj_data:
+                    for kind in obj_data["corner"]:
+                        all_corners.extend([obj_data["corner"][kind][c] for c in obj_data["corner"][kind]])
             if all_corners:
                 candidates.append(np.min(all_corners, axis=0))
                 candidates.append(np.max(all_corners, axis=0))
                 
         for ds in dataset_3d_list:
-            mins = ds["3D"].min(dim=[d for d in ds["3D"].dims if d != "Coords"], skipna=True).to_numpy()
-            maxs = ds["3D"].max(dim=[d for d in ds["3D"].dims if d != "Coords"], skipna=True).to_numpy()
+            mins = ds["3D"].min(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
+            maxs = ds["3D"].max(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
             candidates.append(mins)
             candidates.append(maxs)
             
@@ -237,15 +236,15 @@ class Plotter3D:
         """
         Plot time series data
         
-        :param dataset_3d: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'.
+        :param dataset_3d: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
         """
         dataset_3d = self._preprocess_dataset(dataset_3d)
         
         # 1. Initialization
-        times = dataset_3d["Times"].to_numpy()
+        times = dataset_3d["Time"].to_numpy()
         n_frame = len(times)
-        labels = list(dataset_3d["Labels"].to_numpy())
+        labels = list(dataset_3d["Label"].to_numpy())
         
         # Separate static object traces to keep them persistent during slider steps
         static_obj_traces = self._create_obj_traces()
@@ -254,7 +253,7 @@ class Plotter3D:
         # Helper function
         def make_dynamic_traces(step_i: int):
             sel_times = times[:step_i + 1]
-            marker_coordinates = dataset_3d.sel(Times=sel_times, Labels=labels)["3D"].to_numpy()
+            marker_coordinates = dataset_3d.sel(Time = sel_times, Label = labels)["3D"].to_numpy()
                 
             # Visualize - data markers
             cmap = plt.get_cmap("tab10")
@@ -350,14 +349,14 @@ class Plotter3D:
         """
         Plot single dataset
 
-        :param position_ds: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'.
+        :param position_ds: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'.
         :param targets: List of marker labels (Targets) to visualize.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
         """
         position_ds = self._preprocess_dataset(position_ds)
         
-        times = position_ds["Times"].to_numpy()
-        targets = list(position_ds.Labels.to_numpy()) if len(targets) == 0 else list(targets)
+        times = position_ds["Time"].to_numpy()
+        targets = list(position_ds.Label.to_numpy()) if len(targets) == 0 else list(targets)
         
         """
         1. Visualize - Static Objects (e.g., table, environment boundaries)
@@ -375,7 +374,7 @@ class Plotter3D:
         marker_traces = []
         
         # Extract coordinates for the selected times and targets
-        selected_position_ds = position_ds.sel(Times=times, Labels=targets)
+        selected_position_ds = position_ds.sel(Time=times, Label=targets)
         selected_position_array = selected_position_ds["3D"].to_numpy()
         
         # Define color gradient based on time progression (Coolwarm colormap)
@@ -411,7 +410,7 @@ class Plotter3D:
         """
         4. Skeleton
         """
-        labels = list(selected_position_ds.Labels.to_numpy())
+        labels = list(selected_position_ds.Label.to_numpy())
         skeleton_traces = self._create_skeleton_traces(selected_position_array[-1], labels, skeletons)
                 
         """
@@ -435,7 +434,7 @@ class Plotter3D:
         """
         Plot multiple dataset
 
-        :param position_ds: Dataset containing '3D' variable with 'Times', 'Labels', 'Coords'.
+        :param position_ds: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'.
         :param targets: List of marker labels (Targets) to visualize.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
         """
@@ -466,11 +465,11 @@ class Plotter3D:
             rgb = dataset_rgbs[ds_idx]
             r, g, b = [int(v * 255) for v in rgb]
 
-            times = position_ds["Times"].to_numpy()
+            times = position_ds["Time"].to_numpy()
             alphas = np.linspace(1.0, 0.15, len(times))
             point_colors = [f"rgba({r},{g},{b},{a})" for a in alphas]
-            sel_t = list(position_ds.Labels.to_numpy()) if len(targets) == 0 else targets
-            marker_coordinates = position_ds.sel(Times=times, Labels=sel_t)["3D"].to_numpy()
+            sel_t = list(position_ds.Label.to_numpy()) if len(targets) == 0 else targets
+            marker_coordinates = position_ds.sel(Time=times, Label=sel_t)["3D"].to_numpy()
 
             for target_idx, target in enumerate(sel_t):
                 trace = go.Scatter3d(
@@ -495,9 +494,9 @@ class Plotter3D:
         """
         skeleton_traces = []
         for ds_idx, position_ds in enumerate(processed_ds_list):
-            times = position_ds["Times"].to_numpy()
-            marker_coordinates = position_ds.sel(Times=times)["3D"].to_numpy()
-            labels = list(position_ds.Labels.to_numpy())
+            times = position_ds["Time"].to_numpy()
+            marker_coordinates = position_ds.sel(Time=times)["3D"].to_numpy()
+            labels = list(position_ds.Label.to_numpy())
 
             if ds_idx < len(skeletons_list):
                 skeletons = skeletons_list[ds_idx]
@@ -524,22 +523,22 @@ class Plotter3D:
     def export_to_video(self,
                         dataset_3d: xarray.Dataset,
                         skeletons: list = [],
-                        filename: str = "plotly_animation.mp4",
-                        fps: int = 30):
+                        file_path: str = "plotly_animation.mp4",
+                        fps: int = 30,
+                        width = 480,
+                        height = 640):
         """
         Export the 3D time series animation to an MP4 video file frame by frame.
         Requires kaleido and opencv-python libraries.
         
         :param dataset_3d: xarray Dataset containing the 3D marker data.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
-        :param filename: Output filename for the video.
+        :param file_path: Output file path for the video.
         :param fps: Frames per second for the video output.
         """
-        import cv2
-        
         dataset_3d = self._preprocess_dataset(dataset_3d)
-        times = dataset_3d["Times"].to_numpy()
-        labels = list(dataset_3d["Labels"].to_numpy())
+        times = dataset_3d["Time"].to_numpy()
+        labels = list(dataset_3d["Label"].to_numpy())
         
         obj_traces = self._create_obj_traces()
         axis_traces = self._create_axis_traces()
@@ -554,7 +553,7 @@ class Plotter3D:
         
         for frame_i in range(len(times)):
             sel_times = times[:frame_i + 1]
-            marker_coordinates = dataset_3d.sel(Times=sel_times, Labels=labels)["3D"].to_numpy()
+            marker_coordinates = dataset_3d.sel(Time=sel_times, Label=labels)["3D"].to_numpy()
             
             marker_traces = []
             for idx, (target, color) in enumerate(zip(labels, colors)):
@@ -572,7 +571,7 @@ class Plotter3D:
             frame_data = axis_traces + obj_traces + marker_traces + skeleton_traces
             frame_fig = go.Figure(data=frame_data, layout=layout)
             
-            img_bytes = frame_fig.to_image(format="png", width=1200, height=900)
+            img_bytes = frame_fig.to_image(format="png", width=width, height=height)
             
             image = Image.open(io.BytesIO(img_bytes))
             frame_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
@@ -580,10 +579,11 @@ class Plotter3D:
             if video_writer is None:
                 height, width, _ = frame_bgr.shape
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                video_writer = cv2.VideoWriter(filename, fourcc, fps, (width, height))
+                video_writer = cv2.VideoWriter(file_path, fourcc, fps, (width, height))
                 
             video_writer.write(frame_bgr)
             
         if video_writer is not None:
             video_writer.release()
-        print(f"Video export complete! Saved as: {filename}")
+        print(f"Video export complete! Saved as: {file_path}")
+    

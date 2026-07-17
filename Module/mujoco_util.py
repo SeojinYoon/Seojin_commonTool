@@ -84,23 +84,23 @@ def write_keyframe(mujoco_model_path: str,
     qpos_str = " ".join(map(str, qpos))
     
     # Check whether keyframe tag exists
-    keyframe_tag = root.find('keyframe')
+    keyframe_tag = root.find("keyframe")
     if keyframe_tag is None:
-        keyframe_tag = ET.SubElement(root, 'keyframe')
+        keyframe_tag = ET.SubElement(root, "keyframe")
     
     # Remove existing keyframe
-    for existing_key in keyframe_tag.findall('key'):
-        if existing_key.get('name') == key_name:
+    for existing_key in keyframe_tag.findall("key"):
+        if existing_key.get("name") == key_name:
             keyframe_tag.remove(existing_key)
             
     # Add new key element
-    new_key = ET.SubElement(keyframe_tag, 'key')
-    new_key.set('name', key_name)
-    new_key.set('qpos', qpos_str)
+    new_key = ET.SubElement(keyframe_tag, "key")
+    new_key.set("name", key_name)
+    new_key.set("qpos", qpos_str)
     
     # Save
     ET.indent(tree, space = "  ")
-    tree.write(output_path, encoding='utf-8', xml_declaration=False)
+    tree.write(output_path, encoding="utf-8", xml_declaration=False)
     print(f"Write {key_name} key to {output_path}")
 
 # Body
@@ -617,6 +617,59 @@ def calc_geom_angle(model: mujoco.MjModel,
     return angle_rad
     
 # Muscle
+def get_muscle_lengths(model: mujoco.MjModel,
+                       joint_configs: pd.DataFrame) -> pd.DataFrame:
+    """
+    :param model: mujoco model
+    :param joint_configs: joint angle configurations
+
+    :return: musclulotendon lengths given configuration
+    """
+    # Constants
+    joint_names = [model.joint(i).name for i in range(model.njnt)]
+    actuator_names = [model.actuator(i).name for i in range(model.nu)]
+    n_data = len(joint_configs)
+    n_muscle = len(actuator_names)
+    
+    # Make data
+    mj_data = mujoco.MjData(model)
+
+    # Filter data having valid joints
+    valid_joint_names = [col for col in joint_configs.columns if col in joint_names]
+    valid_joint_names_idx = [joint_names.index(joint) for joint in valid_joint_names]
+
+    # Get muscle lengths on each joint configuration
+    muscle_length_infos = np.zeros((n_data, n_muscle))
+    for i in range(len(joint_configs)):
+        mj_data.qpos[valid_joint_names_idx] = joint_configs.iloc[i].to_numpy()[valid_joint_names_idx]
+        enforce_equality_constraints(model, mj_data)
+        
+        muscle_length_info = get_muscle_length(model, mj_data)
+        muscle_length_infos[i] = muscle_length_info.values
+    muscle_length_infos = pd.DataFrame(muscle_length_infos, columns = actuator_names)
+    return muscle_length_infos
+
+def get_muscle_length(model: mujoco.MjModel,
+                      data: mujoco.MjData) -> pd.Series:
+    """
+    Get muscle length on the data
+
+    :param model: mujoco model
+    :param data: mujoco data
+
+    return information containing musclulotendon lengths and corresponding musclulotendon
+    """
+    # Constants
+    actuator_names = [model.actuator(i).name for i in range(model.nu)]
+
+    # Set joint configuration
+    mujoco.mj_forward(model, data)
+
+    # Get muscle length
+    muscle_length = data.actuator_length[:].copy()
+    muscle_length = pd.Series(muscle_length, index = actuator_names)
+    return muscle_length
+    
 def get_muscle_length_range(model: mujoco.MjModel) -> pd.DataFrame:
     """
     Get muscle length from mujoco model
@@ -638,27 +691,46 @@ def get_muscle_length_range(model: mujoco.MjModel) -> pd.DataFrame:
     result_df.index = ["min", "max"]
     return result_df
 
-def get_muscle_path_world(mujoco_path, muscle_name, qpos=None):
-    model = mujoco.MjModel.from_xml_path(mujoco_path)
+def get_muscle_path_world(model_path: str,
+                          muscle_name: str,
+                          qpos: np.ndarray =None) -> pd.DataFrame:
+    """
+    Get muscle path in the world coordinate system
+
+    :param model_path: path to the MuJoCo XML model file
+    :param muscle_name: name of the muscle (actuator) to extract the path for
+    :param qpos: target joint angles
+
+    :return: information containing ordered site names and their 3D world coordinates
+    """
+    # Load model
+    model = mujoco.MjModel.from_xml_path(model_path)
+    root = parse_xml_with_includes(model_path)
+
+    # Set joint configuration
     data = mujoco.MjData(model)
-    if qpos is None:
+    if qpos is not None:
+        data.qpos[:] = qpos
+    else:
         data.qpos[:] = np.zeros_like(data.qpos)
     mujoco.mj_forward(model, data)
-    
-    root = parse_xml_with_includes(mujoco_path)
+
+    # Find actuator
     actuator = None
     for elem in root.iter():
         if elem.tag in ["muscle", "general"] and elem.attrib.get("name") == muscle_name:
             actuator = elem
             break
-    
+
+    # Find tendon connected with muscle
     tendon_name = actuator.attrib.get("tendon")
     tendon = None
     for elem in root.findall(".//tendon/*"):
         if elem.attrib.get("name") == tendon_name:
             tendon = elem
             break
-    
+
+    # Extract muscle sites along the muscle path
     rows = []
     for i, child in enumerate(tendon):
         if child.tag == "site":
@@ -684,8 +756,18 @@ def get_muscle_path_world(mujoco_path, muscle_name, qpos=None):
     df = pd.DataFrame(rows)
     return df
 
-def get_muscle_path(mujoco_path, muscle_name):
-    tree = ET.parse(mujoco_path)
+def get_muscle_path(model_path,
+                    muscle_name) -> pd.DataFrame:
+    """
+    Get muscle sites information along the muscle path in the local coordinate system
+
+    :param model_path: path to the MuJoCo XML model file
+    :param muscle_name: name of the muscle to extract the path for
+
+    :return: information containing ordered site names in local coordinate system
+    """
+    # Load model
+    tree = ET.parse(model_path)
     root = tree.getroot()
 
     def get_body_name(elem):
@@ -696,7 +778,8 @@ def get_muscle_path(mujoco_path, muscle_name):
                 return p.attrib.get("name")
             p = parent.get(p)
         return None
-        
+
+    # Get site information
     sites = {}
     for s in root.iter("site"):
         name = s.attrib.get("name")
@@ -707,13 +790,15 @@ def get_muscle_path(mujoco_path, muscle_name):
                 "pos": s.attrib.get("pos"),
                 "size": s.attrib.get("size"),
             }
-            
+
+    # Get actuator information
     actuator = None
     for elem in root.iter():
         if elem.tag in ["muscle", "general"] and elem.attrib.get("name") == muscle_name:
             actuator = elem
             break
 
+    # Get tendon information
     tendon_name = actuator.attrib.get("tendon")
     tendon = None
     for elem in root.findall(".//tendon/*"):
@@ -721,6 +806,7 @@ def get_muscle_path(mujoco_path, muscle_name):
             tendon = elem
             break
 
+    # Concat all the muscle information
     rows = []
     for i, child in enumerate(tendon):
         row = {
@@ -738,7 +824,14 @@ def get_muscle_path(mujoco_path, muscle_name):
 
     return pd.DataFrame(rows)
 
-def extract_mujoco_muscle_bias_params(model):
+def extract_muscle_bias_params(model) -> pd.DataFrame:
+    """
+    Extract muscle bias params from mujoco model
+
+    :param model: mujoco model
+
+    :return: muscle param info(columns: l_mt_min, l_mt_max, F_max, F_scale, l_m_min, l_m_max, v_max, fp_max, fv_max, unused)
+    """
     muscle_names = [model.actuator(i).name for i in range(model.nu)]
     
     actuator_gainprms = pd.DataFrame(model.actuator_biasprm)
@@ -751,13 +844,26 @@ def extract_mujoco_muscle_bias_params(model):
                                  "unused"]
     return actuator_gainprms.T
 
-def mju_muscleBias_manually(model_path, actuator_acc0s, acutator_lengths, actuator_lengthranges):
+def calc_passive_force(model_path: str, 
+                       actuator_acc0s: np.ndarray, 
+                       acutator_lengths: np.ndarray, 
+                       actuator_lengthranges: np.ndarray) -> np.ndarray:
+    """
+    Calculate passive muscle force based on muscle bias parameters in model
+
+    :param model_path: mujoco model path
+    :param actuator_acc0s: 
+    :param acutator_lengths: muscle lengths
+    :param actuator_lengthranges: muscle length range
+
+    return passive muscle forces
+    """
     model = mujoco.MjModel.from_xml_path(model_path)
-    muscle_bias_param_df = extract_mujoco_muscle_bias_params(model)
+    muscle_bias_param_df = extract_muscle_bias_params(model)
     
-    acc0 = model.actuator_acc0
-    length = mj_data.actuator_length
-    length_range = model.actuator_lengthrange
+    # acc0 = model.actuator_acc0
+    # length = mj_data.actuator_length
+    # length_range = model.actuator_lengthrange
     
     mt_range = muscle_bias_param_df.loc[["l_mt_min", "l_mt_max"], :].T.to_numpy()
     F_max = muscle_bias_param_df.loc["F_max", :].to_numpy()
@@ -1299,7 +1405,7 @@ def calc_muscle_force(model: mujoco.MjModel,
         "passive_force" : bias,
         "total_force" : gain * activation + bias,
     }
-
+    
 # Verification
 def calc_actuator_force_manually(model: mujoco.MjModel,
                                  mj_data: mujoco.MjData) -> np.ndarray:
@@ -1420,6 +1526,8 @@ def display_qpos_viewer(
     scene_option.frame = mujoco.mjtFrame.mjFRAME_WORLD
     scene_option.sitegroup[:] = 0
     scene_option.sitegroup[marker_group] = 1
+    scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
+    scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
 
     output_area = widgets.Output()
 
@@ -1814,4 +1922,73 @@ class StaticOpt_ID_loss:
         loss = self.loss_fn(result.x, qpos, qvel, qforce)
 
         return loss, torque_error, result
-        
+
+def inspect_constraint_force_df(model, data):
+    """
+    Inspect constraint force
+    """
+    rows = []
+
+    constraint_type_names = {
+        mujoco.mjtConstraint.mjCNSTR_EQUALITY: "EQUALITY",
+        mujoco.mjtConstraint.mjCNSTR_FRICTION_DOF: "FRICTION_DOF",
+        mujoco.mjtConstraint.mjCNSTR_FRICTION_TENDON: "FRICTION_TENDON",
+        mujoco.mjtConstraint.mjCNSTR_LIMIT_JOINT: "LIMIT_JOINT",
+        mujoco.mjtConstraint.mjCNSTR_LIMIT_TENDON: "LIMIT_TENDON",
+        mujoco.mjtConstraint.mjCNSTR_CONTACT_FRICTIONLESS: "CONTACT_FRICTIONLESS",
+        mujoco.mjtConstraint.mjCNSTR_CONTACT_PYRAMIDAL: "CONTACT_PYRAMIDAL",
+        mujoco.mjtConstraint.mjCNSTR_CONTACT_ELLIPTIC: "CONTACT_ELLIPTIC",
+    }
+
+    for i in range(data.nefc):
+        ctype = data.efc_type[i]
+        cid = data.efc_id[i]
+        cname = constraint_type_names.get(ctype, str(ctype))
+
+        source_name = None
+        geom1 = None
+        geom2 = None
+
+        if ctype == mujoco.mjtConstraint.mjCNSTR_EQUALITY:
+            source_name = mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_EQUALITY, cid
+            )
+
+        elif ctype == mujoco.mjtConstraint.mjCNSTR_LIMIT_JOINT:
+            source_name = mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_JOINT, cid
+            )
+
+        elif ctype == mujoco.mjtConstraint.mjCNSTR_LIMIT_TENDON:
+            source_name = mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_TENDON, cid
+            )
+
+        elif ctype in [
+            mujoco.mjtConstraint.mjCNSTR_CONTACT_FRICTIONLESS,
+            mujoco.mjtConstraint.mjCNSTR_CONTACT_PYRAMIDAL,
+            mujoco.mjtConstraint.mjCNSTR_CONTACT_ELLIPTIC,
+        ]:
+            contact = data.contact[cid]
+            geom1 = mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1
+            )
+            geom2 = mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2
+            )
+            source_name = f"{geom1} - {geom2}"
+
+        rows.append({
+            "efc_i": i,
+            "constraint_type": cname,
+            "constraint_id": cid,
+            "source_name": source_name,
+            "pos_violation": data.efc_pos[i],
+            "vel_violation": data.efc_vel[i],
+            "constraint_force": data.efc_force[i],
+            "geom1": geom1,
+            "geom2": geom2,
+        })
+
+    return pd.DataFrame(rows)
+    

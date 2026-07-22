@@ -495,7 +495,7 @@ class Plotter3D:
         skeleton_traces = []
         for ds_idx, position_ds in enumerate(processed_ds_list):
             times = position_ds["Time"].to_numpy()
-            marker_coordinates = position_ds.sel(Times=times)["3D"].to_numpy()
+            marker_coordinates = position_ds.sel(Time=times)["3D"].to_numpy()
             labels = list(position_ds.Label.to_numpy())
 
             if ds_idx < len(skeletons_list):

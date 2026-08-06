@@ -14,7 +14,7 @@ from sj_array import reorient_ACS_array, get_ACS_axis_group
 # Functions
 class Plotter3D:
     def __init__(self,
-                 visualize_coord_order = "LAS",
+                 visualize_coord_order = None,
                  obj_info = None,
                  axis_info = None,
                  vis_info = None):
@@ -586,4 +586,75 @@ class Plotter3D:
         if video_writer is not None:
             video_writer.release()
         print(f"Video export complete! Saved as: {file_path}")
+
+def load_obj(file_path: str) -> dict:
+    """
+    Load .obj file to read vertex and face informations
+
+    :param file_path: obj file path
+    
+    return vertexes, faces
+    """
+    verts = []
+    triangles = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            if line.startswith('v '):
+                parts = line.strip().split()
+                verts.append([float(parts[1]), float(parts[2]), float(parts[3])])
+            elif line.startswith('f '):
+                parts = line.strip().split()[1:]
+                v_idx = [int(p.split('/')[0]) - 1 for p in parts]
+                for t in range(1, len(v_idx) - 1):
+                    triangles.append([v_idx[0], v_idx[t], v_idx[t + 1]])
+                    
+    verts = np.array(verts)
+    triangles = np.array(triangles)
+
+    result = {}
+    result["vertex"] = verts
+    result["face"] = triangles
+
+    return result
+
+def draw_obj(vertices: np.ndarray,
+             faces: np.ndarray,
+             width = 900,
+             height = 750):
+    """
+    Draw obj file
+
+    :param vertices(shape: #vertex, xyz): position of vertex
+    :param faces(shape: #face, #vertex): faces
+    :param width: horizontal length of graph
+    :param height: vertical length of graph
+    """
+    # Draw mesh
+    mesh_trace = go.Mesh3d(
+        x=vertices[:, 0],
+        y=vertices[:, 1],
+        z=vertices[:, 2],
+        i=faces[:, 0],
+        j=faces[:, 1],
+        k=faces[:, 2],
+        intensity=vertices[:, 2],
+        colorscale='Viridis',
+        showscale=True,
+    )
+
+    # Draw figure
+    fig = go.Figure(data=[mesh_trace])
+    fig.update_layout(
+        title=dict(text="Interactive Plotly 3D Arm Marker Mesh", font=dict(size=18)),
+        scene=dict(
+            xaxis_title="X",
+            yaxis_title="Y",
+            zaxis_title="Z",
+            aspectmode="data"
+        ),
+        width=width,
+        height=height
+    )
+    
+    return HTML(fig.to_html(include_plotlyjs="cdn"))
     

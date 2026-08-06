@@ -21,7 +21,6 @@ from vedo import Text2D, Sphere, Plotter, Light, Point
 
 # Custom Libraries
 from sj_brain_mask import untangle_mask_img
-from sj_file_system import str_join
 from sj_string import search_stringAcrossTarget
 from sj_enum import File_validation
 from afni_extension import cluster_infos, clusterize
@@ -103,7 +102,7 @@ def make_mesh_fromRM(roi_manager,
     """
     mesh_paths = []
     for keywords in search_keywords:
-        file_name = str_join(keywords)
+        file_name = "_".join(keywords)
         path = os.path.join(save_dir_path, file_name)
         nii_path = path + ".nii"
         vtk_path = path + ".vtk"
@@ -127,7 +126,7 @@ def make_mesh_fromRM(roi_manager,
             if r != None:
                 options += f"-r {r}" 
             
-            options = str_join(options, " ")
+            options = " ".join(options)
 
             command = command_format.format(nifti_path = nii_path,
                                             mesh_path = vtk_path,

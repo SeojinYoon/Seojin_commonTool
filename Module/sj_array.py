@@ -115,6 +115,9 @@ def reorient_ACS_array(data: np.ndarray,
 
     return reoriented array
     """
+    if (type(current_orient) is None) and (type(target_orient) is None):
+        return data
+    
     M = get_ACS_orientation_mat(current_orient, target_orient)
     return data @ M.T
 

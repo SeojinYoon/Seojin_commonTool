@@ -372,7 +372,7 @@ def make_ACS_timeseries(data: np.ndarray, labels, coord_system):
     orientation = get_ACS_explicit_orientation(coord_system)
     ds = make_3d_dataset(data,
                          "3D",
-                         element_dataset_names = ["Times", "Labels", "Coords"],
+                         element_dataset_names = ["Time", "Label", "Coord"],
                          dataset1_dim_names = [0],
                          dataset2_dim_names = labels,
                          dataset3_dim_names = orientation)

@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import xarray as xr
 from tqdm import tqdm
+from typing import Union
 import matplotlib.pylab as plt
 from multiprocessing import Pool
 from joblib import Parallel, delayed
@@ -457,7 +458,7 @@ def calc_pixel_sum(video_path: str,
 def compare_trajectories_to_video(trajectories: list[np.ndarray],
                                   output_path: str,
                                   labels: list[str] = None,
-                                  figsize: tuple[int | float, int | float] =(6, 6),
+                                  figsize: tuple[Union[int, float], Union[int, float]] =(6, 6),
                                   fps: int = 10):
     """
     Save multiple 2D trajectories as a video using cv2.VideoWriter.

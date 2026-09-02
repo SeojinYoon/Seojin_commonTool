@@ -27,5 +27,3 @@ def get_duration(start_time: float, end_time: float) -> Tuple[float, float, floa
     minutes, seconds = divmod(remainder, 60)
 
     return hours, minutes, seconds
-
-    

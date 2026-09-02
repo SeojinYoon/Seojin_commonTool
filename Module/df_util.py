@@ -7,6 +7,15 @@ import pandas as pd
 from sj_higher_function import get_index_from_nested_list
 
 # MARK: - functions related to columns
+def to_series(data):
+    if isinstance(data, pd.Series):
+        return data
+    elif isinstance(data, pd.DataFrame):
+        return data.squeeze("columns")
+    else:
+        # 리스트, 넘파이 배열 등을 Series로 변환
+        return pd.Series(data)
+        
 def get_column_keywords(data, keywords, search_mode = 1):
     """
     search data from passed condition

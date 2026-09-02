@@ -110,7 +110,7 @@ def search_stringAcrossTarget(targets,
     elif return_type == "flag":
         out = search_flags
     else:
-        out = results
+        out = result
 
     # only 옵션이면 scalar로 축약
     if (validation_type is not None

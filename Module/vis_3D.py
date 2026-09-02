@@ -340,7 +340,7 @@ class Plotter3D:
         )
 
         fig = go.Figure(data=all_traces, layout=layout)
-        return HTML(fig.to_html(include_plotlyjs="cdn"))
+        return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def plot_single_dataset(self,
                             position_ds: xarray.Dataset,
@@ -417,14 +417,14 @@ class Plotter3D:
         5. Layout Configuration
         """
         layout = self._calculate_scene_layout([position_ds])
-        layout.title = f"3D Estimation Traces ({len(times)} frames)"
+        layout.update(title=f"3D Estimation Traces ({len(times)} frames)", height=800)
         
         """
         5. Construct Figure and Render to HTML
         """
         data = axis_traces + obj_traces + marker_traces + skeleton_traces
         fig = go.Figure(data=data, layout=layout)
-        return HTML(fig.to_html(include_plotlyjs="cdn"))
+        return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def plot_multiple_datasets(self,
                                position_ds_list: list[xarray.Dataset],
@@ -514,11 +514,11 @@ class Plotter3D:
         5. Layout configuration
         """
         layout = self._calculate_scene_layout(processed_ds_list)
-        layout.title = "3D Estimation Traces (Multiple Datasets)"
+        layout.update(title=f"3D Estimation Traces ({len(times)} frames)", height=800)
 
         data = axis_traces + obj_traces + marker_traces + skeleton_traces
         fig = go.Figure(data=data, layout=layout)
-        return HTML(fig.to_html(include_plotlyjs="cdn"))
+        return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def export_to_video(self,
                         dataset_3d: xarray.Dataset,

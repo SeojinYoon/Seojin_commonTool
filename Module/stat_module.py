@@ -29,6 +29,7 @@ def LSE(f, x, args, responses):
     :param x: description variables ex) [[1,2], [3,4]]
     :param args: argumetns of f ex) [1,2]
     :param responses: response values of data ex) [4]
+    
     :return: scalar(LSE value)
     """
     if len(x) == len(responses):
@@ -49,6 +50,7 @@ def LSE_one_data(f, x, args, response):
     :param x: description variables ex) [1,2]
     :param args: values for appling f ex) [1]
     :param response: response values of data ex) 4
+    
     :return: scalar(LSE value)
     """
 

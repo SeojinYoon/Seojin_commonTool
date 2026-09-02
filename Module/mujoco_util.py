@@ -461,6 +461,36 @@ def get_joint_axis_global(model, data, joint_name):
 
     return axis_global
 
+def get_body_pos(model: mujoco.MjModel, data: mujoco.MjData) -> pd.DataFrame:
+    """
+    Get body positions
+
+    :param model: mujoco model
+    :param data: mujoco data
+
+    :return body position info:
+    """
+    mujoco.mj_forward(model, data)
+
+    rows = []
+    for body_id in range(model.nbody):
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+        parent_id = model.body_parentid[body_id]
+        parent_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, parent_id)
+
+        global_pos = data.xpos[body_id]
+        rows.append({
+            "body_id": body_id,
+            "body_name": body_name,
+            "parent_id": parent_id,
+            "parent_name": parent_name,
+            "global_x": global_pos[0],
+            "global_y": global_pos[1],
+            "global_z": global_pos[2],
+        })
+
+    return pd.DataFrame(rows)
+    
 # Site
 def get_site_pos(model: mujoco.MjModel, data: mujoco.MjData):
     mujoco.mj_forward(model, data)
@@ -492,28 +522,6 @@ def get_site_pos(model: mujoco.MjModel, data: mujoco.MjData):
         })
     df_sites = pd.DataFrame(site_rows)
     return df_sites
-
-def get_body_pos(model: mujoco.MjModel, data: mujoco.MjData):
-    mujoco.mj_forward(model, data)
-
-    rows = []
-    for body_id in range(model.nbody):
-        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
-        parent_id = model.body_parentid[body_id]
-        parent_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, parent_id)
-
-        global_pos = data.xpos[body_id]
-        rows.append({
-            "body_id": body_id,
-            "body_name": body_name,
-            "parent_id": parent_id,
-            "parent_name": parent_name,
-            "global_x": global_pos[0],
-            "global_y": global_pos[1],
-            "global_z": global_pos[2],
-        })
-
-    return pd.DataFrame(rows)
     
 # Geometry
 def extract_geometry_info(xml_path: str) -> pd.DataFrame:
@@ -1991,4 +1999,13 @@ def inspect_constraint_force_df(model, data):
         })
 
     return pd.DataFrame(rows)
+
+if __name__ == "__main__":
+    # Load model
+    model_path = "/home/seojin/Tools/biomechanics/musclemimic_models/musclemimic_models/model/body/myofullbody.xml"
+    mj_model = mujoco.MjModel.from_xml_path(model_path)
+    mj_data = mujoco.MjData(model)
+    get_body_pos(mj_model, mj_data)
+    get_site_pos(mj_model, mj_data)
+    get_all_muscle_paths(mj_model, mj_data)
     

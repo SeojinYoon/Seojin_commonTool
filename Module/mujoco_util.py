@@ -2000,6 +2000,72 @@ def inspect_constraint_force_df(model, data):
 
     return pd.DataFrame(rows)
 
+# Mesh
+def get_mesh(mj_model: mujoco.MjModel, 
+             mj_data: mujoco.MjData,
+             mesh_name: str) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Extracts mesh geometry from a MuJoCo model and transforms vertices
+    into the global world coordinate frame based on real-time simulation state.
+
+    Handles cases where multiple geoms reference the same mesh resource,
+    returning an array of shape (N_geoms, N_vertices, 3).
+
+    :param mj_model: mujoco.MjModel instance containing static model definitions.
+    :param mj_data: mujoco.MjData instance containing dynamic simulation states.
+    :param mesh_name: Name of the target mesh asset defined in the MJCF model.
+    :return:
+        - vertices_worlds: Transformed vertices in world coordinates with shape (N_geoms, V, 3).
+        - faces: Triangle vertex indices with shape (F, 3).
+    """
+    # -------------------------------------------------------------
+    # 1. Resolve mesh asset ID and retrieve local vertex positions
+    # -------------------------------------------------------------
+    # Query the unique integer ID corresponding to the mesh name
+    mesh_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_MESH, mesh_name)
+
+    # Starting address and count within the contiguous 1D vertex buffer (mj_model.mesh_vert)
+    vert_adr = mj_model.mesh_vertadr[mesh_id]
+    vert_num = mj_model.mesh_vertnum[mesh_id]
+
+    # Extract vertex coordinates defined in the mesh's local frame: shape = (V, 3)
+    vertices = mj_model.mesh_vert[vert_adr : vert_adr + vert_num].copy()
+
+    # -------------------------------------------------------------
+    # 2. Retrieve face topology (triangle indices)
+    # -------------------------------------------------------------
+    # Starting address and count within the contiguous 1D face buffer (mj_model.mesh_face)
+    face_adr = mj_model.mesh_faceadr[mesh_id]
+    face_num = mj_model.mesh_facenum[mesh_id]
+
+    # Extract vertex index triplets for each triangular face: shape = (F, 3)
+    faces = mj_model.mesh_face[face_adr : face_adr + face_num].copy()
+
+    # -------------------------------------------------------------
+    # 3. Transform vertices to the world coordinate frame
+    # -------------------------------------------------------------
+    # Find all geom IDs referencing this mesh asset (geom_type == MESH and geom_dataid == mesh_id)
+    geom_ids = np.where(
+        (mj_model.geom_type == mujoco.mjtGeom.mjGEOM_MESH)
+        & (mj_model.geom_dataid == mesh_id)
+    )[0]
+
+    n_geoms = len(geom_ids)
+    # Allocate storage for world-space vertices across all referencing geoms: shape = (N_geoms, V, 3)
+    vertices_worlds = np.zeros((n_geoms, len(vertices), 3))
+
+    for i, geom_id in enumerate(geom_ids):
+        # Global position of the geom in world coordinates: shape = (3,)
+        geom_pos = mj_data.geom_xpos[geom_id]
+
+        # Global orientation matrix (row-major 9-element array reshaped to 3x3)
+        geom_rot = mj_data.geom_xmat[geom_id].reshape(3, 3)
+
+        # Apply rigid body forward kinematics: V_world = V_local @ R^T + p
+        vertices_worlds[i] = vertices @ geom_rot.T + geom_pos
+
+    return vertices_worlds, faces
+
 if __name__ == "__main__":
     # Load model
     model_path = "/home/seojin/Tools/biomechanics/musclemimic_models/musclemimic_models/model/body/myofullbody.xml"

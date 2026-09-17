@@ -1,7 +1,7 @@
 # Common Libraries
 import copy, cv2, io
 import numpy as np
-import xarray
+import xarray as xr
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import plotly.colors
@@ -96,6 +96,19 @@ class Plotter3D:
                         reoriented_pt = reorient_ACS_array(corner_pt[None, None, :], obj_coord_order, self.coord_order)
                         obj_data["corner"][kind][corner_name] = reoriented_pt[0, 0]
 
+    def _preprocess_mesh(self, mesh_ds: xr.Dataset) -> xr.Dataset:
+        mesh_ds = copy.deepcopy(mesh_ds)
+        if not self.coord_order:
+            return mesh_ds
+
+        ds_coord_order = [coord[0] for coord in mesh_ds.Coord.to_numpy()]
+        verts = np.asarray(mesh_ds["vertices"].data)
+        
+        aligned_verts = reorient_ACS_array(verts, ds_coord_order, self.coord_order)
+        mesh_ds["vertices"].data = aligned_verts
+        mesh_ds["Coord"] = list(self.coord_order)
+        return mesh_ds
+        
     def _create_axis_traces(self):
         """
         Create axis on origin
@@ -174,7 +187,7 @@ class Plotter3D:
                 ))
         return traces
 
-    def _calculate_scene_layout(self, dataset_3d_list: list[xarray.Dataset]):
+    def _calculate_scene_layout(self, dataset_3d_list: list[xr.Dataset], mesh_ds_list: list[xr.Dataset] = None):
         """
         Optimize scene ranges
 
@@ -187,7 +200,8 @@ class Plotter3D:
             length = self.axis_info.get("axis_length", 0.2)
             candidates.append(np.array(orig) - length)
             candidates.append(np.array(orig) + length)
-            
+
+        # Object
         if self.obj_info:
             all_corners = []
             for obj in self.obj_info:
@@ -198,13 +212,22 @@ class Plotter3D:
             if all_corners:
                 candidates.append(np.min(all_corners, axis=0))
                 candidates.append(np.max(all_corners, axis=0))
-                
+
+        # Dataset markers range
         for ds in dataset_3d_list:
             mins = ds["3D"].min(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
             maxs = ds["3D"].max(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
             candidates.append(mins)
             candidates.append(maxs)
-            
+
+        # Mesh datasets range
+        if mesh_ds_list:
+            for m_ds in mesh_ds_list:
+                if "vertices" in m_ds:
+                    verts = m_ds["vertices"].to_numpy()
+                    candidates.append(np.nanmin(verts, axis=(0, 1)))
+                    candidates.append(np.nanmax(verts, axis=(0, 1)))
+                    
         candidates = np.array(candidates)
         scene_min = np.min(candidates, axis=0)
         scene_max = np.max(candidates, axis=0)
@@ -231,8 +254,53 @@ class Plotter3D:
             showlegend=True,
         )
 
+    def _create_mesh_trace(self,
+                           vertices: np.ndarray,
+                           faces: np.ndarray,
+                           name: str = "Mesh",
+                           color: str = "lightblue",
+                           opacity: float = 0.6,
+                           visible: bool = True,
+                           showlegend: bool = True) -> go.Mesh3d:
+        """
+        Create a 3D mesh trace using go.Mesh3d.
+        Expects already preprocessed vertices.
+
+        :param vertices: (V, 3) preprocessed vertex coordinates
+        :param faces: (F, 3) triangle face indices
+        :param name: Display name in legend/hover
+        :param color: Mesh surface color
+        :param opacity: Surface transparency (0.0 ~ 1.0)
+        :param visible: Initial visibility
+        :param showlegend: Whether to show in the legend
+        """
+        return go.Mesh3d(
+            x=vertices[:, self.x_index],
+            y=vertices[:, self.y_index],
+            z=vertices[:, self.z_index],
+            i=faces[:, 0],
+            j=faces[:, 1],
+            k=faces[:, 2],
+            color=color,
+            opacity=opacity,
+            name=name,
+            visible=visible,
+            showlegend=showlegend,
+            flatshading=True,
+            lighting=dict(
+                ambient=0.6,
+                diffuse=0.8,
+                roughness=0.5,
+                specular=0.2
+            ),
+            hoverinfo="name"
+        )
+        
     # API
-    def plot_time_series(self, dataset_3d: xarray.Dataset, skeletons: list = []):
+    def plot_time_series(self,
+                         dataset_3d: xr.Dataset,
+                         skeletons: list = [],
+                         mesh_ds_list: list[xr.Dataset] = [],):
         """
         Plot time series data
         
@@ -240,6 +308,7 @@ class Plotter3D:
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
         """
         dataset_3d = self._preprocess_dataset(dataset_3d)
+        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
         
         # 1. Initialization
         times = dataset_3d["Time"].to_numpy()
@@ -275,6 +344,25 @@ class Plotter3D:
                 )
                 marker_traces.append(trace)
 
+            # Meshes per step
+            step_mesh_traces = []
+            for m_ds in processed_meshes:
+                if "vertices" in m_ds and "faces" in m_ds.attrs:
+                    frame_idx = step_i if m_ds.sizes["Time"] > 1 else 0
+                    m_verts = m_ds["vertices"].isel(Time=frame_idx).to_numpy()
+                    faces = np.array(m_ds.attrs["faces"])
+                    step_mesh_traces.append(
+                        self._create_mesh_trace(
+                            vertices=m_verts,
+                            faces=faces,
+                            name=m_ds.attrs.get("name", "Mesh"),
+                            color=m_ds.attrs.get("color", "lightblue"),
+                            opacity=m_ds.attrs.get("opacity", 0.6),
+                            visible=False,
+                            showlegend=(step_i == 0),
+                        )
+                    )
+                    
             # Visualize - skeleton
             skeleton_traces = []
             for p1, p2 in skeletons:
@@ -293,7 +381,7 @@ class Plotter3D:
                         hoverinfo="skip"
                     )
                     skeleton_traces.append(trace)
-            return skeleton_traces + marker_traces
+            return skeleton_traces + marker_traces + step_mesh_traces
 
         # 2. Create all traced over all frames
         all_traces = list(static_obj_traces)
@@ -328,7 +416,7 @@ class Plotter3D:
             all_traces[n_static + j].visible = True
 
         # Make figure and layout
-        layout = self._calculate_scene_layout([dataset_3d])
+        layout = self._calculate_scene_layout([dataset_3d], mesh_ds_list=processed_meshes)
         layout.update(
             sliders=[dict(
                 active=0,
@@ -343,9 +431,10 @@ class Plotter3D:
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def plot_single_dataset(self,
-                            position_ds: xarray.Dataset,
+                            position_ds: xr.Dataset,
                             targets: list = [], 
-                            skeletons: list = []):
+                            skeletons: list = [],
+                            mesh_ds_list: list[xr.Dataset] = []):
         """
         Plot single dataset
 
@@ -354,7 +443,8 @@ class Plotter3D:
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
         """
         position_ds = self._preprocess_dataset(position_ds)
-        
+        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+            
         times = position_ds["Time"].to_numpy()
         targets = list(position_ds.Label.to_numpy()) if len(targets) == 0 else list(targets)
         
@@ -412,22 +502,42 @@ class Plotter3D:
         """
         labels = list(selected_position_ds.Label.to_numpy())
         skeleton_traces = self._create_skeleton_traces(selected_position_array[-1], labels, skeletons)
-                
+
         """
-        5. Layout Configuration
+        5. Mesh
         """
-        layout = self._calculate_scene_layout([position_ds])
-        layout.update(title=f"3D Estimation Traces ({len(times)} frames)", height=800)
+        mesh_traces = []
+        for m_ds in processed_meshes:
+            if "vertices" in m_ds and "faces" in m_ds.attrs:
+                proc_mesh_verts = m_ds["vertices"].isel(Time=-1).to_numpy()
+                faces = np.array(m_ds.attrs["faces"])
+                mesh_traces.append(
+                    self._create_mesh_trace(
+                        vertices=proc_mesh_verts,
+                        faces=faces,
+                        name=m_ds.attrs.get("name", "Mesh"),
+                        color=m_ds.attrs.get("color", "lightblue"),
+                        opacity=m_ds.attrs.get("opacity", 0.6),
+                        visible=True,
+                        showlegend=True,
+                    )
+                )
+            
+        """
+        6. Layout Configuration
+        """
+        layout = self._calculate_scene_layout([position_ds], mesh_ds_list=processed_meshes)
+        layout.update(title = f"3D Estimation Traces ({len(times)} frames)", height = 800)
         
         """
-        5. Construct Figure and Render to HTML
+        7. Construct Figure and Render to HTML
         """
-        data = axis_traces + obj_traces + marker_traces + skeleton_traces
+        data = axis_traces + obj_traces + marker_traces + skeleton_traces + mesh_traces
         fig = go.Figure(data=data, layout=layout)
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def plot_multiple_datasets(self,
-                               position_ds_list: list[xarray.Dataset],
+                               position_ds_list: list[xr.Dataset],
                                targets: list = [],
                                skeletons_list: list = [],
                                dataset_names: list = []):
@@ -521,7 +631,7 @@ class Plotter3D:
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def export_to_video(self,
-                        dataset_3d: xarray.Dataset,
+                        dataset_3d: xr.Dataset,
                         skeletons: list = [],
                         file_path: str = "plotly_animation.mp4",
                         fps: int = 30,
@@ -657,4 +767,71 @@ def draw_obj(vertices: np.ndarray,
     )
     
     return HTML(fig.to_html(include_plotlyjs="cdn"))
+
+def make_mesh_ds(vertices: np.ndarray,
+                 faces: np.ndarray,
+                 coord_order: str = "XYZ",
+                 times: np.ndarray = None,
+                 name: str = "Mesh",
+                 color: str = "lightblue",
+                 opacity: float = 0.6) -> xr.Dataset:
+    """
+    Create a 3D Mesh xarray.Dataset compatible with Plotter3D.
+
+    :param vertices: (V, 3) for single frame or (T, V, 3) for time series
+    :param faces: (F, 3) triangle face indices
+    :param coord_order: Source coordinate system string (e.g., "RDF", "LAS",
+    "RAS")
+    :param times: Optional array of time indices/timestamps
+    :param name: Display name for the mesh
+    :param color: Default surface color (e.g., "lightblue", "lightpink")
+    :param opacity: Surface opacity (0.0 to 1.0)
+    
+    :return: xr.Dataset with ('Time', 'Vertex', 'Coord') dims
+    """
+    vertices = np.asarray(vertices)
+    faces = np.asarray(faces)
+
+    # 1. Align dimension
+    if vertices.ndim == 2:
+        vertices = vertices[None, :, :]
+        n_times = 1
+    elif vertices.ndim == 3:
+        n_times = vertices.shape[0]
+    else:
+        raise ValueError(
+            f"Expected vertices with 2 or 3 dims, got shape {vertices.shape}"
+        )
+
+    n_verts = vertices.shape[1]
+
+    # Set times
+    if times is None:
+        time_coords = np.arange(n_times)
+    else:
+        time_coords = np.asarray(times)
+        if len(time_coords) != n_times:
+            raise ValueError(
+                f"Length of times ({len(time_coords)}) does not match vertices time dimension ({n_times})"
+            )
+
+    # Create dataset
+    mesh_ds = xr.Dataset(
+        data_vars={
+            "vertices": (("Time", "Vertex", "Coord"), vertices),
+        },
+        coords={
+            "Time": time_coords,
+            "Vertex": np.arange(n_verts),
+            "Coord": list(coord_order),
+        },
+        attrs={
+            "faces": faces,
+            "name": name,
+            "color": color,
+            "opacity": opacity,
+        },
+    )
+
+    return mesh_ds
     

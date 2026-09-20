@@ -274,26 +274,36 @@ class Plotter3D:
         :param visible: Initial visibility
         :param showlegend: Whether to show in the legend
         """
-        return go.Mesh3d(
-            x=vertices[:, self.x_index],
-            y=vertices[:, self.y_index],
-            z=vertices[:, self.z_index],
-            i=faces[:, 0],
-            j=faces[:, 1],
-            k=faces[:, 2],
-            color=color,
-            opacity=opacity,
-            name=name,
-            visible=visible,
-            showlegend=showlegend,
-            flatshading=True,
-            lighting=dict(
-                ambient=0.6,
-                diffuse=0.8,
-                roughness=0.5,
-                specular=0.2
-            ),
-            hoverinfo="name"
+        return go.Mesh3d(x=vertices[:, self.x_index],
+                         y=vertices[:, self.y_index],
+                         z=vertices[:, self.z_index],
+                         i=faces[:, 0],
+                         j=faces[:, 1],
+                         k=faces[:, 2],
+                         color=color,
+                         opacity=opacity,
+                         name=name,
+                         visible=visible,
+                         showlegend=showlegend,
+                         flatshading=True,
+                         lighting=dict(ambient=0.6,
+                                       diffuse=0.8,
+                                       roughness=0.5,
+                                       specular=0.2),
+                         hoverinfo="none",
+                         hovertemplate=None)
+
+    # Dummy
+    def _create_empty_position_ds(self, coords = ["X", "Y", "Z"]) -> xr.Dataset:
+        return xr.Dataset(
+            data_vars={
+                "3D": (("Time", "Label", "Coord"), np.full((1, 1, 3), np.nan))
+            },
+            coords={
+                "Time": [0],
+                "Label": ["__dummy__"],
+                "Coord": coords,
+            },
         )
         
     # API
@@ -381,7 +391,7 @@ class Plotter3D:
                         hoverinfo="skip"
                     )
                     skeleton_traces.append(trace)
-            return skeleton_traces + marker_traces + step_mesh_traces
+            return step_mesh_traces + skeleton_traces + marker_traces
 
         # 2. Create all traced over all frames
         all_traces = list(static_obj_traces)
@@ -431,7 +441,7 @@ class Plotter3D:
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
     def plot_single_dataset(self,
-                            position_ds: xr.Dataset,
+                            position_ds: xr.Dataset = None,
                             targets: list = [], 
                             skeletons: list = [],
                             mesh_ds_list: list[xr.Dataset] = []):
@@ -442,6 +452,10 @@ class Plotter3D:
         :param targets: List of marker labels (Targets) to visualize.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
         """
+        if position_ds is None:
+            coords = list(mesh_ds_list[0].Coord.to_numpy()) if mesh_ds_list else ["X", "Y", "Z"]
+            position_ds = self._create_empty_position_ds(coords=coords)
+        
         position_ds = self._preprocess_dataset(position_ds)
         processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
             
@@ -532,54 +546,102 @@ class Plotter3D:
         """
         7. Construct Figure and Render to HTML
         """
-        data = axis_traces + obj_traces + marker_traces + skeleton_traces + mesh_traces
+        data = mesh_traces + axis_traces + obj_traces + skeleton_traces + marker_traces
         fig = go.Figure(data=data, layout=layout)
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
-    def plot_multiple_datasets(self,
-                               position_ds_list: list[xr.Dataset],
-                               targets: list = [],
-                               skeletons_list: list = [],
-                               dataset_names: list = []):
-        """
-        Plot multiple dataset
+    def plot_multiple_datasets(
+        self,
+        position_ds_list: list[xr.Dataset] = None,
+        targets: list = [],
+        skeletons_list: list = [],
+        dataset_names: list = [],
+        mesh_ds_list: list[xr.Dataset] = [],
+    ):
+        """Plot multiple datasets with optional 3D meshes.
 
-        :param position_ds: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'.
+        :param position_ds_list: List of datasets containing '3D' variable
+          with 'Time', 'Label', 'Coord'.
         :param targets: List of marker labels (Targets) to visualize.
-        :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+        :param skeletons_list: List of skeleton configurations per dataset.
+        :param dataset_names: Custom names for each dataset legend group.
+        :param mesh_ds_list: List of xarray Datasets containing 'vertices' and
+          'faces' in attrs.
         """
-        processed_ds_list = [self._preprocess_dataset(ds) for ds in position_ds_list]
-            
+        # 1. Dataset 및 Mesh 전처리
+        if position_ds_list is None:
+            position_ds_list = []
+
+        processed_ds_list = [
+            self._preprocess_dataset(ds) for ds in position_ds_list
+        ]
+        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+
         # Validation check
         n_ds = len(processed_ds_list)
-        dataset_names = [f"{i}" for i in range(n_ds)] if len(dataset_names) == 0 else dataset_names
-        assert len(dataset_names) == n_ds, "dataset_names and position_ds_list must have the same length"
-        
+        dataset_names = (
+            [f"{i}" for i in range(n_ds)]
+            if len(dataset_names) == 0
+            else dataset_names
+        )
+        assert len(dataset_names) == n_ds, (
+            "dataset_names and position_ds_list must have the same length"
+        )
+
         """
-        1. Static objects
+        2. Static objects
         """
         obj_traces = self._create_obj_traces(use_qualitative_colors=True)
 
         """
-        2. Marker traces for multiple datasets
+        3. Mesh traces
+        """
+        mesh_traces = []
+        for m_ds in processed_meshes:
+            if "vertices" in m_ds and "faces" in m_ds.attrs:
+                # 마지막 프레임 또는 단일 프레임 정점 추출
+                proc_mesh_verts = m_ds["vertices"].isel(Time=-1).to_numpy()
+                faces = np.array(m_ds.attrs["faces"])
+                mesh_traces.append(
+                    self._create_mesh_trace(
+                        vertices=proc_mesh_verts,
+                        faces=faces,
+                        name=m_ds.attrs.get("name", "Mesh"),
+                        color=m_ds.attrs.get("color", "lightblue"),
+                        opacity=m_ds.attrs.get("opacity", 0.6),
+                        visible=True,
+                        showlegend=True,
+                    )
+                )
+
+        """
+        4. Marker traces for multiple datasets
         """
         marker_traces = []
-
-        # dataset-level colors
         cmap_dataset = plt.get_cmap("tab10")
         dataset_rgbs = [cmap_dataset(i % 10)[:3] for i in range(n_ds)]
-        
         mode = self.vis_info.get("marker_mode", "markers")
+
         for ds_idx, position_ds in enumerate(processed_ds_list):
             ds_name = dataset_names[ds_idx]
             rgb = dataset_rgbs[ds_idx]
             r, g, b = [int(v * 255) for v in rgb]
 
             times = position_ds["Time"].to_numpy()
-            alphas = np.linspace(1.0, 0.15, len(times))
+            alphas = (
+                np.linspace(1.0, 0.15, len(times))
+                if len(times) > 1
+                else np.array([1.0])
+            )
             point_colors = [f"rgba({r},{g},{b},{a})" for a in alphas]
-            sel_t = list(position_ds.Label.to_numpy()) if len(targets) == 0 else targets
-            marker_coordinates = position_ds.sel(Time=times, Label=sel_t)["3D"].to_numpy()
+            sel_t = (
+                list(position_ds.Label.to_numpy())
+                if len(targets) == 0
+                else targets
+            )
+            marker_coordinates = position_ds.sel(Time=times, Label=sel_t)[
+                "3D"
+            ].to_numpy()
 
             for target_idx, target in enumerate(sel_t):
                 trace = go.Scatter3d(
@@ -600,7 +662,7 @@ class Plotter3D:
                 marker_traces.append(trace)
 
         """
-        3. Skeleton
+        5. Skeleton
         """
         skeleton_traces = []
         for ds_idx, position_ds in enumerate(processed_ds_list):
@@ -612,21 +674,44 @@ class Plotter3D:
                 skeletons = skeletons_list[ds_idx]
             else:
                 continue
-                
-            skeleton_traces.extend(self._create_skeleton_traces(marker_coordinates[-1], labels, skeletons))
-        
+
+            skeleton_traces.extend(
+                self._create_skeleton_traces(
+                    marker_coordinates[-1], labels, skeletons
+                )
+            )
+
         """
-        4. Axis
+        6. Axis
         """
         axis_traces = self._create_axis_traces()
-            
-        """
-        5. Layout configuration
-        """
-        layout = self._calculate_scene_layout(processed_ds_list)
-        layout.update(title=f"3D Estimation Traces ({len(times)} frames)", height=800)
 
-        data = axis_traces + obj_traces + marker_traces + skeleton_traces
+        """
+        7. Layout configuration
+        """
+        # mesh_ds_list를 layout 계산에 포함하여 Mesh bounding box도 카메라 범위에 반영
+        layout = self._calculate_scene_layout(
+            processed_ds_list, mesh_ds_list=processed_meshes
+        )
+
+        title_frame_count = (
+            len(processed_ds_list[0]["Time"]) if processed_ds_list else 1
+        )
+        layout.update(
+            title=f"3D Estimation Traces ({title_frame_count} frames)",
+            height=800,
+        )
+
+        """
+        8. Construct Figure and Render to HTML
+        """
+        data = (
+            mesh_traces
+            + axis_traces
+            + obj_traces
+            + skeleton_traces
+            + marker_traces
+        )
         fig = go.Figure(data=data, layout=layout)
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
@@ -834,4 +919,53 @@ def make_mesh_ds(vertices: np.ndarray,
     )
 
     return mesh_ds
-    
+
+def make_point_ds(positions, times=None, coord_order="XYZ", labels=None) -> xr.Dataset:
+    pts = np.asarray(positions)
+
+    if pts.ndim == 2:
+        pts = pts[None, :, :]
+        n_times = 1
+    elif pts.ndim == 3:
+        n_times = pts.shape[0]
+    else:
+        raise ValueError(
+            f"Expected pts with 2 or 3 dims, got shape {pts.shape}"
+        )
+
+    n_pts = pts.shape[1]
+
+    # Set times (스칼라 값이 들어온 경우 리스트로 변환)
+    if times is None:
+        time_coords = np.arange(n_times)
+    else:
+        if np.isscalar(times):
+            times = [times]
+        time_coords = np.asarray(times)
+        if len(time_coords) != n_times:
+            raise ValueError(
+                f"Length of times ({len(time_coords)}) does not match pts time dimension ({n_times})"
+            )
+
+    # Set labels
+    if labels is None:
+        label_coords = [f"point_{i}" for i in range(n_pts)]
+    else:
+        label_coords = list(labels)
+        if len(label_coords) != n_pts:
+            raise ValueError(
+                f"Length of labels ({len(label_coords)}) does not match pts point dimension ({n_pts})"
+            )
+
+    point_ds = xr.Dataset(
+        data_vars={
+            "3D": (("Time", "Label", "Coord"), pts),
+        },
+        coords={
+            "Time": time_coords,
+            "Label": label_coords,
+            "Coord": np.array(list(coord_order)),
+        },
+    )
+
+    return point_ds

@@ -2001,6 +2001,21 @@ def inspect_constraint_force_df(model, data):
     return pd.DataFrame(rows)
 
 # Mesh
+def get_mesh_names(mj_model: mujoco.MjModel) -> np.ndarray:
+    """
+    Extracts mesh names in MuJoCo model
+
+    :param mj_model: mujoco.MjModel instance containing static model definitions.
+
+    return mesh names of mujoco model
+    """
+    mesh_names = []
+    for i in range(mj_model.nmesh):
+        name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_MESH, i)
+        if name:  # 이름이 지정되어 있는 경우 추가
+            mesh_names.append(name)
+    return np.array(mesh_names)
+    
 def get_mesh(mj_model: mujoco.MjModel, 
              mj_data: mujoco.MjData,
              mesh_name: str) -> tuple[np.ndarray, np.ndarray]:

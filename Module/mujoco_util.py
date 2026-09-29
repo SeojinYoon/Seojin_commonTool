@@ -1,6 +1,6 @@
 
 # Common Libraries
-import os, sys, mujoco, mediapy, shutil
+import os, sys, mujoco, mediapy, shutil, cv2
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -212,18 +212,16 @@ def calc_dependent_joint_angle(mjc_model: mujoco.MjModel,
     results = pd.DataFrame(rows)
     return results
 
-def get_joints(model_path: str) -> pd.DataFrame:
+def get_joints(model: mujoco.MjModel) -> pd.DataFrame:
     """
     get joints from mujoco compatible model
     
-    :param model_path: xml path of mujoco model
+    :param model: mujoco model
     
     return
         dependent: joint which changes its angle depending on another joint
         independent: joint which changes its angle independently
     """
-
-    model = mujoco.MjModel.from_xml_path(model_path)
 
     # Get all joint names
     all_joint_names = [model.joint(i).name for i in range(model.njnt)]
@@ -248,32 +246,31 @@ def get_joints(model_path: str) -> pd.DataFrame:
 
     return joint_df
     
-def get_joint_ranges(model_path: str) -> pd.DataFrame:
+def get_joint_ranges(model: mujoco.MjModel) -> pd.DataFrame:
     """
-    Get each joint range from mujoco model
+    Get each joint range from mujoco MjModel.
 
-    :param model_path: model path
-
-    return dataframe - columns: joint, rows: min, max
-    """
-    tree = ET.parse(model_path)
-    root = tree.getroot()
+    :param model: mujoco.MjModel instance
     
-    joint_elements = [joint for joint in root.iter("joint") if ("range" in joint.attrib) and (type(joint) == ET.Element)]    
+    :return: dataframe - columns: joint, rows: min, max
+    """
     joint_names = []
-    data_array = np.zeros((2, len(joint_elements)))
-    for i, joint_element in enumerate(joint_elements):
-        name = joint_element.attrib.get("name", "unknown")
-        min_val, max_val = map(float, joint_element.attrib["range"].split())
-    
-        data_array[0, i] = min_val
-        data_array[1, i] = max_val
-        joint_names.append(name)
-    
-    df = pd.DataFrame(data_array)
-    df.columns = joint_names
-    df.index = ["min", "max"]
-    return df
+    ranges = []
+
+    for jnt_id in range(model.njnt):
+        if model.jnt_limited[jnt_id]:
+            name = (
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jnt_id)
+                or f"joint_{jnt_id}"
+            )
+            joint_names.append(name)
+            ranges.append(model.jnt_range[jnt_id])
+
+    if not ranges:
+        return pd.DataFrame(index=["min", "max"])
+
+    data_array = np.array(ranges).T
+    return pd.DataFrame(data_array, index=["min", "max"], columns=joint_names)
 
 def get_locked_joint_angle(mjc_model: mujoco.MjModel) -> pd.DataFrame:
     """
@@ -623,6 +620,62 @@ def calc_geom_angle(model: mujoco.MjModel,
     angle_rad = np.arccos(cos_theta)
 
     return angle_rad
+
+def get_geom_group_info(model: mujoco.MjModel) -> pd.DataFrame:
+    """
+    Iterate through all geoms in a MuJoCo MjModel and return geom_group and detailed metadata as a DataFrame.
+
+    :param model: mujoco.MjModel instance.
+    
+    :return: pandas DataFrame containing geom attributes.
+    """
+    records = []
+
+    for g_id in range(model.ngeom):
+        # Geom name and associated body info
+        g_name = (
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g_id)
+            or f"geom_{g_id}"
+        )
+        b_id = model.geom_bodyid[g_id]
+        b_name = (
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b_id)
+            or f"body_{b_id}"
+        )
+
+        # Check whether the body is a mocap body
+        is_mocap = model.body_mocapid[b_id] >= 0
+
+        # Retrieve geom type name
+        g_type = mujoco.mjtGeom(model.geom_type[g_id]).name.replace(
+            "mjGEOM_", ""
+        ).lower()
+
+        # Identify referenced mesh name if geom type is mesh
+        mesh_name = None
+        if model.geom_type[g_id] == mujoco.mjtGeom.mjGEOM_MESH:
+            m_id = model.geom_dataid[g_id]
+            mesh_name = (
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, m_id) or ""
+            )
+
+        records.append(
+            {
+                "geom_group": int(model.geom_group[g_id]),
+                "geom_id": g_id,
+                "geom_name": g_name,
+                "body_id": b_id,
+                "body_name": b_name,
+                "is_mocap": is_mocap,
+                "geom_type": g_type,
+                "mesh_name": mesh_name,
+                "contype": int(model.geom_contype[g_id]),
+                "conaffinity": int(model.geom_conaffinity[g_id]),
+            }
+        )
+
+    df = pd.DataFrame(records)
+    return df.sort_values(by=["geom_group", "geom_id"]).reset_index(drop=True)
     
 # Muscle
 def get_muscle_lengths(model: mujoco.MjModel,
@@ -1497,7 +1550,7 @@ def calculate_muscle_force_manually(model,
 
 # Viewer
 def display_qpos_viewer(
-    model_path,
+    model,
     qposes,
     marker_group = 4,
     marker_default_class="marker",
@@ -1509,19 +1562,18 @@ def display_qpos_viewer(
     init_camera=(2.5, -90, -90),
 ):
     # Model
-    model = mujoco.MjModel.from_xml_path(model_path)
     model.vis.scale.framewidth = framewidth
     model.vis.scale.framelength = framelength
     data = mujoco.MjData(model)
 
     # Marker group from XML
-    tree = ET.parse(model_path)
-    root = tree.getroot()
-    try:
-        marker_default = root.find(f".//default[@class='{marker_default_class}']/site")
-        marker_group = int(marker_default.get("group"))
-    except:
-        marker_group = marker_group
+    for s_id in range(model.nsite):
+        s_name = (
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, s_id) or ""
+        )
+        if marker_default_class.lower() in s_name.lower():
+            marker_group = int(model.site_group[s_id])
+            break
 
     # Render
     renderer = mujoco.Renderer(model, height=height, width=width)
@@ -2081,6 +2133,199 @@ def get_mesh(mj_model: mujoco.MjModel,
 
     return vertices_worlds, faces
 
+# Camera
+def get_intrinsic_matrix(mj_model: mujoco.MjModel, 
+                         cam_id: int, 
+                         width: int, 
+                         height: int) -> np.ndarray:
+    """
+    Compute the standard camera intrinsic matrix (K).
+
+    :param mj_model: mujoco.MjModel instance
+    :param cam_id: int, target camera ID
+    :param width: int, rendering image width in pixels
+    :param height: int, rendering image height in pixels
+  
+    :return: numpy.ndarray, 3x3 intrinsic matrix K
+    """
+    # Check if calibrated camera intrinsics (fx, fy) are stored in the model
+    if hasattr(mj_model, 'cam_intrinsic') and mj_model.cam_intrinsic[cam_id, 0] > 0:
+        fx = mj_model.cam_intrinsic[cam_id, 0]
+        fy = mj_model.cam_intrinsic[cam_id, 1]
+        cx = mj_model.cam_intrinsic[cam_id, 2] if mj_model.cam_intrinsic[cam_id, 2] > 0 else width / 2.0
+        cy = mj_model.cam_intrinsic[cam_id, 3] if mj_model.cam_intrinsic[cam_id, 3] > 0 else height / 2.0
+    else:
+        # Get vertical field of view (fovy) in degrees from the model
+        fovy_deg = mj_model.cam_fovy[cam_id]
+
+        # Calculate focal lengths (fx, fy) based on the pinhole camera model
+        f = (height / 2.0) / np.tan(np.radians(fovy_deg) / 2.0)
+        fx, fy = f, f
+
+        # Principal point coordinates (cx, cy) at the center of the image
+        cx = width / 2.0
+        cy = height / 2.0
+
+    # Construct the 3x3 intrinsic matrix K
+    K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
+    
+    return K
+
+def get_extrinsic_matrix(mj_data: mujoco.MjData, 
+                         cam_id: int) -> np.ndarray:
+    """
+    Compute the 4x4 camera extrinsic matrix [R | T].
+
+    :param mj_data: mujoco.MjData instance
+    :param cam_id: int, target camera ID 
+    
+    :return: numpy.ndarray, 4x4 extrinsic matrix [R | T]
+    """
+    # Extract position (Translation T) in world coordinates
+    pos = mj_data.cam_xpos[cam_id]
+
+    # Extract rotation matrix R (MuJoCo stores it as a 1D array of 9 elements)
+    R_mujoco = mj_data.cam_xmat[cam_id].reshape(3, 3)
+
+    # Set extrinsic matrix
+    extrinsic_matrix = np.eye(4, dtype=np.float64)
+    extrinsic_matrix[:3, :3] = R_mujoco
+    extrinsic_matrix[:3, 3] = pos
+    
+    return extrinsic_matrix
+
+def proj_camera(model: mujoco.MjModel, 
+                data: mujoco.MjData, 
+                cam_id: int, 
+                img_width: int, 
+                img_height: int, 
+                pos_array: np.ndarray):
+    """
+    Project 3D world coordinates onto 2D image pixel coordinates using a pinhole camera model.
+    
+    :param model: MuJoCo model instance (mjModel).
+    :param data: MuJoCo data instance (mjData) containing current kinematic states.
+    :param cam_id: Integer identifier of the target camera.
+    :param img_width: Rendered image width in pixels.
+    :param img_height: Rendered image height in pixels.
+    :param pos_array: Array of 3D points in world coordinates with shape (N, 3).
+    :return: uv: Array of 2D pixel coordinates (u, v) with shape (N, 2). Points
+                 behind the camera are filled with np.nan.
+    """
+    # Compute intrinsic and extrinsic matrices
+    K = get_intrinsic_matrix(model, cam_id, img_width, img_height)
+    c2w = get_extrinsic_matrix(data, cam_id)
+
+    # Transform World Coordinates to Camera Coordinates
+    w2c = np.linalg.inv(c2w)
+    ones = np.ones((len(pos_array), 1))
+    point_cam = np.c_[pos_array, ones] @ w2c.T  # Shape: (N, 4)
+
+    # Extract coordinates in camera frame (MuJoCo convention: forward is -Z, up is +Y)
+    x_c, y_c, z_c = point_cam[:, 0], point_cam[:, 1], point_cam[:, 2]
+    
+    # Valid mask for points in front of the camera (Z_cam < 0 in MuJoCo)
+    front_mask = z_c < 0
+    depth = -z_c
+
+    # Avoid zero division using safe depth
+    safe_depth = np.where(front_mask, depth, 1.0)
+
+    # Standard pinhole projection mapping to image pixel space
+    u = K[0, 0] * (x_c / safe_depth) + K[0, 2]
+    v = -K[1, 1] * (y_c / safe_depth) + K[1, 2]
+
+    # Assign NaN to points that lie behind the camera
+    u = np.where(front_mask, u, np.nan)
+    v = np.where(front_mask, v, np.nan)
+
+    uv = np.stack([u, v], axis=1)  # Shape: (N, 2)
+    return uv
+
+def proj_camera_from_render(model: mujoco.MjModel,
+                            data: mujoco.MjData,
+                            renderer: mujoco.Renderer,
+                            scene_option: mujoco.MjvOption,
+                            cam_id: int,
+                            site_names: list,
+                            site_size: float = 0.005,
+                            min_visible_pixels: int = 4):
+    """Track 2D marker site positions directly from rendered image with occlusion check.
+
+    Only detects markers that are ACTUALLY VISIBLE on the screen in the given scene_option.
+    Markers that are occluded by other geoms/bodies or outside the camera view are
+    returned as [np.nan, np.nan].
+
+    :param model: MuJoCo model instance (MjModel).
+    :param data: MuJoCo data instance (MjData).
+    :param renderer: MuJoCo renderer instance (mujoco.Renderer).
+    :param scene_option: MuJoCo scene option (MjvOption).
+    :param cam_id: Integer identifier of the target camera.
+    :param site_names: List of site names to track.
+    :param site_size: Radius of marker sphere in meters (default: 0.005 = 5mm).
+    :param min_visible_pixels: Minimum visible pixel count to consider a marker unoccluded.
+
+    :return: pd.DataFrame with columns ['site_name', 'X', 'Y']
+    """
+    orig_rgba = model.site_rgba.copy()
+    orig_size = model.site_size.copy()
+
+    # Hide all sites to render the reference background scene
+    model.site_rgba[:, 3] = 0.0
+    renderer.update_scene(data, camera=cam_id, scene_option=scene_option)
+    base_rgb = renderer.render()
+
+    site_coords = {}
+    for s_name in site_names:
+        s_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, s_name)
+        if s_id == -1:
+            site_coords[s_name] = [np.nan, np.nan]
+            continue
+
+        # Render ONLY this single site as bright red with user's scene_option (geoms present for occlusion)
+        model.site_rgba[s_id] = [1.0, 0.0, 0.0, 1.0]
+        model.site_size[s_id][0] = site_size
+
+        renderer.update_scene(data, camera=cam_id, scene_option=scene_option)
+        site_rgb = renderer.render()
+
+        # Turn it back off
+        model.site_rgba[s_id][3] = 0.0
+
+        # Calculate differential: only visible pixels of this site will differ from base_rgb
+        diff = np.abs(site_rgb.astype(np.int16) - base_rgb.astype(np.int16))
+        diff_max = np.max(diff, axis=2)
+        changed_pixels = np.sum(diff_max > 20)
+
+        # If occluded by a geom/body or out of frame, changed_pixels will be 0 (or below threshold)
+        if changed_pixels < min_visible_pixels:
+            site_coords[s_name] = [np.nan, np.nan]
+            continue
+
+        mask = (diff_max > 20).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) > 0:
+            largest = max(contours, key=cv2.contourArea)
+            M = cv2.moments(largest)
+            if M["m00"] > 0:
+                cx = M["m10"] / M["m00"]
+                cy = M["m01"] / M["m00"]
+                site_coords[s_name] = [cx, cy]
+                continue
+
+        site_coords[s_name] = [np.nan, np.nan]
+
+    # Restore original site settings in the model
+    model.site_rgba[:] = orig_rgba
+    model.site_size[:] = orig_size
+
+    # Construct DataFrame preserving the original input site_names order
+    coords = np.array([site_coords[s] for s in site_names])
+    df = pd.DataFrame(coords, columns=["X", "Y"])
+    df.insert(0, "site_name", site_names)
+
+    return df
+    
 if __name__ == "__main__":
     # Load model
     model_path = "/home/seojin/Tools/biomechanics/musclemimic_models/musclemimic_models/model/body/myofullbody.xml"

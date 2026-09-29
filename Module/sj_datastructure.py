@@ -7,8 +7,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Custom Libraries
-from sj_linux import exec_command, make_command
-from sj_string import search_stringAcrossTarget
 from sj_array import get_ACS_explicit_orientation
 
 # Custom Libraries

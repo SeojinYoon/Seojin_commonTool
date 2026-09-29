@@ -3,14 +3,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_point_clicker import clicker
 
-def create_point_clicker(img: np.array, 
+def create_point_clicker(img: np.ndarray, 
                          labels: list, 
                          markers = None,
                          figsize = None):
     """
     Display an image and enable interactive point selection.
 
-    :param img: Image array to display (e.g., numpy array)
+    :param img: Image array to display
     :param tablet_labels: Labels for clickable points
     :param markers: Marker styles for each label (default: '*' for all)
     :param figsize: Size of the figure (width, height)
@@ -23,7 +23,9 @@ def create_point_clicker(img: np.array,
         markers = ["*"] * len(labels)
 
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
-    ax.imshow(img)
+
+    cmap = "gray" if img.ndim == 2 else "viridis"
+    ax.imshow(img, cmap = cmap)
 
     klicker = clicker(ax, labels, markers=markers)
 
@@ -40,5 +42,4 @@ if __name__ == "__main__":
         tablet_labels=tablet_labels,
         title="Click 4 points"
     )
-    pass
     

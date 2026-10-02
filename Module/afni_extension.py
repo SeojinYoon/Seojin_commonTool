@@ -66,7 +66,7 @@ def clusterize(file_path,
         test_str = f"-2sided {l_threshold} {u_threshold}"
         
     # command
-    command = " "(strs = [
+    cmd_elements = [
         "3dClusterize",
         f"-inset {file_path}",
         f"-idat {stat_index}",
@@ -75,9 +75,12 @@ def clusterize(file_path,
         f"-ithr {stat_index}",
         f"-orient {orientation}",
         test_str,
-        f"-pref_map {pref_map}" if pref_map != None else "",
-        f"-pref_dat {pref_dat}" if pref_dat != None else "",
-    ], delimiter = " ")
+    ]
+    if pref_map is not None:
+        cmd_elements.append(f"-pref_map {pref_map}")
+    if pref_dat is not None:
+        cmd_elements.append(f"-pref_dat {pref_dat}")
+    command = " ".join(cmd_elements)
 
     if is_show_command:
         print("command: ", command)

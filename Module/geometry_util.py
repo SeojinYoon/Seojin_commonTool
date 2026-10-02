@@ -98,66 +98,8 @@ class Plane:
 
         return unique_pts[np.argsort(angles)]
 
-    def slice_mesh(self, mesh: trimesh.Trimesh) -> trimesh.Trimesh:
-        """Slice a 3D mesh using this plane, keeping the half on the normal side."""
-        return slice_mesh_by_plane(mesh, self)
-
-
-
-def slice_mesh_by_plane(
-    mesh: trimesh.Trimesh,
-    plane_origin: Union[List[float], np.ndarray, Plane],
-    plane_normal: Optional[Union[List[float], np.ndarray]] = None,
-) -> trimesh.Trimesh:
-    """Slice a 3D mesh by a cross-section plane, keeping the half on the normal side.
-
-    :param mesh: Input trimesh.Trimesh.
-    :param plane_origin: 3D point on the cutting plane, or a Plane object.
-    :param plane_normal: 3D normal vector of the cutting plane (omitted if Plane is passed).
-    :return: Sliced trimesh.Trimesh with open boundary.
-    """
-    if isinstance(plane_origin, Plane):
-        plane_normal = plane_origin.normal
-        plane_origin = plane_origin.origin
-    elif plane_normal is None:
-        raise ValueError("plane_normal must be provided when plane_origin is not a Plane instance.")
-
-    sliced = mesh.slice_plane(plane_origin=plane_origin, plane_normal=plane_normal)
-    sliced.remove_unreferenced_vertices()
-    return sliced
-
-
-def slice_mesh_between_planes(
-    mesh: trimesh.Trimesh,
-    plane1_origin: Union[List[float], np.ndarray, Plane],
-    plane1_normal: Optional[Union[List[float], np.ndarray, Plane]] = None,
-    plane2_origin: Optional[Union[List[float], np.ndarray, Plane]] = None,
-    plane2_normal: Optional[Union[List[float], np.ndarray]] = None,
-) -> trimesh.Trimesh:
-    """Slice a mesh section between two cross-section planes (e.g. upper arm segment).
-
-    Can be called either as:
-      slice_mesh_between_planes(mesh, plane1, plane2)  # where plane1, plane2 are Plane objects
-    or:
-      slice_mesh_between_planes(mesh, p1_origin, p1_normal, p2_origin, p2_normal)
-    """
-    if isinstance(plane1_origin, Plane) and isinstance(plane1_normal, Plane):
-        p1_o, p1_n = plane1_origin.origin, plane1_origin.normal
-        p2_o, p2_n = plane1_normal.origin, plane1_normal.normal
-    elif isinstance(plane1_origin, Plane) and plane2_origin is not None:
-        p1_o, p1_n = plane1_origin.origin, plane1_origin.normal
-        if isinstance(plane2_origin, Plane):
-            p2_o, p2_n = plane2_origin.origin, plane2_origin.normal
-        else:
-            p2_o, p2_n = plane2_origin, plane2_normal
-    else:
-        p1_o, p1_n = plane1_origin, plane1_normal
-        p2_o, p2_n = plane2_origin, plane2_normal
-
-    section = mesh.slice_plane(plane_origin=p1_o, plane_normal=p1_n)
-    section = section.slice_plane(plane_origin=p2_o, plane_normal=p2_n)
-    section.remove_unreferenced_vertices()
-    return section
+# Alias
+slice_mesh_by_polygon = slice_mesh_by_cutting_edges
 
 if __name__ == "__main__":
     plane = Plane(origin=[0.0, 0.0, 0.0], normal=[0.0, 0.0, 1.0])

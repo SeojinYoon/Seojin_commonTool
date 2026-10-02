@@ -23,7 +23,8 @@ class Plotter3D:
                  line_ds_list: list[xr.Dataset] = None,
                  mesh_ds_list: list[xr.Dataset] = None,
                  axis_info = None,
-                 vis_info = None):
+                 vis_info = None,
+                 mesh_penetrable: Optional[bool] = None):
         """
         3D plot visualization manger
 
@@ -56,6 +57,8 @@ class Plotter3D:
             self.mesh_ds_list = [self._preprocess_mesh(m) for m in mesh_ds_list]
         else:
             self.mesh_ds_list = []
+
+        self.mesh_penetrable = mesh_penetrable
 
     # Helper functions
     def _build_axis_titles(self):
@@ -294,7 +297,9 @@ class Plotter3D:
                            color: str = "lightblue",
                            opacity: float = 0.6,
                            visible: bool = True,
-                           showlegend: bool = True) -> go.Mesh3d:
+                           showlegend: bool = True,
+                           penetrable: bool = True,
+                           hoverinfo: Optional[str] = None) -> go.Mesh3d:
         """
         Create a 3D mesh trace using go.Mesh3d.
         Expects already preprocessed vertices.
@@ -306,7 +311,14 @@ class Plotter3D:
         :param opacity: Surface transparency (0.0 ~ 1.0)
         :param visible: Initial visibility
         :param showlegend: Whether to show in the legend
+        :param hover_penetrable: If True, mouse ray penetrates the mesh (hoverinfo='skip')
+                                 allowing points/markers behind/on the mesh to be hovered.
+                                 If False, mesh intercepts mouse ray (hoverinfo='none').
+        :param hoverinfo: Optional direct plotly hoverinfo override ('skip', 'none', 'name', etc.)
         """
+        if hoverinfo is None:
+            hoverinfo = "skip" if penetrable else "none"
+
         return go.Mesh3d(x=vertices[:, self.x_index],
                          y=vertices[:, self.y_index],
                          z=vertices[:, self.z_index],
@@ -324,8 +336,8 @@ class Plotter3D:
                                        specular=0.0,
                                        roughness=0.0,
                                        fresnel=0.0),
-                         hoverinfo="none",
-                         hovertemplate=None)
+                         hoverinfo=hoverinfo,
+                         hovertemplate=None if hoverinfo in ("none", "skip") else None)
 
     # Dummy
     def _create_empty_position_ds(self, coords = ["X", "Y", "Z"]) -> xr.Dataset:
@@ -345,7 +357,8 @@ class Plotter3D:
                          dataset_3d: xr.Dataset,
                          skeletons: list = [],
                          mesh_ds_list: list[xr.Dataset] = [],
-                         line_ds_list: list[xr.Dataset] = []):
+                         line_ds_list: list[xr.Dataset] = [],
+                         mesh_penetrable: Optional[bool] = None):
         """
         Plot time series data
         
@@ -410,12 +423,15 @@ class Plotter3D:
                 marker_traces.append(trace)
 
             # Meshes per step
+            eff_penetrable = mesh_penetrable if mesh_penetrable is not None else self.mesh_penetrable
             step_mesh_traces = []
             for m_ds in processed_meshes:
                 if "vertices" in m_ds and "faces" in m_ds.attrs:
                     frame_idx = step_i if m_ds.sizes["Time"] > 1 else 0
                     m_verts = m_ds["vertices"].isel(Time=frame_idx).to_numpy()
                     faces = np.array(m_ds.attrs["faces"])
+                    p_val = eff_penetrable if eff_penetrable is not None else m_ds.attrs.get("penetrable", True)
+                    h_info = m_ds.attrs.get("hoverinfo", None)
                     step_mesh_traces.append(
                         self._create_mesh_trace(
                             vertices=m_verts,
@@ -425,6 +441,8 @@ class Plotter3D:
                             opacity=m_ds.attrs.get("opacity", 0.6),
                             visible=False,
                             showlegend=(step_i == 0),
+                            penetrable=p_val,
+                            hoverinfo=h_info,
                         )
                     )
 
@@ -516,10 +534,11 @@ class Plotter3D:
 
     def plot_single_dataset(self,
                             position_ds: xr.Dataset = None,
-                            targets: list = [], 
+                            targets: list = [],
                             skeletons: list = [],
                             mesh_ds_list: list[xr.Dataset] = [],
-                            line_ds_list: list[xr.Dataset] = []):
+                            line_ds_list: list[xr.Dataset] = [],
+                            mesh_penetrable: Optional[bool] = None):
         """
         Plot single dataset
 
@@ -593,11 +612,14 @@ class Plotter3D:
         """
         5. Mesh
         """
+        eff_penetrable = mesh_penetrable if mesh_penetrable is not None else self.mesh_penetrable
         mesh_traces = []
         for m_ds in processed_meshes:
             if "vertices" in m_ds and "faces" in m_ds.attrs:
                 proc_mesh_verts = m_ds["vertices"].isel(Time=-1).to_numpy()
                 faces = np.array(m_ds.attrs["faces"])
+                p_val = eff_penetrable if eff_penetrable is not None else m_ds.attrs.get("penetrable", True)
+                h_info = m_ds.attrs.get("hoverinfo", None)
                 mesh_traces.append(
                     self._create_mesh_trace(
                         vertices=proc_mesh_verts,
@@ -607,6 +629,8 @@ class Plotter3D:
                         opacity=m_ds.attrs.get("opacity", 0.6),
                         visible=True,
                         showlegend=True,
+                        penetrable=p_val,
+                        hoverinfo=h_info,
                     )
                 )
 
@@ -651,6 +675,7 @@ class Plotter3D:
         dataset_names: list = [],
         mesh_ds_list: list[xr.Dataset] = [],
         line_ds_list: list[xr.Dataset] = [],
+        mesh_penetrable: Optional[bool] = None,
     ):
         """Plot multiple datasets with optional 3D meshes and lines.
 
@@ -780,11 +805,14 @@ class Plotter3D:
         """
         4. Visualize - Meshes
         """
+        eff_penetrable = mesh_penetrable if mesh_penetrable is not None else self.mesh_penetrable
         mesh_traces = []
         for m_ds in processed_meshes:
             if "vertices" in m_ds and "faces" in m_ds.attrs:
                 proc_mesh_verts = m_ds["vertices"].isel(Time=-1).to_numpy()
                 faces = np.array(m_ds.attrs["faces"])
+                p_val = eff_penetrable if eff_penetrable is not None else m_ds.attrs.get("penetrable", True)
+                h_info = m_ds.attrs.get("hoverinfo", None)
                 mesh_traces.append(
                     self._create_mesh_trace(
                         vertices=proc_mesh_verts,
@@ -794,6 +822,8 @@ class Plotter3D:
                         opacity=m_ds.attrs.get("opacity", 0.6),
                         visible=True,
                         showlegend=True,
+                        penetrable=p_val,
+                        hoverinfo=h_info,
                     )
                 )
 
@@ -905,6 +935,8 @@ class Plotter3D:
                     frame_idx = frame_i if m_ds.sizes["Time"] > 1 else 0
                     m_verts = m_ds["vertices"].isel(Time=frame_idx).to_numpy()
                     faces = np.array(m_ds.attrs["faces"])
+                    p_val = self.mesh_penetrable if self.mesh_penetrable is not None else m_ds.attrs.get("hover_penetrable", m_ds.attrs.get("penetrable", True))
+                    h_info = m_ds.attrs.get("hoverinfo", None)
                     mesh_traces.append(self._create_mesh_trace(
                         vertices=m_verts,
                         faces=faces,
@@ -913,6 +945,8 @@ class Plotter3D:
                         opacity=m_ds.attrs.get("opacity", 0.6),
                         visible=True,
                         showlegend=False,
+                        penetrable=p_val,
+                        hoverinfo=h_info,
                     ))
 
             line_traces = []
@@ -1098,7 +1132,9 @@ def make_mesh_ds(vertices: np.ndarray,
                  times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
                  name: str = "Mesh",
                  color: str = "lightblue",
-                 opacity: float = 0.6) -> xr.Dataset:
+                 opacity: float = 0.6,
+                 penetrable: bool = True,
+                 hoverinfo: Optional[str] = None) -> xr.Dataset:
     """
     Create a 3D Mesh xarray.Dataset compatible with Plotter3D.
 
@@ -1109,6 +1145,10 @@ def make_mesh_ds(vertices: np.ndarray,
     :param name: Display name for the mesh
     :param color: Default surface color (e.g., "lightblue", "lightpink")
     :param opacity: Surface opacity (0.0 to 1.0)
+    :param hover_penetrable: If True, mouse ray penetrates the mesh so points/markers
+                             behind/on the mesh can be hovered (default: True).
+    :param penetrable: Alias for hover_penetrable.
+    :param hoverinfo: Optional explicit plotly hoverinfo ('skip', 'none', 'name', etc.)
     
     :return: xr.Dataset with ('Time', 'Vertex', 'Coord') dims
     """
@@ -1131,6 +1171,8 @@ def make_mesh_ds(vertices: np.ndarray,
             "name": name,
             "color": color,
             "opacity": opacity,
+            "penetrable": penetrable,
+            "hoverinfo": hoverinfo,
         },
     )
 
@@ -1148,6 +1190,8 @@ def make_plane_mesh_ds(
     coord_order: str = "XYZ",
     times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
     double_sided: bool = True,
+    penetrable: bool = True,
+    hoverinfo: Optional[str] = None,
 ) -> xr.Dataset:
     """
     Create a 3D rectangular/quad plane mesh xarray.Dataset compatible with Plotter3D.
@@ -1255,6 +1299,8 @@ def make_plane_mesh_ds(
         name=name,
         color=color,
         opacity=opacity,
+        penetrable=penetrable,
+        hoverinfo=hoverinfo,
     )
 
 

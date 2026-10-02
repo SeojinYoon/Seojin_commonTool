@@ -7,9 +7,14 @@ import plotly.graph_objects as go
 import plotly.colors
 from IPython.display import HTML
 from PIL import Image
+from typing import Any, Mapping, Optional, Sequence, Union
 
 # Custom Libraries
-from sj_array import reorient_ACS_array, get_ACS_axis_group
+from sj_array import (
+    reorient_ACS_array, 
+    get_ACS_axis_group, 
+    get_ACS_explicit_orientation,
+)
 
 # Functions
 class Plotter3D:
@@ -150,16 +155,23 @@ class Plotter3D:
         plotly_colors = plotly.colors.qualitative.Plotly
         
         for idx, obj_name in enumerate(self.obj_info):
-            kinds = self.obj_info[obj_name].get("point", {})
-            color = plotly_colors[idx % len(plotly_colors)] if use_qualitative_colors else "black"
+            obj_data = self.obj_info[obj_name]
+            kinds = obj_data.get("point", {})
+            fallback_color = plotly_colors[idx % len(plotly_colors)] if use_qualitative_colors else "#000000"
+            obj_color = obj_data.get("color", fallback_color)
             
             for j, kind in enumerate(kinds):
                 pts = np.array(kinds[kind])
+                kind_color = obj_data.get("colors", {}).get(kind, obj_color)
+
                 traces.append(go.Scatter3d(
                     x=pts[:, self.x_index], y=pts[:, self.y_index], z=pts[:, self.z_index],
-                    mode="lines", line=dict(color=color, width=2),
-                    visible=True, showlegend=(j == 0 if use_qualitative_colors else True),
-                    name=obj_name if use_qualitative_colors else kind, hoverinfo="name"
+                    mode="lines", 
+                    line=dict(color=kind_color, width=obj_data.get("width", 2)),
+                    visible=True, 
+                    showlegend=(j == 0 if use_qualitative_colors else True),
+                    name=obj_name if use_qualitative_colors else kind, 
+                    hoverinfo="name"
                 ))
         return traces
 
@@ -285,11 +297,12 @@ class Plotter3D:
                          name=name,
                          visible=visible,
                          showlegend=showlegend,
-                         flatshading=True,
-                         lighting=dict(ambient=0.6,
-                                       diffuse=0.8,
-                                       roughness=0.5,
-                                       specular=0.2),
+                         flatshading=False,
+                         lighting=dict(ambient=1.0,
+                                       diffuse=0.0,
+                                       specular=0.0,
+                                       roughness=0.0,
+                                       fresnel=0.0),
                          hoverinfo="none",
                          hovertemplate=None)
 
@@ -853,10 +866,81 @@ def draw_obj(vertices: np.ndarray,
     
     return HTML(fig.to_html(include_plotlyjs="cdn"))
 
+# ---------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------
+def _normalize_3d_timeseries(arr: np.ndarray,
+                             times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
+                             name: str = "array") -> tuple[np.ndarray, np.ndarray]:
+    """
+    Normalize 2D (N, 3) or 3D (T, N, 3) input to (T, N, 3) and validate time coordinates.
+
+    :param arr: Input coordinate array with shape (N, 3) or (T, N, 3)
+    :param times: Optional array, sequence, or scalar representing time coordinates
+    :param name: Variable name used for descriptive error messages
+    
+    :return: Tuple of normalized 3D array (T, N, 3) and 1D time coordinates
+    """
+    arr = np.asarray(arr)
+
+    # Align to 3D tensor: (T, N, 3)
+    if arr.ndim == 2:
+        arr = arr[np.newaxis, :, :]
+    elif arr.ndim != 3:
+        raise ValueError(
+            f"Expected {name} to have 2 or 3 dimensions, got shape {arr.shape}"
+        )
+
+    n_times = arr.shape[0]
+
+    # Resolve time coordinates
+    if times is None:
+        time_coords = np.arange(n_times)
+    else:
+        if np.isscalar(times):
+            time_coords = np.array([times])
+        else:
+            time_coords = np.asarray(times)
+
+        if len(time_coords) != n_times:
+            raise ValueError(
+                f"Length of times ({len(time_coords)}) does not match "
+                f"{name} time dimension ({n_times})"
+            )
+
+    return arr, time_coords
+
+
+def build_3d_dataset(var_name: str,
+                     data: np.ndarray,
+                     dims: tuple[str, str, str],
+                     coords: Mapping[str, Sequence],
+                     attrs: Optional[dict[str, Any]] = None) -> xr.Dataset:
+    """
+    Build a standard 3D single-variable xarray.Dataset.
+
+    :param var_name: Key name for the primary data variable
+    :param data: 3D data array
+    :param dims: Dimension names tuple, e.g., ('Time', 'Vertex', 'Coord')
+    :param coords: Mapping of coordinate names to values
+    :param attrs: Optional dataset metadata dictionary
+    
+    :return: Constructed xarray.Dataset
+    """
+    return xr.Dataset(
+        data_vars={var_name: (dims, data)},
+        coords=coords,
+        attrs=attrs or {},
+    )
+
+
+# ---------------------------------------------------------
+# Public Dataset Constructors
+# ---------------------------------------------------------
 def make_mesh_ds(vertices: np.ndarray,
                  faces: np.ndarray,
                  coord_order: str = "XYZ",
-                 times: np.ndarray = None,
+                 times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
                  name: str = "Mesh",
                  color: str = "lightblue",
                  opacity: float = 0.6) -> xr.Dataset:
@@ -865,49 +949,26 @@ def make_mesh_ds(vertices: np.ndarray,
 
     :param vertices: (V, 3) for single frame or (T, V, 3) for time series
     :param faces: (F, 3) triangle face indices
-    :param coord_order: Source coordinate system string (e.g., "RDF", "LAS",
-    "RAS")
-    :param times: Optional array of time indices/timestamps
+    :param coord_order: Source coordinate system string (e.g., "XYZ", "RDF", "RAS")
+    :param times: Optional array or sequence of time indices/timestamps
     :param name: Display name for the mesh
     :param color: Default surface color (e.g., "lightblue", "lightpink")
     :param opacity: Surface opacity (0.0 to 1.0)
     
     :return: xr.Dataset with ('Time', 'Vertex', 'Coord') dims
     """
-    vertices = np.asarray(vertices)
+    vertices, time_coords = _normalize_3d_timeseries(
+        vertices, times, name="vertices"
+    )
     faces = np.asarray(faces)
 
-    # 1. Align dimension
-    if vertices.ndim == 2:
-        vertices = vertices[None, :, :]
-        n_times = 1
-    elif vertices.ndim == 3:
-        n_times = vertices.shape[0]
-    else:
-        raise ValueError(
-            f"Expected vertices with 2 or 3 dims, got shape {vertices.shape}"
-        )
-
-    n_verts = vertices.shape[1]
-
-    # Set times
-    if times is None:
-        time_coords = np.arange(n_times)
-    else:
-        time_coords = np.asarray(times)
-        if len(time_coords) != n_times:
-            raise ValueError(
-                f"Length of times ({len(time_coords)}) does not match vertices time dimension ({n_times})"
-            )
-
-    # Create dataset
-    mesh_ds = xr.Dataset(
-        data_vars={
-            "vertices": (("Time", "Vertex", "Coord"), vertices),
-        },
+    return build_3d_dataset(
+        var_name="vertices",
+        data=vertices,
+        dims=("Time", "Vertex", "Coord"),
         coords={
             "Time": time_coords,
-            "Vertex": np.arange(n_verts),
+            "Vertex": np.arange(vertices.shape[1]),
             "Coord": list(coord_order),
         },
         attrs={
@@ -918,54 +979,180 @@ def make_mesh_ds(vertices: np.ndarray,
         },
     )
 
-    return mesh_ds
 
-def make_point_ds(positions, times=None, coord_order="XYZ", labels=None) -> xr.Dataset:
-    pts = np.asarray(positions)
+def make_point_ds(positions: np.ndarray,
+                  times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
+                  coord_order: str = "XYZ",
+                  labels: Optional[Sequence[str]] = None) -> xr.Dataset:
+    """
+    Create a 3D point/marker xarray.Dataset.
 
-    if pts.ndim == 2:
-        pts = pts[None, :, :]
-        n_times = 1
-    elif pts.ndim == 3:
-        n_times = pts.shape[0]
-    else:
-        raise ValueError(
-            f"Expected pts with 2 or 3 dims, got shape {pts.shape}"
-        )
+    :param positions: (P, 3) for single frame or (T, P, 3) for time series
+    :param times: Optional array or sequence of time indices/timestamps
+    :param coord_order: Coordinate ordering string (e.g., "XYZ")
+    :param labels: Optional list of names for each point
+    
+    :return: xr.Dataset with ('Time', 'Label', 'Coord') dims
+    """
+    positions, time_coords = _normalize_3d_timeseries(
+        positions, times, name="positions"
+    )
+    n_pts = positions.shape[1]
 
-    n_pts = pts.shape[1]
-
-    # Set times (스칼라 값이 들어온 경우 리스트로 변환)
-    if times is None:
-        time_coords = np.arange(n_times)
-    else:
-        if np.isscalar(times):
-            times = [times]
-        time_coords = np.asarray(times)
-        if len(time_coords) != n_times:
-            raise ValueError(
-                f"Length of times ({len(time_coords)}) does not match pts time dimension ({n_times})"
-            )
-
-    # Set labels
+    # Generate default point labels if none are supplied
     if labels is None:
         label_coords = [f"point_{i}" for i in range(n_pts)]
     else:
         label_coords = list(labels)
         if len(label_coords) != n_pts:
             raise ValueError(
-                f"Length of labels ({len(label_coords)}) does not match pts point dimension ({n_pts})"
+                f"Length of labels ({len(label_coords)}) does not match "
+                f"point dimension ({n_pts})"
             )
 
-    point_ds = xr.Dataset(
-        data_vars={
-            "3D": (("Time", "Label", "Coord"), pts),
-        },
+    return build_3d_dataset(
+        var_name="3D",
+        data=positions,
+        dims=("Time", "Label", "Coord"),
         coords={
             "Time": time_coords,
             "Label": label_coords,
-            "Coord": np.array(list(coord_order)),
+            "Coord": list(coord_order),
         },
     )
 
-    return point_ds
+
+def make_ACS_timeseries(data: np.ndarray,
+                        labels: Sequence[str],
+                        coord_system: Any,
+                        times: Optional[Union[float, int, Sequence, np.ndarray]] = None) -> xr.Dataset:
+    """
+    Create a time series dataset in Anatomical Coordinate System (ACS).
+
+    :param data: (L, 3) for single frame or (T, L, 3) for time series
+    :param labels: Label sequence for each marker/body landmark
+    :param coord_system: Source coordinate system passed to get_ACS_explicit_orientation
+    :param times: Optional array or sequence of time indices/timestamps
+    
+    :return: xr.Dataset with ('Time', 'Label', 'Coord') dims
+    """
+    data, time_coords = _normalize_3d_timeseries(data, times, name="ACS data")
+    orientation = get_ACS_explicit_orientation(coord_system)
+
+    if len(labels) != data.shape[1]:
+        raise ValueError(
+            f"Length of labels ({len(labels)}) does not match "
+            f"marker dimension ({data.shape[1]})"
+        )
+
+    return build_3d_dataset(
+        var_name="3D",
+        data=data,
+        dims=("Time", "Label", "Coord"),
+        coords={
+            "Time": time_coords,
+            "Label": list(labels),
+            "Coord": list(orientation),
+        },
+    )
+
+if __name__ == "__main__":
+    # ---------------------------------------------------------
+    # Example 1: Generic 3D Dataset (Financial Stock Prices)
+    # ---------------------------------------------------------
+    companies = ["AAPL", "GOOGL", "MSFT"]
+    dates = ["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04"]
+    price_types = ["Open", "High", "Low", "Close"]
+    
+    # Shape: (3 companies, 4 dates, 4 price metrics)
+    np.random.seed(42)
+    stock_prices = np.random.uniform(150.0, 300.0, size=(len(companies), len(dates), len(price_types)))
+    
+    stock_ds = build_3d_dataset(
+        var_name="Stock Prices",
+        data=stock_prices,
+        dims=("Company", "Dates", "Prices"),
+        coords={
+            "Company": companies,
+            "Dates": dates,
+            "Prices": price_types,
+        },
+    )
+    
+    print("=== 1. Stock Dataset ===")
+    print(stock_ds)
+    print()
+    
+    
+    # ---------------------------------------------------------
+    # Example 2: 3D Point Dataset (Marker Tracking)
+    # ---------------------------------------------------------
+    n_t = 10
+    n_marker = 3
+    n_coord = 3
+    
+    # Shape: (10 frames, 3 markers, 3 coords)
+    dummy_marker_pos = np.random.random((n_t, n_marker, n_coord))
+    marker_labels = ["Wrist", "Elbow", "Shoulder"]
+    timestamps = np.arange(n_t) * 0.02  # Recorded at 50 Hz
+    
+    point_ds = make_point_ds(
+        positions=dummy_marker_pos,
+        times=timestamps,
+        coord_order="XYZ",
+        labels=marker_labels,
+    )
+    
+    print("=== 2. Point Dataset ===")
+    print(point_ds)
+    print()
+    
+    
+    # ---------------------------------------------------------
+    # Example 3: 3D Mesh Dataset (Single-frame Geometry)
+    # ---------------------------------------------------------
+    # Single-frame triangular pyramid: 4 vertices in 3D
+    pyramid_vertices = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.5, 1.0, 0.0],
+        [0.5, 0.5, 1.0],
+    ])
+    
+    pyramid_faces = np.array([
+        [0, 1, 2],
+        [0, 1, 3],
+        [1, 2, 3],
+        [2, 0, 3],
+    ])
+    
+    mesh_ds = make_mesh_ds(
+        vertices=pyramid_vertices,
+        faces=pyramid_faces,
+        coord_order="XYZ",
+        name="Pyramid",
+        color="steelblue",
+        opacity=0.7,
+    )
+    
+    print("=== 3. Mesh Dataset ===")
+    print(mesh_ds)
+    print()
+    
+    
+    # ---------------------------------------------------------
+    # Example 4: ACS Timeseries Dataset (Multi-frame Pelvis Markers)
+    # ---------------------------------------------------------
+    n_frames = 5
+    pelvis_landmarks = ["ASIS_R", "ASIS_L", "PSIS"]
+    dummy_pelvis_data = np.random.uniform(-100.0, 100.0, size=(n_frames, len(pelvis_landmarks), 3))
+    
+    acs_ds = make_ACS_timeseries(
+        data=dummy_pelvis_data,
+        labels=pelvis_landmarks,
+        coord_system="RAS",
+        times=np.arange(n_frames),
+    )
+    
+    print("=== 4. ACS Timeseries Dataset ===")
+    print(acs_ds)

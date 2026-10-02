@@ -9,7 +9,7 @@ import xml.dom.minidom as md
 import xml.etree.ElementTree as ET
 
 # Custom Libraries
-from sj_datastructure import make_3d_dataset
+from vis_3D import build_3d_dataset
 from XML.xml_util import search_tags_in_xml
 from sj_array import get_ACS_explicit_orientation
 
@@ -107,12 +107,16 @@ def trc_to_dataset(trc_path: str,
     exp_marker_pos = np.array(exp_marker_pos).transpose(1, 0, 2)
     
     # Create the final 3D dataset with coordinates and metadata
-    exp_marker_ds = make_3d_dataset(exp_marker_pos, 
-                                    "3D", 
-                                    element_dataset_names = ["Times", "Labels", "Coords"], 
-                                    dataset1_dim_names = times, 
-                                    dataset2_dim_names = marker_names,
-                                    dataset3_dim_names = orientation)
+    exp_marker_ds = build_3d_dataset(
+        var_name="3D",
+        data=exp_marker_pos,
+        dims=("Times", "Labels", "Coords"),
+        coords={
+            "Times": times,
+            "Labels": marker_names,
+            "Coords": orientation,
+        },
+    )
     return exp_marker_ds
     
 # Marker
@@ -150,12 +154,16 @@ def model_marker_positions(model: osim.simulation.Model,
     model_marker_pos = np.expand_dims(model_marker_pos, 0)
     
     # Construct the final 3D dataset with metadata
-    model_marker_pos_ds = make_3d_dataset(model_marker_pos, 
-                                          "3D", 
-                                          element_dataset_names = ["Times", "Labels", "Coords"], 
-                                          dataset1_dim_names = [0], 
-                                          dataset2_dim_names = marker_names,
-                                          dataset3_dim_names = get_ACS_explicit_orientation(orientation))
+    model_marker_pos_ds = build_3d_dataset(
+        var_name="3D",
+        data=model_marker_pos,
+        dims=("Times", "Labels", "Coords"),
+        coords={
+            "Times": [0],
+            "Labels": marker_names,
+            "Coords": get_ACS_explicit_orientation(orientation),
+        },
+    )
     return model_marker_pos_ds
     
 # Joint

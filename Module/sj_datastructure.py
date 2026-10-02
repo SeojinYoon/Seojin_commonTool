@@ -7,9 +7,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Custom Libraries
-from sj_array import get_ACS_explicit_orientation
-
-# Custom Libraries
 
 # Sources
 
@@ -327,55 +324,6 @@ class Permutation:
     def except_data(datas, removal_index):
         return [e for i, e in enumerate(datas) if i != removal_index]
 
-def make_3d_dataset(data, 
-                    wrapping_dataset_name,
-                    element_dataset_names,
-                    dataset1_dim_names, 
-                    dataset2_dim_names, 
-                    dataset3_dim_names):
-    """
-    Make 3D dataset from 3D numpy array
-    
-    :param data(numpy array - shape(3d)): numpy data ex) (#time, #marker, #coord)
-    :param wrapping_dataset_name(string): Wrapping name of total dataset
-    :param element_dataset_names(list - string): dataset name list of each dataset within total dataset
-    :param dataset1_dim_names(list - string): dimension name list of dataset1
-    :param dataset2_dim_names(list - string): dimension name list of dataset2
-    :param dataset3_dim_names(list - string): dimension name list of dataset3
-    
-    return (xarray.Dataset)
-    """
-    # Create the xarray Dataset
-    ds = xr.Dataset(
-        {
-            wrapping_dataset_name : (element_dataset_names, data)
-        },
-        coords={
-            element_dataset_names[0]: dataset1_dim_names,
-            element_dataset_names[1]: dataset2_dim_names,
-            element_dataset_names[2]: dataset3_dim_names
-        }
-    )
-    return ds
-
-def make_ACS_timeseries(data: np.ndarray, labels, coord_system):
-    """
-    Make time series dataset in Anatomical Coordinate System (ACS)
-    
-    :param data: (shape: (#times, #labels, #coords))
-    :param labels: label of each data
-    
-    return (xarray.Dataset)
-    """
-    orientation = get_ACS_explicit_orientation(coord_system)
-    ds = make_3d_dataset(data,
-                         "3D",
-                         element_dataset_names = ["Time", "Label", "Coord"],
-                         dataset1_dim_names = [0],
-                         dataset2_dim_names = labels,
-                         dataset3_dim_names = orientation)
-    return ds
-    
 # Test  #############################################################################################
 if __name__=="__main__":
     import my_function
@@ -412,22 +360,4 @@ if __name__=="__main__":
     ## Generate random data - Shape: (companies, dates, prices)
     data = np.random.rand(len(companies), len(dates), len(prices))
 
-    ## Make dataset
-    ds = make_3d_dataset(data = data,
-                         wrapping_dataset_name = "Stock Prices",
-                         element_dataset_names = ["Company", "Dates", "Prices"],
-                         datset1_dim_names = companies,
-                         datset2_dim_names = dates,
-                         datset3_dim_names = prices)
-
-    n_t = 10
-    n_marker = 3
-    n_coord = 3
-    dummy_marker_pos = np.random.random((n_t, n_marker, n_coord))
-    estim_3D_dataSet = make_3d_dataset(data = dummy_marker_pos,
-                                       wrapping_dataset_name = "3D",
-                                       element_dataset_names = ["Times", "Labels", "Coords"],
-                                       dataset1_dim_names = np.arange(n_t),
-                                       dataset2_dim_names = [marker_i for marker_i in range(n_marker)],
-                                       dataset3_dim_names = ["X", "Y", "Z"])
     

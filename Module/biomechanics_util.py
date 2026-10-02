@@ -12,7 +12,7 @@ from mink import Configuration, SE3, FrameTask, solve_ik
 from scipy.spatial.transform import Rotation as R
 
 # Custom Libraries
-from sj_datastructure import make_3d_dataset
+from vis_3D import build_3d_dataset
 
 # Functions
 def align_joint_link(source_ds, parent_label, child_label, target_vec, affected_labels=None):
@@ -167,10 +167,14 @@ def transform_ds(df, name_col):
     names = df[name_col].to_numpy()
     locs = df[["global_x", "global_y", "global_z"]].to_numpy()
     
-    ds = make_3d_dataset(locs[None, :, :],
-                         "3D",
-                         element_dataset_names = ["Times", "Labels", "Coords"],
-                         dataset1_dim_names = np.arange(1),
-                         dataset2_dim_names = names,
-                         dataset3_dim_names = ["X", "Y", "Z"])
+    ds = build_3d_dataset(
+        var_name="3D",
+        data=locs[None, :, :],
+        dims=("Times", "Labels", "Coords"),
+        coords={
+            "Times": np.arange(1),
+            "Labels": names,
+            "Coords": ["X", "Y", "Z"],
+        },
+    )
     return ds

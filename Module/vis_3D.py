@@ -1056,6 +1056,48 @@ def make_ACS_timeseries(data: np.ndarray,
         },
     )
 
+def make_labeled_ds(data: np.ndarray,
+                    labels: Sequence[str],
+                    times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
+                    coords: Sequence[str] = ("X", "Y", "Z"),
+                    var_name: str = "3D",
+                    attrs: Optional[dict[str, Any]] = None) -> xr.Dataset:
+    """
+    Create an xarray.Dataset with ('Time', 'Label', 'Coord') dimensions.
+
+    :param data: Input array of shape (N, 3) or (T, N, 3)
+    :param labels: Names for each entity along the 'Label' axis
+    :param times: Optional timestamp sequence or scalar (defaults to 0..T-1)
+    :param coords: Coordinate axis names (default: ("X", "Y", "Z"))
+    :param var_name: Dataset variable name (default: "3D")
+    :param attrs: Optional metadata dictionary
+    
+    :return: xr.Dataset
+    """
+    # 1. Normalize 2D/3D shape and resolve time coordinates
+    data_3d, time_coords = _normalize_3d_timeseries(data, times, name="data")
+
+    # 2. Validate label count against the entity axis
+    label_list = list(labels)
+    if len(label_list) != data_3d.shape[1]:
+        raise ValueError(
+            f"Length of labels ({len(label_list)}) does not match "
+            f"entity dimension ({data_3d.shape[1]})"
+        )
+
+    # 3. Construct dataset via standard builder
+    return build_3d_dataset(
+        var_name=var_name,
+        data=data_3d,
+        dims=("Time", "Label", "Coord"),
+        coords={
+            "Time": time_coords,
+            "Label": label_list,
+            "Coord": list(coords),
+        },
+        attrs=attrs,
+    )
+    
 if __name__ == "__main__":
     # ---------------------------------------------------------
     # Example 1: Generic 3D Dataset (Financial Stock Prices)

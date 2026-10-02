@@ -20,14 +20,14 @@ from sj_array import (
 class Plotter3D:
     def __init__(self,
                  visualize_coord_order = None,
-                 obj_info = None,
+                 line_ds_list: list[xr.Dataset] = None,
                  axis_info = None,
                  vis_info = None):
         """
         3D plot visualization manger
 
         :param visualize_coord_order: visualization coords ex) "LAS"
-        :param obj_info: Dictionary for static objects ex) {'obj_name': {'point': [[x, y, z], ...]}}
+        :param line_ds_list: List of line xarray Datasets created via make_line_ds
         :param axis_info: Dictionary containing configuration for the origin axes visualization.
             * show_origin_axes: Whether to display the coordinate axes at the origin. (default: True)
             * axis_length: The length of the line for each axis. (default: 0.2)
@@ -36,15 +36,17 @@ class Plotter3D:
         :param vis_info: Dictionary containing configuration for visualization.
         """
         self.coord_order = visualize_coord_order
-        self.obj_info = copy.deepcopy(obj_info) if obj_info else {}
         self.axis_info = axis_info if axis_info else {}
         self.vis_info = vis_info if vis_info else {}
         
         self.x_index, self.y_index, self.z_index = 0, 1, 2
         self.axis_titles = self._build_axis_titles()
-        
-        # Preprocessing obj_info and corners only once at initialization to prevent duplicate reorientation
-        self._preprocess_obj_info()
+        if line_ds_list is not None:
+            if isinstance(line_ds_list, xr.Dataset):
+                line_ds_list = tablet_ds_to_line_ds_list(line_ds_list)
+            self.line_ds_list = [self._preprocess_line(l) for l in line_ds_list]
+        else:
+            self.line_ds_list = []
 
     # Helper functions
     def _build_axis_titles(self):
@@ -57,8 +59,16 @@ class Plotter3D:
         opposite_order = []
         for vis_coord in self.coord_order:
             axis_group = get_ACS_axis_group(vis_coord)
-            opposite_order.append(axis_group.replace(vis_coord, ""))
-        return [f"{self.coord_order[i]}(-), {opposite_order[i]}(+)" for i in range(3)]
+            if axis_group:
+                opposite_order.append(axis_group.replace(vis_coord, ""))
+            else:
+                opposite_order.append("")
+        return [
+            f"{self.coord_order[i]}(-), {opposite_order[i]}(+)"
+            if opposite_order[i]
+            else str(self.coord_order[i])
+            for i in range(3)
+        ]
 
     def _preprocess_dataset(self, dataset_3d):
         """
@@ -71,35 +81,11 @@ class Plotter3D:
             return dataset_3d
             
         ds_coord_order = [coord[0] for coord in dataset_3d.Coord.to_numpy()]
+        acs_chars = {"L", "R", "A", "P", "S", "I"}
+        if not all(c in acs_chars for c in ds_coord_order) or not all(c in acs_chars for c in self.coord_order):
+            return dataset_3d
         dataset_3d["3D"].data = reorient_ACS_array(dataset_3d["3D"].data, ds_coord_order, self.coord_order)
         return dataset_3d
-
-    def _preprocess_obj_info(self):
-        """
-        Align objects coordinate system
-        """
-        if not self.coord_order or not self.obj_info:
-            return
-            
-        for obj_name in self.obj_info:
-            obj_data = self.obj_info[obj_name]
-            if "coord" not in obj_data:
-                continue
-                
-            obj_coord_order = [e[0] for e in obj_data["coord"]]
-            
-            if "point" in obj_data:
-                for kind in obj_data["point"]:
-                    pts = np.array(obj_data["point"][kind])
-                    pts = reorient_ACS_array(pts[None, :, :], obj_coord_order, self.coord_order)
-                    obj_data["point"][kind] = pts[0]
-                    
-            if "corner" in obj_data:
-                for kind in obj_data["corner"]:
-                    for corner_name in obj_data["corner"][kind]:
-                        corner_pt = np.array(obj_data["corner"][kind][corner_name])
-                        reoriented_pt = reorient_ACS_array(corner_pt[None, None, :], obj_coord_order, self.coord_order)
-                        obj_data["corner"][kind][corner_name] = reoriented_pt[0, 0]
 
     def _preprocess_mesh(self, mesh_ds: xr.Dataset) -> xr.Dataset:
         mesh_ds = copy.deepcopy(mesh_ds)
@@ -107,12 +93,53 @@ class Plotter3D:
             return mesh_ds
 
         ds_coord_order = [coord[0] for coord in mesh_ds.Coord.to_numpy()]
+        acs_chars = {"L", "R", "A", "P", "S", "I"}
+        if not all(c in acs_chars for c in ds_coord_order) or not all(c in acs_chars for c in self.coord_order):
+            return mesh_ds
         verts = np.asarray(mesh_ds["vertices"].data)
         
         aligned_verts = reorient_ACS_array(verts, ds_coord_order, self.coord_order)
         mesh_ds["vertices"].data = aligned_verts
         mesh_ds["Coord"] = list(self.coord_order)
         return mesh_ds
+
+    def _preprocess_line(self, line_ds: xr.Dataset) -> xr.Dataset:
+        line_ds = copy.deepcopy(line_ds)
+        if not self.coord_order:
+            return line_ds
+
+        ds_coord_order = [coord[0] for coord in line_ds.Coord.to_numpy()]
+        acs_chars = {"L", "R", "A", "P", "S", "I"}
+        if not all(c in acs_chars for c in ds_coord_order) or not all(c in acs_chars for c in self.coord_order):
+            return line_ds
+        pts = np.asarray(line_ds["points"].data)
+        
+        aligned_pts = reorient_ACS_array(pts, ds_coord_order, self.coord_order)
+        line_ds["points"].data = aligned_pts
+        line_ds["Coord"] = list(self.coord_order)
+        return line_ds
+
+    def _create_line_trace(self,
+                           points: np.ndarray,
+                           name: str = "Line",
+                           color: str = "black",
+                           width: float = 3.0,
+                           opacity: float = 1.0,
+                           dash: str = "solid",
+                           visible: bool = True,
+                           showlegend: bool = True):
+        return go.Scatter3d(
+            x=points[:, self.x_index],
+            y=points[:, self.y_index],
+            z=points[:, self.z_index],
+            mode="lines",
+            line=dict(color=color, width=width, dash=dash),
+            opacity=opacity,
+            name=name,
+            visible=visible,
+            showlegend=showlegend,
+            hoverinfo="name",
+        )
         
     def _create_axis_traces(self):
         """
@@ -147,34 +174,6 @@ class Plotter3D:
             ))
         return traces
 
-    def _create_obj_traces(self, use_qualitative_colors = False):
-        """
-        Create objects
-        """
-        traces = []
-        plotly_colors = plotly.colors.qualitative.Plotly
-        
-        for idx, obj_name in enumerate(self.obj_info):
-            obj_data = self.obj_info[obj_name]
-            kinds = obj_data.get("point", {})
-            fallback_color = plotly_colors[idx % len(plotly_colors)] if use_qualitative_colors else "#000000"
-            obj_color = obj_data.get("color", fallback_color)
-            
-            for j, kind in enumerate(kinds):
-                pts = np.array(kinds[kind])
-                kind_color = obj_data.get("colors", {}).get(kind, obj_color)
-
-                traces.append(go.Scatter3d(
-                    x=pts[:, self.x_index], y=pts[:, self.y_index], z=pts[:, self.z_index],
-                    mode="lines", 
-                    line=dict(color=kind_color, width=obj_data.get("width", 2)),
-                    visible=True, 
-                    showlegend=(j == 0 if use_qualitative_colors else True),
-                    name=obj_name if use_qualitative_colors else kind, 
-                    hoverinfo="name"
-                ))
-        return traces
-
     def _create_skeleton_traces(self,
                                 marker_coordinates: np.ndarray,
                                 labels: list,
@@ -199,11 +198,16 @@ class Plotter3D:
                 ))
         return traces
 
-    def _calculate_scene_layout(self, dataset_3d_list: list[xr.Dataset], mesh_ds_list: list[xr.Dataset] = None):
+    def _calculate_scene_layout(self,
+                                dataset_3d_list: list[xr.Dataset],
+                                mesh_ds_list: list[xr.Dataset] = None,
+                                line_ds_list: list[xr.Dataset] = None):
         """
         Optimize scene ranges
 
         :param dataset_3d_list: List of datasets containing the '3D' variable with 'Time', 'Label', 'Coord' dimensions
+        :param mesh_ds_list: List of datasets containing 'vertices'
+        :param line_ds_list: List of datasets containing 'points'
         """
         candidates = []
         
@@ -213,24 +217,13 @@ class Plotter3D:
             candidates.append(np.array(orig) - length)
             candidates.append(np.array(orig) + length)
 
-        # Object
-        if self.obj_info:
-            all_corners = []
-            for obj in self.obj_info:
-                obj_data = self.obj_info[obj]
-                if "corner" in obj_data:
-                    for kind in obj_data["corner"]:
-                        all_corners.extend([obj_data["corner"][kind][c] for c in obj_data["corner"][kind]])
-            if all_corners:
-                candidates.append(np.min(all_corners, axis=0))
-                candidates.append(np.max(all_corners, axis=0))
-
         # Dataset markers range
         for ds in dataset_3d_list:
-            mins = ds["3D"].min(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
-            maxs = ds["3D"].max(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
-            candidates.append(mins)
-            candidates.append(maxs)
+            if "3D" in ds:
+                mins = ds["3D"].min(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
+                maxs = ds["3D"].max(dim=[d for d in ds["3D"].dims if d != "Coord"], skipna=True).to_numpy()
+                candidates.append(mins)
+                candidates.append(maxs)
 
         # Mesh datasets range
         if mesh_ds_list:
@@ -239,6 +232,18 @@ class Plotter3D:
                     verts = m_ds["vertices"].to_numpy()
                     candidates.append(np.nanmin(verts, axis=(0, 1)))
                     candidates.append(np.nanmax(verts, axis=(0, 1)))
+
+        # Line datasets range
+        combined_line_list = []
+        if getattr(self, "line_ds_list", None):
+            combined_line_list.extend(self.line_ds_list)
+        if line_ds_list:
+            combined_line_list.extend(line_ds_list)
+        for l_ds in combined_line_list:
+            if "points" in l_ds:
+                pts = l_ds["points"].to_numpy()
+                candidates.append(np.nanmin(pts, axis=(0, 1)))
+                candidates.append(np.nanmax(pts, axis=(0, 1)))
                     
         candidates = np.array(candidates)
         scene_min = np.min(candidates, axis=0)
@@ -323,24 +328,45 @@ class Plotter3D:
     def plot_time_series(self,
                          dataset_3d: xr.Dataset,
                          skeletons: list = [],
-                         mesh_ds_list: list[xr.Dataset] = [],):
+                         mesh_ds_list: list[xr.Dataset] = [],
+                         line_ds_list: list[xr.Dataset] = []):
         """
         Plot time series data
         
         :param dataset_3d: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+        :param mesh_ds_list: List of mesh datasets containing 'vertices' and 'faces'.
+        :param line_ds_list: List of line datasets containing 'points'.
         """
         dataset_3d = self._preprocess_dataset(dataset_3d)
         processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
         
         # 1. Initialization
         times = dataset_3d["Time"].to_numpy()
         n_frame = len(times)
         labels = list(dataset_3d["Label"].to_numpy())
         
-        # Separate static object traces to keep them persistent during slider steps
-        static_obj_traces = self._create_obj_traces()
-        n_static = len(static_obj_traces)
+        # Static line traces to keep them persistent during slider steps
+        static_line_traces = []
+        dynamic_lines = []
+        for l_ds in all_lines:
+            if l_ds.sizes["Time"] == 1:
+                pts = l_ds["points"].isel(Time=0).to_numpy()
+                static_line_traces.append(
+                    self._create_line_trace(
+                        points=pts,
+                        name=l_ds.attrs.get("name", "Line"),
+                        color=l_ds.attrs.get("color", "black"),
+                        width=l_ds.attrs.get("width", 3.0),
+                        opacity=l_ds.attrs.get("opacity", 1.0),
+                        dash=l_ds.attrs.get("dash", "solid"),
+                        visible=True,
+                        showlegend=True,
+                    )
+                )
+            else:
+                dynamic_lines.append(l_ds)
 
         # Helper function
         def make_dynamic_traces(step_i: int):
@@ -385,6 +411,24 @@ class Plotter3D:
                             showlegend=(step_i == 0),
                         )
                     )
+
+            # Lines per step (dynamic)
+            step_line_traces = []
+            for l_ds in dynamic_lines:
+                frame_idx = min(step_i, l_ds.sizes["Time"] - 1)
+                pts = l_ds["points"].isel(Time=frame_idx).to_numpy()
+                step_line_traces.append(
+                    self._create_line_trace(
+                        points=pts,
+                        name=l_ds.attrs.get("name", "Line"),
+                        color=l_ds.attrs.get("color", "black"),
+                        width=l_ds.attrs.get("width", 3.0),
+                        opacity=l_ds.attrs.get("opacity", 1.0),
+                        dash=l_ds.attrs.get("dash", "solid"),
+                        visible=False,
+                        showlegend=(step_i == 0),
+                    )
+                )
                     
             # Visualize - skeleton
             skeleton_traces = []
@@ -404,10 +448,11 @@ class Plotter3D:
                         hoverinfo="skip"
                     )
                     skeleton_traces.append(trace)
-            return step_mesh_traces + skeleton_traces + marker_traces
+            return step_mesh_traces + step_line_traces + skeleton_traces + marker_traces
 
         # 2. Create all traced over all frames
-        all_traces = list(static_obj_traces)
+        all_traces = list(static_line_traces)
+        n_static = len(all_traces)
         dynamic_blocks = []
         for step_i in range(n_frame):
             block = make_dynamic_traces(step_i)
@@ -439,7 +484,7 @@ class Plotter3D:
             all_traces[n_static + j].visible = True
 
         # Make figure and layout
-        layout = self._calculate_scene_layout([dataset_3d], mesh_ds_list=processed_meshes)
+        layout = self._calculate_scene_layout([dataset_3d], mesh_ds_list=processed_meshes, line_ds_list=all_lines)
         layout.update(
             sliders=[dict(
                 active=0,
@@ -457,13 +502,16 @@ class Plotter3D:
                             position_ds: xr.Dataset = None,
                             targets: list = [], 
                             skeletons: list = [],
-                            mesh_ds_list: list[xr.Dataset] = []):
+                            mesh_ds_list: list[xr.Dataset] = [],
+                            line_ds_list: list[xr.Dataset] = []):
         """
         Plot single dataset
 
         :param position_ds: Dataset containing '3D' variable with 'Time', 'Label', 'Coord'.
         :param targets: List of marker labels (Targets) to visualize.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+        :param mesh_ds_list: List of mesh datasets containing 'vertices' and 'faces'.
+        :param line_ds_list: List of line datasets containing 'points'.
         """
         if position_ds is None:
             coords = list(mesh_ds_list[0].Coord.to_numpy()) if mesh_ds_list else ["X", "Y", "Z"]
@@ -471,17 +519,13 @@ class Plotter3D:
         
         position_ds = self._preprocess_dataset(position_ds)
         processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
             
         times = position_ds["Time"].to_numpy()
         targets = list(position_ds.Label.to_numpy()) if len(targets) == 0 else list(targets)
         
         """
-        1. Visualize - Static Objects (e.g., table, environment boundaries)
-        """
-        obj_traces = self._create_obj_traces()
-
-        """
-        2. Visualize - Coordinate Axes (Origin)
+        1. Visualize - Coordinate Axes (Origin)
         """
         axis_traces = self._create_axis_traces()
             
@@ -500,7 +544,7 @@ class Plotter3D:
         
         # Convert colormap to Plotly-compatible RGBA strings and handle ZeroDivisionError
         if num_colors > 1:
-            colors = [f"rgba({int(c[0]*255)}, {int(c[1]*255)}, {int(c[2]*255)}, {c[3]})" 
+            colors = [f"rgba({int(c[0]*255)}, {int(c[1]*255)}, {int(c[2]*255)}, {c[3]})"
                       for i in range(num_colors) for c in [my_cmap(i / (num_colors - 1))]]
         else:
             colors = ["rgba(0, 0, 255, 1)"] # Default blue if only one time step exists
@@ -549,17 +593,37 @@ class Plotter3D:
                         showlegend=True,
                     )
                 )
+
+        """
+        6. Line
+        """
+        line_traces = []
+        for l_ds in all_lines:
+            if "points" in l_ds:
+                proc_pts = l_ds["points"].isel(Time=-1).to_numpy()
+                line_traces.append(
+                    self._create_line_trace(
+                        points=proc_pts,
+                        name=l_ds.attrs.get("name", "Line"),
+                        color=l_ds.attrs.get("color", "black"),
+                        width=l_ds.attrs.get("width", 3.0),
+                        opacity=l_ds.attrs.get("opacity", 1.0),
+                        dash=l_ds.attrs.get("dash", "solid"),
+                        visible=True,
+                        showlegend=True,
+                    )
+                )
             
         """
-        6. Layout Configuration
+        7. Layout Configuration
         """
-        layout = self._calculate_scene_layout([position_ds], mesh_ds_list=processed_meshes)
+        layout = self._calculate_scene_layout([position_ds], mesh_ds_list=processed_meshes, line_ds_list=all_lines)
         layout.update(title = f"3D Estimation Traces ({len(times)} frames)", height = 800)
         
         """
-        7. Construct Figure and Render to HTML
+        8. Construct Figure and Render to HTML
         """
-        data = mesh_traces + axis_traces + obj_traces + skeleton_traces + marker_traces
+        data = mesh_traces + axis_traces + line_traces + skeleton_traces + marker_traces
         fig = go.Figure(data=data, layout=layout)
         return HTML(fig.to_html(include_plotlyjs="cdn", full_html=False))
 
@@ -570,8 +634,9 @@ class Plotter3D:
         skeletons_list: list = [],
         dataset_names: list = [],
         mesh_ds_list: list[xr.Dataset] = [],
+        line_ds_list: list[xr.Dataset] = [],
     ):
-        """Plot multiple datasets with optional 3D meshes.
+        """Plot multiple datasets with optional 3D meshes and lines.
 
         :param position_ds_list: List of datasets containing '3D' variable
           with 'Time', 'Label', 'Coord'.
@@ -579,40 +644,129 @@ class Plotter3D:
         :param skeletons_list: List of skeleton configurations per dataset.
         :param dataset_names: Custom names for each dataset legend group.
         :param mesh_ds_list: List of xarray Datasets containing 'vertices' and
-          'faces' in attrs.
+          'faces' as attrs.
+        :param line_ds_list: List of line xarray Datasets containing 'points'.
         """
-        # 1. Dataset 및 Mesh 전처리
         if position_ds_list is None:
-            position_ds_list = []
+            coords = (
+                list(mesh_ds_list[0].Coord.to_numpy())
+                if mesh_ds_list
+                else ["X", "Y", "Z"]
+            )
+            position_ds_list = [self._create_empty_position_ds(coords=coords)]
 
         processed_ds_list = [
             self._preprocess_dataset(ds) for ds in position_ds_list
         ]
         processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
 
-        # Validation check
-        n_ds = len(processed_ds_list)
-        dataset_names = (
-            [f"{i}" for i in range(n_ds)]
-            if len(dataset_names) == 0
-            else dataset_names
-        )
-        assert len(dataset_names) == n_ds, (
-            "dataset_names and position_ds_list must have the same length"
-        )
+        if not skeletons_list:
+            skeletons_list = [[] for _ in processed_ds_list]
 
         """
-        2. Static objects
+        1. Visualize - Coordinate axes (Origin)
         """
-        obj_traces = self._create_obj_traces(use_qualitative_colors=True)
+        axis_traces = self._create_axis_traces()
 
         """
-        3. Mesh traces
+        3. Visualize - Markers
+        """
+        marker_traces = []
+        skeleton_traces = []
+
+        # Color palettes for different datasets
+        colors = plotly.colors.qualitative.Plotly
+        symbols = [
+            "circle",
+            "diamond",
+            "square",
+            "cross",
+            "x",
+            "triangle-up",
+            "triangle-down",
+        ]
+
+        mode = self.vis_info.get("marker_mode", "markers")
+
+        for ds_idx, ds in enumerate(processed_ds_list):
+            current_targets = (
+                list(ds.Label.to_numpy()) if len(targets) == 0 else list(targets)
+            )
+            times = ds["Time"].to_numpy()
+
+            # Extract coordinates for the selected targets
+            selected_ds = ds.sel(Time=times, Label=current_targets)
+            selected_array = selected_ds["3D"].to_numpy()
+
+            ds_name = (
+                dataset_names[ds_idx]
+                if ds_idx < len(dataset_names)
+                else f"Dataset {ds_idx + 1}"
+            )
+            ds_color = colors[ds_idx % len(colors)]
+            ds_symbol = symbols[ds_idx % len(symbols)]
+
+            # A. Markers for this dataset
+            for target in current_targets:
+                target_idx = current_targets.index(target)
+                marker_traces.append(
+                    go.Scatter3d(
+                        x=selected_array[:, target_idx, self.x_index],
+                        y=selected_array[:, target_idx, self.y_index],
+                        z=selected_array[:, target_idx, self.z_index],
+                        showlegend=(target == current_targets[0]),
+                        legendgroup=ds_name,
+                        mode=mode,
+                        marker=dict(
+                            size=4,
+                            opacity=0.8,
+                            color=ds_color,
+                            symbol=ds_symbol,
+                        ),
+                        name=ds_name,
+                        text=[f"[{ds_name}] {target} {t}" for t in times],
+                    )
+                )
+
+            # B. Skeletons for this dataset
+            labels = list(selected_ds.Label.to_numpy())
+            skeletons = (
+                skeletons_list[ds_idx] if ds_idx < len(skeletons_list) else []
+            )
+
+            for p1, p2 in skeletons:
+                if p1 in labels and p2 in labels:
+                    i1, i2 = labels.index(p1), labels.index(p2)
+                    skeleton_traces.append(
+                        go.Scatter3d(
+                            x=[
+                                selected_array[-1, i1, self.x_index],
+                                selected_array[-1, i2, self.x_index],
+                            ],
+                            y=[
+                                selected_array[-1, i1, self.y_index],
+                                selected_array[-1, i2, self.y_index],
+                            ],
+                            z=[
+                                selected_array[-1, i1, self.z_index],
+                                selected_array[-1, i2, self.z_index],
+                            ],
+                            mode="lines",
+                            line=dict(color=ds_color, width=3),
+                            visible=True,
+                            showlegend=False,
+                            legendgroup=ds_name,
+                            hoverinfo="skip",
+                        )
+                    )
+
+        """
+        4. Visualize - Meshes
         """
         mesh_traces = []
         for m_ds in processed_meshes:
             if "vertices" in m_ds and "faces" in m_ds.attrs:
-                # 마지막 프레임 또는 단일 프레임 정점 추출
                 proc_mesh_verts = m_ds["vertices"].isel(Time=-1).to_numpy()
                 faces = np.array(m_ds.attrs["faces"])
                 mesh_traces.append(
@@ -628,83 +782,30 @@ class Plotter3D:
                 )
 
         """
-        4. Marker traces for multiple datasets
+        5. Visualize - Lines
         """
-        marker_traces = []
-        cmap_dataset = plt.get_cmap("tab10")
-        dataset_rgbs = [cmap_dataset(i % 10)[:3] for i in range(n_ds)]
-        mode = self.vis_info.get("marker_mode", "markers")
-
-        for ds_idx, position_ds in enumerate(processed_ds_list):
-            ds_name = dataset_names[ds_idx]
-            rgb = dataset_rgbs[ds_idx]
-            r, g, b = [int(v * 255) for v in rgb]
-
-            times = position_ds["Time"].to_numpy()
-            alphas = (
-                np.linspace(1.0, 0.15, len(times))
-                if len(times) > 1
-                else np.array([1.0])
-            )
-            point_colors = [f"rgba({r},{g},{b},{a})" for a in alphas]
-            sel_t = (
-                list(position_ds.Label.to_numpy())
-                if len(targets) == 0
-                else targets
-            )
-            marker_coordinates = position_ds.sel(Time=times, Label=sel_t)[
-                "3D"
-            ].to_numpy()
-
-            for target_idx, target in enumerate(sel_t):
-                trace = go.Scatter3d(
-                    x=marker_coordinates[:, target_idx, self.x_index],
-                    y=marker_coordinates[:, target_idx, self.y_index],
-                    z=marker_coordinates[:, target_idx, self.z_index],
-                    mode=mode,
-                    marker=dict(
-                        size=4,
-                        opacity=0.8,
-                        color=point_colors,
-                    ),
-                    name=ds_name,
-                    legendgroup=ds_name,
-                    showlegend=(target_idx == 0),
-                    text=[f"{target} {t}" for t in times],
+        line_traces = []
+        for l_ds in all_lines:
+            if "points" in l_ds:
+                proc_pts = l_ds["points"].isel(Time=-1).to_numpy()
+                line_traces.append(
+                    self._create_line_trace(
+                        points=proc_pts,
+                        name=l_ds.attrs.get("name", "Line"),
+                        color=l_ds.attrs.get("color", "black"),
+                        width=l_ds.attrs.get("width", 3.0),
+                        opacity=l_ds.attrs.get("opacity", 1.0),
+                        dash=l_ds.attrs.get("dash", "solid"),
+                        visible=True,
+                        showlegend=True,
+                    )
                 )
-                marker_traces.append(trace)
 
         """
-        5. Skeleton
+        6. Layout configuration
         """
-        skeleton_traces = []
-        for ds_idx, position_ds in enumerate(processed_ds_list):
-            times = position_ds["Time"].to_numpy()
-            marker_coordinates = position_ds.sel(Time=times)["3D"].to_numpy()
-            labels = list(position_ds.Label.to_numpy())
-
-            if ds_idx < len(skeletons_list):
-                skeletons = skeletons_list[ds_idx]
-            else:
-                continue
-
-            skeleton_traces.extend(
-                self._create_skeleton_traces(
-                    marker_coordinates[-1], labels, skeletons
-                )
-            )
-
-        """
-        6. Axis
-        """
-        axis_traces = self._create_axis_traces()
-
-        """
-        7. Layout configuration
-        """
-        # mesh_ds_list를 layout 계산에 포함하여 Mesh bounding box도 카메라 범위에 반영
         layout = self._calculate_scene_layout(
-            processed_ds_list, mesh_ds_list=processed_meshes
+            processed_ds_list, mesh_ds_list=processed_meshes, line_ds_list=all_lines
         )
 
         title_frame_count = (
@@ -716,12 +817,12 @@ class Plotter3D:
         )
 
         """
-        8. Construct Figure and Render to HTML
+        7. Construct Figure and Render to HTML
         """
         data = (
             mesh_traces
             + axis_traces
-            + obj_traces
+            + line_traces
             + skeleton_traces
             + marker_traces
         )
@@ -731,6 +832,8 @@ class Plotter3D:
     def export_to_video(self,
                         dataset_3d: xr.Dataset,
                         skeletons: list = [],
+                        mesh_ds_list: list[xr.Dataset] = [],
+                        line_ds_list: list[xr.Dataset] = [],
                         file_path: str = "plotly_animation.mp4",
                         fps: int = 30,
                         width = 480,
@@ -741,6 +844,8 @@ class Plotter3D:
         
         :param dataset_3d: xarray Dataset containing the 3D marker data.
         :param skeletons: skeleton information ex) [("Shoulder", "Elbow"), ("Elbow", "Wrist")]
+        :param mesh_ds_list: List of mesh datasets containing 'vertices' and 'faces'.
+        :param line_ds_list: List of line datasets containing 'points'.
         :param file_path: Output file path for the video.
         :param fps: Frames per second for the video output.
         """
@@ -748,9 +853,11 @@ class Plotter3D:
         times = dataset_3d["Time"].to_numpy()
         labels = list(dataset_3d["Label"].to_numpy())
         
-        obj_traces = self._create_obj_traces()
+        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
+        
         axis_traces = self._create_axis_traces()
-        layout = self._calculate_scene_layout([dataset_3d])
+        layout = self._calculate_scene_layout([dataset_3d], mesh_ds_list=processed_meshes, line_ds_list=all_lines)
         
         cmap = plt.get_cmap("tab10")
         colors = cmap(np.linspace(0, 1, len(labels)))
@@ -776,7 +883,39 @@ class Plotter3D:
             
             skeleton_traces = self._create_skeleton_traces(marker_coordinates[-1], labels, skeletons)
             
-            frame_data = axis_traces + obj_traces + marker_traces + skeleton_traces
+            mesh_traces = []
+            for m_ds in processed_meshes:
+                if "vertices" in m_ds and "faces" in m_ds.attrs:
+                    frame_idx = frame_i if m_ds.sizes["Time"] > 1 else 0
+                    m_verts = m_ds["vertices"].isel(Time=frame_idx).to_numpy()
+                    faces = np.array(m_ds.attrs["faces"])
+                    mesh_traces.append(self._create_mesh_trace(
+                        vertices=m_verts,
+                        faces=faces,
+                        name=m_ds.attrs.get("name", "Mesh"),
+                        color=m_ds.attrs.get("color", "lightblue"),
+                        opacity=m_ds.attrs.get("opacity", 0.6),
+                        visible=True,
+                        showlegend=False,
+                    ))
+
+            line_traces = []
+            for l_ds in all_lines:
+                if "points" in l_ds:
+                    frame_idx = min(frame_i, l_ds.sizes["Time"] - 1)
+                    pts = l_ds["points"].isel(Time=frame_idx).to_numpy()
+                    line_traces.append(self._create_line_trace(
+                        points=pts,
+                        name=l_ds.attrs.get("name", "Line"),
+                        color=l_ds.attrs.get("color", "black"),
+                        width=l_ds.attrs.get("width", 3.0),
+                        opacity=l_ds.attrs.get("opacity", 1.0),
+                        dash=l_ds.attrs.get("dash", "solid"),
+                        visible=True,
+                        showlegend=False,
+                    ))
+
+            frame_data = mesh_traces + line_traces + axis_traces + marker_traces + skeleton_traces
             frame_fig = go.Figure(data=frame_data, layout=layout)
             
             img_bytes = frame_fig.to_image(format="png", width=width, height=height)
@@ -1098,6 +1237,241 @@ def make_labeled_ds(data: np.ndarray,
         attrs=attrs,
     )
     
+
+
+def make_line_ds(points: np.ndarray,
+                 coord_order: Sequence[str] = ("X", "Y", "Z"),
+                 times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
+                 name: str = "Line",
+                 color: str = "black",
+                 width: float = 3.0,
+                 opacity: float = 1.0,
+                 dash: str = "solid") -> xr.Dataset:
+    """
+    Create a line dataset with ('Time', 'Point', 'Coord') dimensions.
+
+    :param points: Coordinates of line vertices. Shape can be:
+                   - (N, 3): Single-frame line path with N points.
+                   - (T, N, 3): Time-series line path with T frames and N points.
+    :param coord_order: Coordinate order of the input points (e.g. ("X", "Y", "Z") or "XYZ").
+    :param times: Optional timestamp sequence or scalar (defaults to 0..T-1).
+    :param name: Name of the line / object.
+    :param color: CSS or hex color string (e.g. "red", "#E74C3C").
+    :param width: Line width in pixels.
+    :param opacity: Line opacity (0.0 to 1.0).
+    :param dash: Dash style ("solid", "dot", "dash", "longdash", "dashdot", "longdashdot").
+    :return: xr.Dataset with ('Time', 'Point', 'Coord') dims and 'points' data variable.
+    """
+    points_3d, time_coords = _normalize_3d_timeseries(np.asarray(points), times, name="points")
+    n_pts = points_3d.shape[1]
+
+    return build_3d_dataset(
+        var_name="points",
+        data=points_3d,
+        dims=("Time", "Point", "Coord"),
+        coords={
+            "Time": time_coords,
+            "Point": np.arange(n_pts),
+            "Coord": list(coord_order),
+        },
+        attrs={
+            "name": name,
+            "color": color,
+            "width": float(width),
+            "opacity": float(opacity),
+            "dash": dash,
+        },
+    )
+
+
+def obj_info_to_line_ds_list(obj_info: dict,
+                             default_coord_order: Sequence[str] = ("X", "Y", "Z")) -> list[xr.Dataset]:
+    """
+    Convert legacy obj_info dictionary to a list of line xarray datasets (make_line_ds).
+
+    :param obj_info: Legacy dictionary format:
+                     {'obj_name': {'point': {'part1': [...], ...}, 'coord': 'XYZ', 'color': 'red'}}
+    :param default_coord_order: Default coordinate order if 'coord' key is missing.
+    :return: List of line xarray datasets.
+    """
+    if not obj_info:
+        return []
+
+    line_ds_list = []
+    plotly_colors = plotly.colors.qualitative.Plotly
+
+    for idx, obj_name in enumerate(obj_info):
+        obj_data = obj_info[obj_name]
+        coord = obj_data.get("coord", default_coord_order)
+        kinds = obj_data.get("point", None)
+        if kinds is None and "corner" in obj_data:
+            kinds = {}
+            for kind_name, corners in obj_data["corner"].items():
+                if isinstance(corners, dict):
+                    c_vals = list(corners.values())
+                    if len(c_vals) >= 3:
+                        kinds[kind_name] = c_vals + [c_vals[0]]
+                    else:
+                        kinds[kind_name] = c_vals
+                elif isinstance(corners, (list, np.ndarray)):
+                    kinds[kind_name] = corners
+        if kinds is None:
+            kinds = {}
+        fallback_color = plotly_colors[idx % len(plotly_colors)]
+        obj_color = obj_data.get("color", fallback_color)
+        width = obj_data.get("width", 2.0)
+        opacity = obj_data.get("opacity", 1.0)
+        dash = obj_data.get("dash", "solid")
+
+        if isinstance(kinds, dict):
+            for kind_name, pts in kinds.items():
+                kind_color = obj_data.get("colors", {}).get(kind_name, obj_color)
+                line_name = f"{obj_name}_{kind_name}" if obj_name != "muscle" else kind_name
+                ds = make_line_ds(
+                    points=np.array(pts),
+                    coord_order=coord,
+                    name=line_name,
+                    color=kind_color,
+                    width=width,
+                    opacity=opacity,
+                    dash=dash,
+                )
+                line_ds_list.append(ds)
+        elif isinstance(kinds, (list, np.ndarray)):
+            ds = make_line_ds(
+                points=np.array(kinds),
+                coord_order=coord,
+                name=obj_name,
+                color=obj_color,
+                width=width,
+                opacity=opacity,
+                dash=dash,
+            )
+            line_ds_list.append(ds)
+
+    return line_ds_list
+
+
+def make_tablet_ds(
+    outer_corners: np.ndarray | dict[str, Sequence[float]],
+    inner_corners: np.ndarray | dict[str, Sequence[float]] = None,
+    angle: float = 0.0,
+    coords: Sequence[str] = ("X", "Y", "Z"),
+    times: Sequence[Any] = (0,),
+    attrs: dict = None,
+) -> xr.Dataset:
+    """
+    Create a standardized tablet xarray.Dataset containing outer and inner corner keypoints.
+
+    Labels standard order:
+    - outer: 'outer_ur', 'outer_ul', 'outer_dl', 'outer_dr'
+    - inner: 'inner_ur', 'inner_ul', 'inner_dl', 'inner_dr'
+
+    :param outer_corners: Either a dict with keys ('ur'/'up right', 'ul'/'up left', 'dl'/'down left', 'dr'/'down right')
+                          or an array of shape (4, 3) or (T, 4, 3) in [ur, ul, dl, dr] order.
+    :param inner_corners: Optional dict or array for drawing area corners in the same format.
+    :param angle: Tablet angle in degrees.
+    :param coords: Coordinate labels (e.g. ("X", "Y", "Z") or "LAS").
+    :param times: Optional timestamp sequence or scalar (defaults to (0,)).
+    :param attrs: Optional additional metadata attributes.
+    :return: xr.Dataset created via make_labeled_ds with '3D' variable and ('Time', 'Label', 'Coord') dims.
+    """
+    def _extract_4_corners(c):
+        if isinstance(c, dict):
+            def _get_val(d, keys):
+                for k in keys:
+                    if k in d and d[k] is not None:
+                        return d[k]
+                return None
+
+            ur = _get_val(c, ["ur", "up right", "outer_ur", "inner_ur"])
+            ul = _get_val(c, ["ul", "up left", "outer_ul", "inner_ul"])
+            dl = _get_val(c, ["dl", "down left", "outer_dl", "inner_dl"])
+            dr = _get_val(c, ["dr", "down right", "outer_dr", "inner_dr"])
+            pts = [ur, ul, dl, dr]
+            assert all(p is not None for p in pts), f"Missing corner in {list(c.keys())}"
+            return np.array(pts)
+        pts = np.asarray(c)
+        assert pts.shape[-2:] == (4, 3), f"Expected shape (*, 4, 3), got {pts.shape}"
+        return pts
+
+    outer_arr = _extract_4_corners(outer_corners)
+    if outer_arr.ndim == 2:
+        outer_arr = outer_arr[None, :, :]
+
+    labels = ["outer_ur", "outer_ul", "outer_dl", "outer_dr"]
+    data_list = [outer_arr]
+
+    if inner_corners is not None:
+        inner_arr = _extract_4_corners(inner_corners)
+        if inner_arr.ndim == 2:
+            inner_arr = inner_arr[None, :, :]
+        labels.extend(["inner_ur", "inner_ul", "inner_dl", "inner_dr"])
+        data_list.append(inner_arr)
+
+    combined_data = np.concatenate(data_list, axis=1)
+
+    all_attrs = {"angle": float(angle), "data_type": "tablet"}
+    if attrs:
+        all_attrs.update(attrs)
+
+    return make_labeled_ds(
+        data=combined_data,
+        labels=labels,
+        times=times,
+        coords=coords,
+        attrs=all_attrs,
+    )
+
+
+def tablet_ds_to_line_ds_list(tablet_ds: xr.Dataset,
+                              outer_color: str = "black",
+                              inner_color: str = "blue",
+                              width: float = 2.0) -> list[xr.Dataset]:
+    """
+    Convert a tablet xr.Dataset into a list of line datasets (make_line_ds) for outer and inner boundaries.
+
+    :param tablet_ds: Tablet xr.Dataset containing outer and optional inner corner labels.
+    :param outer_color: Line color for outer tablet boundary.
+    :param inner_color: Line color for inner drawing area boundary.
+    :param width: Line width.
+    :return: List of line xarray datasets ready for Plotter3D(line_ds_list=...).
+    """
+    coord_order = list(tablet_ds.Coord.to_numpy())
+    outer_loop = ["outer_ur", "outer_ul", "outer_dl", "outer_dr", "outer_ur"]
+    inner_loop = ["inner_ur", "inner_ul", "inner_dl", "inner_dr", "inner_ur"]
+
+    outer_pts = tablet_ds["3D"].sel(Label=outer_loop).to_numpy()
+    if tablet_ds.sizes.get("Time", 1) == 1:
+        outer_pts = outer_pts[0]
+
+    lines = [
+        make_line_ds(
+            points=outer_pts,
+            coord_order=coord_order,
+            name="Tablet_outer",
+            color=outer_color,
+            width=width,
+        )
+    ]
+
+    has_inner = all(k in tablet_ds.Label.values for k in ["inner_ur", "inner_ul", "inner_dl", "inner_dr"])
+    if has_inner:
+        inner_pts = tablet_ds["3D"].sel(Label=inner_loop).to_numpy()
+        if tablet_ds.sizes.get("Time", 1) == 1:
+            inner_pts = inner_pts[0]
+        lines.append(
+            make_line_ds(
+                points=inner_pts,
+                coord_order=coord_order,
+                name="Tablet_inner",
+                color=inner_color,
+                width=width,
+            )
+        )
+
+    return lines
+
 if __name__ == "__main__":
     # ---------------------------------------------------------
     # Example 1: Generic 3D Dataset (Financial Stock Prices)
@@ -1198,3 +1572,41 @@ if __name__ == "__main__":
     
     print("=== 4. ACS Timeseries Dataset ===")
     print(acs_ds)
+
+    
+    # ---------------------------------------------------------
+    # Example 5: 3D Line Dataset (Static & Dynamic Lines)
+    # ---------------------------------------------------------
+    # Static boundary/tablet line
+    table_corners = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0],
+    ])
+    static_line_ds = make_line_ds(
+        points=table_corners,
+        coord_order="XYZ",
+        name="TableBoundary",
+        color="crimson",
+        width=3.0,
+    )
+    print("=== 5. Static Line Dataset ===")
+    print(static_line_ds)
+    print()
+
+    # Dynamic time-series muscle / trajectory line
+    n_frames = 5
+    n_points_per_line = 6
+    dynamic_line_data = np.random.uniform(-10.0, 10.0, size=(n_frames, n_points_per_line, 3))
+    dynamic_line_ds = make_line_ds(
+        points=dynamic_line_data,
+        coord_order="XYZ",
+        times=np.arange(n_frames),
+        name="MusclePath",
+        color="#E74C3C",
+        width=4.0,
+    )
+    print("=== 6. Dynamic Line Dataset ===")
+    print(dynamic_line_ds)

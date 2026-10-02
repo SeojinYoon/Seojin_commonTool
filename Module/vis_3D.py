@@ -21,6 +21,7 @@ class Plotter3D:
     def __init__(self,
                  visualize_coord_order = None,
                  line_ds_list: list[xr.Dataset] = None,
+                 mesh_ds_list: list[xr.Dataset] = None,
                  axis_info = None,
                  vis_info = None):
         """
@@ -28,6 +29,7 @@ class Plotter3D:
 
         :param visualize_coord_order: visualization coords ex) "LAS"
         :param line_ds_list: List of line xarray Datasets created via make_line_ds
+        :param mesh_ds_list: List of mesh xarray Datasets (e.g., planes) created via make_mesh_ds or make_plane_mesh_ds
         :param axis_info: Dictionary containing configuration for the origin axes visualization.
             * show_origin_axes: Whether to display the coordinate axes at the origin. (default: True)
             * axis_length: The length of the line for each axis. (default: 0.2)
@@ -47,6 +49,13 @@ class Plotter3D:
             self.line_ds_list = [self._preprocess_line(l) for l in line_ds_list]
         else:
             self.line_ds_list = []
+
+        if mesh_ds_list is not None:
+            if isinstance(mesh_ds_list, xr.Dataset):
+                mesh_ds_list = [mesh_ds_list]
+            self.mesh_ds_list = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        else:
+            self.mesh_ds_list = []
 
     # Helper functions
     def _build_axis_titles(self):
@@ -250,7 +259,14 @@ class Plotter3D:
         scene_max = np.max(candidates, axis=0)
         widths = scene_max - scene_min
         
-        vis_ranges = [(scene_min[i] - widths[i] * 0.2, scene_max[i] + widths[i] * 0.2) for i in range(3)]
+        max_width = np.max(widths) if len(widths) > 0 else 1.0
+        default_pad = max_width * 0.2 if max_width > 0 else 0.5
+        vis_ranges = []
+        for i in range(3):
+            if widths[i] < 1e-4:
+                vis_ranges.append((float(scene_min[i] - default_pad), float(scene_max[i] + default_pad)))
+            else:
+                vis_ranges.append((float(scene_min[i] - widths[i] * 0.2), float(scene_max[i] + widths[i] * 0.2)))
         axis_bg = self.vis_info.get("axis_bg", "rgba(230,230,230,30)")
 
         camera_config = dict(
@@ -339,7 +355,7 @@ class Plotter3D:
         :param line_ds_list: List of line datasets containing 'points'.
         """
         dataset_3d = self._preprocess_dataset(dataset_3d)
-        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        processed_meshes = list(self.mesh_ds_list) + [self._preprocess_mesh(m) for m in mesh_ds_list]
         all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
         
         # 1. Initialization
@@ -518,7 +534,7 @@ class Plotter3D:
             position_ds = self._create_empty_position_ds(coords=coords)
         
         position_ds = self._preprocess_dataset(position_ds)
-        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        processed_meshes = list(self.mesh_ds_list) + [self._preprocess_mesh(m) for m in mesh_ds_list]
         all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
             
         times = position_ds["Time"].to_numpy()
@@ -658,7 +674,7 @@ class Plotter3D:
         processed_ds_list = [
             self._preprocess_dataset(ds) for ds in position_ds_list
         ]
-        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        processed_meshes = list(self.mesh_ds_list) + [self._preprocess_mesh(m) for m in mesh_ds_list]
         all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
 
         if not skeletons_list:
@@ -853,7 +869,7 @@ class Plotter3D:
         times = dataset_3d["Time"].to_numpy()
         labels = list(dataset_3d["Label"].to_numpy())
         
-        processed_meshes = [self._preprocess_mesh(m) for m in mesh_ds_list]
+        processed_meshes = list(self.mesh_ds_list) + [self._preprocess_mesh(m) for m in mesh_ds_list]
         all_lines = list(self.line_ds_list) + [self._preprocess_line(l) for l in line_ds_list]
         
         axis_traces = self._create_axis_traces()
@@ -1118,6 +1134,195 @@ def make_mesh_ds(vertices: np.ndarray,
         },
     )
 
+def make_plane_mesh_ds(
+    corners: Optional[Union[np.ndarray, Sequence]] = None,
+    *,
+    center: Optional[Sequence[float]] = None,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
+    plane: str = "xy",
+    normal: Optional[Sequence[float]] = None,
+    name: str = "Plane",
+    color: str = "lightblue",
+    opacity: float = 0.4,
+    coord_order: str = "XYZ",
+    times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
+    double_sided: bool = True,
+) -> xr.Dataset:
+    """
+    Create a 3D rectangular/quad plane mesh xarray.Dataset compatible with Plotter3D.
+
+    The plane can be defined in either of two ways:
+    1. By passing 4 corner points (corners):
+       A sequence or (4, 3) array of 4 vertices ordered along the perimeter
+       (e.g., [p0, p1, p2, p3] where edges connect p0-p1, p1-p2, p2-p3, p3-p0).
+    2. By passing center, width, height, and plane orientation:
+       - plane: "xy", "xz", or "yz" (default: "xy")
+       - or normal: a 3D normal vector to orient the plane perpendicular to it.
+
+    :param corners: (4, 3) coordinates of the 4 corners in perimeter order.
+    :param center: (3,) center of the plane when specifying by dimensions.
+    :param width: Width of the plane (along primary local axis).
+    :param height: Height of the plane (along secondary local axis).
+    :param plane: Preset plane orientation ("xy", "xz", "yz").
+    :param normal: Optional 3D normal vector for arbitrary orientation.
+    :param name: Display name for the plane.
+    :param color: Surface color (e.g., 'lightblue', 'lightgray', '#1f77b4', 'rgba(...)').
+    :param opacity: Surface opacity (0.0 = fully transparent, 1.0 = opaque).
+    :param coord_order: Coordinate system string (e.g., 'XYZ', 'RAS', 'LPS').
+    :param times: Optional time index or array of time coordinates.
+    :param double_sided: If True, includes front and back face triangles so the plane
+                         is visible from both sides.
+    :return: xr.Dataset with ('Time', 'Vertex', 'Coord') dims and 'faces' in attrs.
+    """
+    if corners is None:
+        if center is None or width is None or height is None:
+            raise ValueError("Either 'corners' (4 points) or ('center', 'width', 'height') must be provided.")
+        center = np.asarray(center, dtype=float).reshape(3)
+        w2 = float(width) / 2.0
+        h2 = float(height) / 2.0
+
+        if normal is not None:
+            n = np.asarray(normal, dtype=float)
+            norm = np.linalg.norm(n)
+            if norm == 0:
+                raise ValueError("Normal vector must have non-zero length.")
+            n = n / norm
+            ref = np.array([0.0, 0.0, 1.0]) if abs(n[2]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            u = np.cross(n, ref)
+            u = u / np.linalg.norm(u)
+            v = np.cross(n, u)
+            corners = np.array([
+                center - w2 * u - h2 * v,
+                center + w2 * u - h2 * v,
+                center + w2 * u + h2 * v,
+                center - w2 * u + h2 * v,
+            ])
+        else:
+            plane_lower = plane.lower()
+            if plane_lower == "xy":
+                corners = np.array([
+                    [center[0] - w2, center[1] - h2, center[2]],
+                    [center[0] + w2, center[1] - h2, center[2]],
+                    [center[0] + w2, center[1] + h2, center[2]],
+                    [center[0] - w2, center[1] + h2, center[2]],
+                ])
+            elif plane_lower == "xz":
+                corners = np.array([
+                    [center[0] - w2, center[1], center[2] - h2],
+                    [center[0] + w2, center[1], center[2] - h2],
+                    [center[0] + w2, center[1], center[2] + h2],
+                    [center[0] - w2, center[1], center[2] + h2],
+                ])
+            elif plane_lower == "yz":
+                corners = np.array([
+                    [center[0], center[1] - w2, center[2] - h2],
+                    [center[0], center[1] + w2, center[2] - h2],
+                    [center[0], center[1] + w2, center[2] + h2],
+                    [center[0], center[1] - w2, center[2] + h2],
+                ])
+            else:
+                raise ValueError(f"Unknown plane orientation '{plane}'. Choose from 'xy', 'xz', 'yz', or provide 'normal'.")
+    else:
+        corners = np.asarray(corners, dtype=float)
+        if corners.ndim == 2:
+            if corners.shape != (4, 3):
+                raise ValueError(f"Expected corners of shape (4, 3), but got {corners.shape}.")
+        elif corners.ndim == 3:
+            if corners.shape[1:] != (4, 3):
+                raise ValueError(f"Expected corners of shape (T, 4, 3), but got {corners.shape}.")
+        else:
+            raise ValueError(f"Invalid corners array dimensions: {corners.ndim}")
+
+    if double_sided:
+        faces = np.array([
+            [0, 1, 2],
+            [0, 2, 3],
+            [0, 2, 1],
+            [0, 3, 2],
+        ])
+    else:
+        faces = np.array([
+            [0, 1, 2],
+            [0, 2, 3],
+        ])
+
+    return make_mesh_ds(
+        vertices=corners,
+        faces=faces,
+        coord_order=coord_order,
+        times=times,
+        name=name,
+        color=color,
+        opacity=opacity,
+    )
+
+
+# Alias
+make_plane_ds = make_plane_mesh_ds
+
+
+def make_plane_wireframe_ds(
+    corners: Optional[Union[np.ndarray, Sequence]] = None,
+    *,
+    center: Optional[Sequence[float]] = None,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
+    plane: str = "xy",
+    normal: Optional[Sequence[float]] = None,
+    name: str = "Plane_Wireframe",
+    color: str = "black",
+    width_pixels: float = 2.0,
+    opacity: float = 1.0,
+    dash: str = "solid",
+    coord_order: str = "XYZ",
+    times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
+) -> xr.Dataset:
+    """
+    Create a closed 3D wireframe outline (boundary loop) dataset for a rectangular/quad plane.
+
+    :param corners: (4, 3) coordinates of the 4 corners in perimeter order.
+    :param center: (3,) center of the plane when specifying by dimensions.
+    :param width: Width of the plane.
+    :param height: Height of the plane.
+    :param plane: Preset plane orientation ("xy", "xz", "yz").
+    :param normal: Optional 3D normal vector.
+    :param name: Display name for the wireframe.
+    :param color: Line color.
+    :param width_pixels: Line width in pixels.
+    :param opacity: Line opacity (0.0 to 1.0).
+    :param dash: Line dash style.
+    :param coord_order: Coordinate system string.
+    :param times: Optional time index.
+    :return: xr.Dataset compatible with Plotter3D line_ds_list.
+    """
+    plane_ds = make_plane_mesh_ds(
+        corners=corners,
+        center=center,
+        width=width,
+        height=height,
+        plane=plane,
+        normal=normal,
+        coord_order=coord_order,
+        times=times,
+    )
+    verts = plane_ds["vertices"].to_numpy()
+    loop_pts = np.concatenate([verts, verts[:, :1, :]], axis=1)
+    if loop_pts.shape[0] == 1 and times is None:
+        loop_pts = loop_pts[0]
+
+    return make_line_ds(
+        points=loop_pts,
+        coord_order=list(plane_ds.Coord.to_numpy()),
+        times=plane_ds.Time.to_numpy(),
+        name=name,
+        color=color,
+        width=width_pixels,
+        opacity=opacity,
+        dash=dash,
+    )
+
+
 
 def make_point_ds(positions: np.ndarray,
                   times: Optional[Union[float, int, Sequence, np.ndarray]] = None,
@@ -1236,8 +1441,6 @@ def make_labeled_ds(data: np.ndarray,
         },
         attrs=attrs,
     )
-    
-
 
 def make_line_ds(points: np.ndarray,
                  coord_order: Sequence[str] = ("X", "Y", "Z"),
@@ -1283,83 +1486,12 @@ def make_line_ds(points: np.ndarray,
         },
     )
 
-
-def obj_info_to_line_ds_list(obj_info: dict,
-                             default_coord_order: Sequence[str] = ("X", "Y", "Z")) -> list[xr.Dataset]:
-    """
-    Convert legacy obj_info dictionary to a list of line xarray datasets (make_line_ds).
-
-    :param obj_info: Legacy dictionary format:
-                     {'obj_name': {'point': {'part1': [...], ...}, 'coord': 'XYZ', 'color': 'red'}}
-    :param default_coord_order: Default coordinate order if 'coord' key is missing.
-    :return: List of line xarray datasets.
-    """
-    if not obj_info:
-        return []
-
-    line_ds_list = []
-    plotly_colors = plotly.colors.qualitative.Plotly
-
-    for idx, obj_name in enumerate(obj_info):
-        obj_data = obj_info[obj_name]
-        coord = obj_data.get("coord", default_coord_order)
-        kinds = obj_data.get("point", None)
-        if kinds is None and "corner" in obj_data:
-            kinds = {}
-            for kind_name, corners in obj_data["corner"].items():
-                if isinstance(corners, dict):
-                    c_vals = list(corners.values())
-                    if len(c_vals) >= 3:
-                        kinds[kind_name] = c_vals + [c_vals[0]]
-                    else:
-                        kinds[kind_name] = c_vals
-                elif isinstance(corners, (list, np.ndarray)):
-                    kinds[kind_name] = corners
-        if kinds is None:
-            kinds = {}
-        fallback_color = plotly_colors[idx % len(plotly_colors)]
-        obj_color = obj_data.get("color", fallback_color)
-        width = obj_data.get("width", 2.0)
-        opacity = obj_data.get("opacity", 1.0)
-        dash = obj_data.get("dash", "solid")
-
-        if isinstance(kinds, dict):
-            for kind_name, pts in kinds.items():
-                kind_color = obj_data.get("colors", {}).get(kind_name, obj_color)
-                line_name = f"{obj_name}_{kind_name}" if obj_name != "muscle" else kind_name
-                ds = make_line_ds(
-                    points=np.array(pts),
-                    coord_order=coord,
-                    name=line_name,
-                    color=kind_color,
-                    width=width,
-                    opacity=opacity,
-                    dash=dash,
-                )
-                line_ds_list.append(ds)
-        elif isinstance(kinds, (list, np.ndarray)):
-            ds = make_line_ds(
-                points=np.array(kinds),
-                coord_order=coord,
-                name=obj_name,
-                color=obj_color,
-                width=width,
-                opacity=opacity,
-                dash=dash,
-            )
-            line_ds_list.append(ds)
-
-    return line_ds_list
-
-
-def make_tablet_ds(
-    outer_corners: np.ndarray | dict[str, Sequence[float]],
-    inner_corners: np.ndarray | dict[str, Sequence[float]] = None,
-    angle: float = 0.0,
-    coords: Sequence[str] = ("X", "Y", "Z"),
-    times: Sequence[Any] = (0,),
-    attrs: dict = None,
-) -> xr.Dataset:
+def make_tablet_ds(outer_corners: np.ndarray | dict[str, Sequence[float]],
+                   inner_corners: np.ndarray | dict[str, Sequence[float]] = None,
+                   angle: float = 0.0,
+                   coords: Sequence[str] = ("X", "Y", "Z"),
+                   times: Sequence[Any] = (0,),
+                   attrs: dict = None) -> xr.Dataset:
     """
     Create a standardized tablet xarray.Dataset containing outer and inner corner keypoints.
 
@@ -1422,7 +1554,6 @@ def make_tablet_ds(
         coords=coords,
         attrs=all_attrs,
     )
-
 
 def tablet_ds_to_line_ds_list(tablet_ds: xr.Dataset,
                               outer_color: str = "black",

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # Common Libraries
 import copy, cv2, io
 import numpy as np

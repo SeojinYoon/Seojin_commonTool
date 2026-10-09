@@ -6,12 +6,14 @@ import pandas as pd
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import ipywidgets as widgets
+from scipy.spatial.transform import Rotation
 from IPython.display import display, clear_output
 if shutil.which("nvidia-smi") is not None:
     os.environ["MUJOCO_GL"] = "egl"
 import mujoco
 
 # Custom Libraries
+from sj_array import reorient_ACS_array
 from XML.xml_util import parse_xml_with_includes
 
 # KeyFrame
@@ -2325,6 +2327,95 @@ def proj_camera_from_render(model: mujoco.MjModel,
     df.insert(0, "site_name", site_names)
 
     return df
+
+# Util
+def calc_local_pos(mj_model: mujoco.MjModel,
+                   mj_data: mujoco.MjData,
+                   mj_parent_body_name: str,
+                   mj_coords: str,
+                   marker_pos: np.ndarray,
+                   marker_coords: str) -> np.ndarray:
+    """
+    Calculate the position of a marker in the local frame of a specified parent body.
+
+    :param mj_model: MuJoCo model instance.
+    :param mj_data: MuJoCo data instance containing the current simulation state.
+    :param mj_parent_body_name: Name of the parent body defined in the MuJoCo model.
+    :param mj_coords: coordinate system of mujoco model
+    :param parent_pos: Global position [x, y, z] of the reference parent point.
+    :param marker_pos: Global position [x, y, z] of the target marker.
+    :param smpl_coords: coordinate system of smpl body model
+    
+    :return: 3D position vector expressed in the parent body's local coordinate frame.
+    """
+    body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, mj_parent_body_name)
+    body_origin = mj_data.xpos[body_id]
+    body_world_mat = mj_data.xmat[body_id].reshape(3, 3)
+    
+    # Align coordiate system
+    target_marker_world = reorient_ACS_array(marker_pos, marker_coords, mj_coords)
+    
+    # Calcualte displacement from the target body
+    displacement = target_marker_world - body_origin
+    
+    # Calcualte local pose
+    local_pos = body_world_mat.T @ displacement
+    return local_pos
+
+def get_global_pos(mj_model: mujoco.MjModel,
+                   mj_data: mujoco.MjData, 
+                   target_body: str,
+                   local_pos: np.ndarray) -> np.ndarray:
+    """
+    Transform a local position vector on a body into the global world frame.
+
+    :param mj_model: MuJoCo model instance.
+    :param mj_data: MuJoCo data instance containing the current simulation state.
+    :param target_body: Name of the reference body in the MuJoCo model.
+    :param local_pos: 3D position vector in the target body's local coordinate frame.
+    
+    :return: 3D position vector in the global world frame.
+    """
+    body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, target_body)
+    body_world_mat = mj_data.xmat[body_id].reshape(3, 3)
+    body_origin = mj_data.xpos[body_id]
+    
+    global_pos = body_origin + (body_world_mat @ local_pos)
+    return global_pos
+
+def calc_local_quat(quat_xyzw: np.ndarray,
+                    parent_body_name: str,
+                    mj_model: mujoco.MjModel,
+                    mj_data: mujoco.MjData) -> np.ndarray:
+    """
+    Compute the orientation of a marker relative to a parent body frame in MuJoCo.
+
+    :param quat_xyzw: World-frame marker orientation quaternion in [x, y, z, w] format.
+    :param parent_body_name: Name of the parent body defined in the MuJoCo model.
+    :param mj_model: MuJoCo model instance.
+    :param mj_data: MuJoCo data instance containing the current simulation state.
+    
+    :return: Relative rotation quaternion [x, y, z, w] representing the marker relative to the body.
+    """
+    # Normalize the marker quaternion to ensure valid rotation representation
+    quat_marker_world = np.asarray(quat_xyzw, dtype=float)
+    quat_marker_world /= np.linalg.norm(quat_marker_world)
+
+    # Query body ID using its name
+    body_id = mujoco.mj_name2id(mj_model,
+                                mujoco.mjtObj.mjOBJ_BODY,
+                                parent_body_name)
+
+    # Convert MuJoCo quaternion order [w, x, y, z] to SciPy order [x, y, z, w]
+    body_quat_xyzw = mj_data.xquat[body_id][[1, 2, 3, 0]]
+
+    # Compute relative rotation: R_local = R_body.inv() * R_marker
+    r_body = Rotation.from_quat(body_quat_xyzw)
+    r_marker = Rotation.from_quat(quat_marker_world)
+
+    r_local = r_body.inv() * r_marker
+
+    return r_local.as_quat()
     
 if __name__ == "__main__":
     # Load model
